@@ -490,6 +490,10 @@ impl App {
         ui.horizontal(|ui| {
             ui.label(RichText::new("OPEN").color(CYAN).size(22.0).strong());
             ui.label(RichText::new("SYNAPSE").color(PINK).size(22.0).strong());
+            let version = RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).color(YELLOW).small();
+            Frame::new().stroke(Stroke::new(1.0, YELLOW)).inner_margin(Margin::symmetric(5, 1)).show(ui, |ui| {
+                ui.label(version);
+            });
             ui.add_space(16.0);
 
             let names: Vec<String> = self.mice.iter().map(|m| m.def.name.to_uppercase()).collect();

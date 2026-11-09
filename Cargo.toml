@@ -2,16 +2,11 @@
 name = "opensynapse"
 version = "0.1.0"
 edition = "2024"
-description = "Remap buttons, turbo and DPI on Razer mice from Linux"
+description = "Remap buttons, set DPI and lighting on Razer mice from Linux"
 license = "GPL-2.0-or-later"
 
 [[bin]]
-name = "opensynapse"
-path = "src/main.rs"
-
-[[bin]]
 name = "opensynapse-gui"
-path = "src/bin/opensynapse-gui.rs"
 required-features = ["gui"]
 
 [dependencies]

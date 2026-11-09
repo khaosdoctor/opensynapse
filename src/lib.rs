@@ -5,3 +5,4 @@ pub mod input;
 pub mod profile;
 pub mod protocol;
 pub mod rgb;
+pub mod scaffold;

@@ -1,7 +1,7 @@
 use opensynapse::action::Action;
 use opensynapse::device::{self, DpiStages, Mouse};
 use opensynapse::rgb::{self, Effect};
-use opensynapse::{input, profile, protocol};
+use opensynapse::{hid, input, profile, protocol, scaffold};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -13,6 +13,7 @@ const USAGE: &str = "\
 usage: opensynapse <command> [--profile N] [--layer NAME]
 
 commands:
+  init [pid] [file.toml]       start a device file for a mouse that doesn't have one (read-only)
   list                         connected mice and their buttons
   dump                         every button's action
   get <button>                 one button's action
@@ -84,6 +85,9 @@ fn run(o: Opts) -> Result<(), String> {
     if matches!(args.first(), None | Some(&"help")) {
         println!("{USAGE}");
         return Ok(());
+    }
+    if args.first() == Some(&"init") {
+        return init(&args[1..], o.force);
     }
     let mice = device::detect().map_err(|e| e.to_string())?;
     // ponytail: first mouse only, add --device when someone has two
@@ -228,6 +232,42 @@ fn run(o: Opts) -> Result<(), String> {
         }
         _ => return Err(format!("bad command\n\n{USAGE}")),
     }
+    Ok(())
+}
+
+/// `init [pid] [file.toml]`: starts a device file for a mouse without one.
+fn init(args: &[&str], force: bool) -> Result<(), String> {
+    let connected = hid::razer_devices();
+    let known_pids: Vec<u16> = device::definitions().iter().map(|d| d.pid).collect();
+    let pid = match args.first() {
+        Some(p) => u16::from_str_radix(p.trim_start_matches("0x"), 16).map_err(|_| format!("bad pid '{p}', use hex like 008d"))?,
+        None => connected.iter().find(|(p, _)| !known_pids.contains(p)).map(|(p, _)| *p).ok_or_else(|| {
+            let list: Vec<String> = connected.iter().map(|(p, n)| format!("{p:04x} {n}")).collect();
+            format!("every connected Razer device already has a definition ({}), pass a pid to redo one", list.join(", "))
+        })?,
+    };
+    let hid_name = connected.iter().find(|(p, _)| *p == pid).map_or(format!("Razer 1532:{pid:04x}"), |(_, n)| n.clone());
+    let s = scaffold::scaffold(pid, &hid_name).map_err(|e| e.to_string())?;
+    let path = match args.get(1) {
+        Some(p) => PathBuf::from(p),
+        None => device::devices_dir().ok_or("no config dir")?.join(format!("{}.toml", scaffold::slug(&s.name))),
+    };
+    if path.exists() && !force {
+        return Err(format!("{} already exists, use --force to overwrite it", path.display()));
+    }
+    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    fs::write(&path, &s.toml).map_err(|e| e.to_string())?;
+    println!(
+        "wrote {}\n{} on interface {}, transaction id 0x{:02x}, {} buttons found\n\
+         name the buttons (`opensynapse watch` shows them as you press), then see CONTRIBUTING.md",
+        path.display(),
+        s.name,
+        s.interface,
+        s.transaction_id,
+        s.buttons
+    );
     Ok(())
 }
 

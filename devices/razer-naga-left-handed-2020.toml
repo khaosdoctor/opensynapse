@@ -8,7 +8,7 @@ vid = 0x1532
 pid = 0x008d
 interface = 0
 transaction_id = 0x1f
-profiles = [0, 1, 2]
+profiles = [0, 1, 2, 3, 4, 5]
 layers = ["normal", "hypershift"]
 dpi_max = 20000
 

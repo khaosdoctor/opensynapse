@@ -66,6 +66,7 @@ opensynapse export my-profile.json
 opensynapse watch                        # prints buttons as you press them
 opensynapse rgb all static ff00aa        # lighting, needs OpenRazer
 opensynapse rgb scroll brightness 128
+opensynapse init                         # start a device file for an unsupported mouse
 opensynapse protocol                     # protocol file for your mouse, see CONTRIBUTING.md
 opensynapse protocol send                # share it as a GitHub issue
 ```
@@ -74,7 +75,7 @@ opensynapse protocol send                # share it as a GitHub issue
 
 ## Adding your mouse
 
-**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single TOML file in [`devices/`](devices/) with its USB ids and the list of buttons, and there's a probe script that finds the button ids without writing anything to your mouse.
+**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single TOML file in [`devices/`](devices/) with its USB ids and the list of buttons, and `opensynapse init` writes most of it for you by asking your mouse, without changing anything on it.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the step by step, and a prompt you can paste into Claude Code (or whatever agent you use) to do the whole thing with it, which is how I did the Naga. Once it works, `opensynapse protocol` writes down what your mouse does and `opensynapse protocol send` shares it with me as an issue, so it helps the next person even if your mouse isn't fully supported yet.
 

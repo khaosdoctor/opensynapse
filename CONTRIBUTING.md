@@ -6,36 +6,30 @@ Bug fixes and features are welcome too, open an issue first if it's something bi
 
 ## Adding a mouse
 
-A mouse is a single TOML file. The best way to start is copying [the Naga one](devices/razer-naga-left-handed-2020.toml) and changing it. You need to find out a few things:
+A mouse is a single TOML file, like [the Naga one](devices/razer-naga-left-handed-2020.toml).
 
-1. **The USB ids.** Run `lsusb | grep 1532`, Razer is `1532` and the part after the colon is your mouse's product id.
-2. **Which hidraw node talks to the mouse.** Most Razer mice use interface 0. `ls -l /dev/input/by-id/ | grep -i razer` shows the hidraw nodes, the one without `if0X` in the name is usually interface 0.
-3. **The button ids.** Run the probe, it only sends read commands so it can't change anything on your mouse:
+1. **Start the file.** With the mouse plugged in, run:
 
    ```sh
-   python3 tools/probe.py /dev/hidrawN 0x02
+   opensynapse init
    ```
 
-   The line for `0x02 id 0x84` lists the buttons: the first byte is how many there are, then one id per button.
+   It finds your Razer mouse, looks up its transaction id and interface in a list taken from OpenRGB ([`devices/known-mice.toml`](devices/known-mice.toml)), asks the mouse for its buttons and profiles, and writes `~/.config/opensynapse/devices/<your-mouse>.toml`. It only reads from the mouse, so it can't change anything. Common buttons get a name, the rest are called `btn-0xNN`.
 
-4. **Which id is which physical button.** Ask the mouse what each id currently does:
+2. **Name the buttons.** `opensynapse dump` shows what each button does today (a key, a mouse button, DPI up...), which is usually enough to know which one it is, and `opensynapse watch` prints the names as you press them. Rename them in the file, and fix the `dpi_max` and any other `TODO`.
 
-   ```sh
-   python3 tools/probe.py /dev/hidrawN 0x02 --args 0140
-   ```
+   If `init` can't talk to your mouse, you can do the same by hand with `tools/probe.py`, it only sends read commands: `python3 tools/probe.py /dev/hidrawN 0x02` lists the buttons in the `0x02 id 0x84` line (first byte is the count, then one id per button), and `--args 0140` asks profile 1 what button `0x40` does.
 
-   That asks profile 1 for button `0x40` (change the second byte for each id). The reply tells you what it does today (a key, a mouse button, DPI up...), which is usually enough to know which button it is. Once the file exists, `opensynapse watch` prints the button names as you press them, so you can double check.
-
-5. **Put the file in `~/.config/opensynapse/devices/`** and run `opensynapse list` and `opensynapse dump`. If those look right, remap one button, check it does what you set, and set it back:
+3. **Test it.** Run `opensynapse list` and `opensynapse dump`. If those look right, remap one button, check it does what you set, and set it back:
 
    ```sh
    opensynapse set <button> key:z
    opensynapse set <button> <whatever dump showed before>
    ```
 
-6. **Optionally, add `at = [x, y]` to the buttons** so they show up on the drawn mouse in the GUI. The body is drawn at x 30..70 and y 2..74 (in percent), anything outside that gets a side plate. If you skip it you get a grid, which is fine.
+4. **Optionally, add `at = [x, y]` to the buttons** so they show up on the drawn mouse in the GUI. The body is drawn at x 30..70 and y 2..74 (in percent), anything outside that gets a side plate. If you skip it you get a grid, which is fine.
 
-7. **Write the protocol file (nice to have).** It's not required, but it helps a lot: next to the device file goes `devices/protocols/<same-name>.md`, where you write down what you found and how, and that's what helps the next person decode a similar mouse instead of starting from zero. `opensynapse protocol` generates most of it for you from your device file, you only fill in the TODOs. [PROTOCOL.md](PROTOCOL.md) explains what goes in it and has [a prompt so an agent fills it in for you](PROTOCOL.md#using-an-agent). The [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example. If you couldn't make your mouse work, send the protocol file anyway, what you found is still super useful.
+5. **Write the protocol file (nice to have).** It's not required, but it helps a lot: next to the device file goes `devices/protocols/<same-name>.md`, where you write down what you found and how, and that's what helps the next person decode a similar mouse instead of starting from zero. `opensynapse protocol` generates most of it for you from your device file, you only fill in the TODOs. [PROTOCOL.md](PROTOCOL.md) explains what goes in it and has [a prompt so an agent fills it in for you](PROTOCOL.md#using-an-agent). The [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example. If you couldn't make your mouse work, send the protocol file anyway, what you found is still super useful.
 
 Then send it. The quickest way is `opensynapse protocol send`, which opens an issue here with your protocol and device files (it asks before posting, `--dry-run` shows what it would send). If you prefer a PR, copy the device file into `devices/` and the protocol file into `devices/protocols/`, add the device to the `BUILTIN` list in [`src/device.rs`](src/device.rs) and open it with both files.
 
@@ -59,17 +53,15 @@ Rules:
 - Don't touch profiles other than 0 unless I ask.
 
 Steps:
-1. Find my mouse with lsusb and figure out which /dev/hidraw node is
-   interface 0.
-2. Run tools/probe.py on class 0x02 to get the button list (0x02/0x84),
-   then read what every button currently does (0x02/0x8c with
-   [profile, button, layer]).
-3. Work out which id is which physical button from those answers. Ask me
-   to press buttons if you need to.
-4. Write devices/<my-mouse>.toml, put a copy in
-   ~/.config/opensynapse/devices/ and check `opensynapse dump` matches
-   what you read.
-5. Do one write test on a single button following the rules above.
+1. Run `opensynapse init` to start the device file in
+   ~/.config/opensynapse/devices/. If it can't talk to my mouse, find the
+   /dev/hidraw node and transaction id by hand with tools/probe.py.
+2. Run `opensynapse dump` and work out which id is which physical button
+   from what each one does. Ask me to press buttons with
+   `opensynapse watch` running if you need to.
+3. Rename the buttons, fix dpi_max and every other TODO in the file.
+4. Do one write test on a single button following the rules above.
+5. Copy the finished file to devices/<my-mouse>.toml.
 6. Run `opensynapse protocol` to generate devices/protocols/<my-mouse>.md
    and fill in its TODOs, marking every finding as verified or inferred.
    Don't send it, I'll review it and send it myself.

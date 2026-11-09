@@ -1,5 +1,6 @@
 use opensynapse::action::Action;
 use opensynapse::device::{self, DpiStages, Mouse};
+use opensynapse::rgb::{self, Effect};
 use opensynapse::{input, profile};
 use std::path::Path;
 use std::sync::mpsc;
@@ -17,6 +18,10 @@ commands:
   dpi [X [Y]]                  show or set DPI
   stages [DPI ...] [--active N]  show or set DPI stages (max 5)
   watch                        print buttons as you press them
+  rgb                          lighting zones (needs the OpenRazer driver)
+  rgb <zone|all> <effect>      off | static RRGGBB | breath RRGGBB|random | spectrum
+                               | wave [reverse] | reactive RRGGBB [speed 1-3]
+  rgb <zone|all> brightness N  0-255
   export <file.json>           save keymap (all layers) + DPI of --profile
   import <file.json>           write a saved profile to --profile
 
@@ -133,6 +138,37 @@ fn run(o: Opts) -> Result<(), String> {
                 }
             }
         }
+        ["rgb", rest @ ..] => {
+            let light = rgb::find(def.vid, def.pid).ok_or("no lighting found (is the OpenRazer driver loaded?)")?;
+            let Some((zone, rest)) = rest.split_first() else {
+                for z in &light.zones {
+                    let saved = rgb::saved_effect(&mouse.serial, z).map_or("?".into(), |e| format!("{e:?}"));
+                    println!("{z:<10} brightness {:>3}  last effect {saved}", light.brightness(z).map_err(e)?);
+                }
+                return Ok(());
+            };
+            let zones: Vec<&str> = match *zone {
+                "all" => light.zones.iter().map(String::as_str).collect(),
+                z if light.zones.iter().any(|x| x == z) => vec![z],
+                z => return Err(format!("unknown zone '{z}', have {:?} or all", light.zones)),
+            };
+            match rest {
+                ["brightness", v] => {
+                    let v: u8 = v.parse().map_err(|_| "brightness is 0-255")?;
+                    for z in &zones {
+                        light.set_brightness(z, v).map_err(e)?;
+                    }
+                }
+                [name, args @ ..] => {
+                    let effect = parse_effect(name, args)?;
+                    for z in &zones {
+                        light.set_effect(z, &effect).map_err(e)?;
+                    }
+                }
+                [] => return Err("rgb <zone|all> <effect|brightness> ...".into()),
+            }
+            println!("{} > {}", zones.join(","), rest.join(" "));
+        }
         ["export", path] => {
             let file = profile::read(mouse, o.profile).map_err(e)?;
             profile::save(&file, Path::new(path)).map_err(e)?;
@@ -146,6 +182,26 @@ fn run(o: Opts) -> Result<(), String> {
         _ => return Err(format!("bad command\n\n{USAGE}")),
     }
     Ok(())
+}
+
+fn parse_effect(name: &str, args: &[&str]) -> Result<Effect, String> {
+    let color = |i: usize| {
+        let raw = args.get(i).ok_or(format!("{name} needs a color like ff00aa"))?;
+        rgb::parse_color(raw).ok_or(format!("bad color '{raw}'"))
+    };
+    Ok(match name {
+        "off" => Effect::Off,
+        "static" => Effect::Static(color(0)?),
+        "breath" if args.first() == Some(&"random") => Effect::BreathRandom,
+        "breath" => Effect::Breath(color(0)?),
+        "spectrum" => Effect::Spectrum,
+        "wave" => Effect::Wave(args.first() == Some(&"reverse")),
+        "reactive" => Effect::Reactive {
+            color: color(0)?,
+            speed: args.get(1).and_then(|s| s.parse().ok()).unwrap_or(2),
+        },
+        _ => return Err(format!("unknown effect '{name}'")),
+    })
 }
 
 fn print_stages(s: &DpiStages) {

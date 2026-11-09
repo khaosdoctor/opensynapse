@@ -65,9 +65,9 @@ opensynapse watch                        # prints buttons as you press them
 
 ## Adding your mouse
 
-Every mouse is a TOML file in [`devices/`](devices/). It has the USB ids, the profiles, the layers and the list of buttons with their ids. Each button can also have an optional `at = [x, y]` so it shows up on the drawn mouse in the GUI, if you skip that you get a grid instead.
+**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single TOML file in [`devices/`](devices/) with its USB ids and the list of buttons, and there's a probe script that finds the button ids without writing anything to your mouse.
 
-To find the button ids of your mouse, `tools/probe.py` asks the mouse for them without writing anything. You can also drop your file in `~/.config/opensynapse/devices/` to try it before opening a PR.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the step by step, and a prompt you can paste into Claude Code (or whatever agent you use) to do the whole thing with it, which is how I did the Naga.
 
 ## AI usage
 

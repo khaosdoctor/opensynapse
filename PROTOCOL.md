@@ -54,6 +54,8 @@ Layer `0` is normal and `1` is Hypershift. Profiles `0`..`2` answer. Writing pro
 
 ## Unknowns
 
+The mouse doesn't validate actions on write: on thumb1 it stored every type byte from `0x01` to `0x1f` exactly as sent (only type `0x00`, and `0x14` with a 6-byte payload, came back rewritten). A write that's accepted and reads back fine says nothing about what the button will do, so new action types have to be checked by pressing the button and watching the input reports.
+
 - The second keyboard byte. It's `02` on most profile 0/1 layer-0 keys and `01` elsewhere. Writing `02` worked.
 - Whether profile 0 lives in RAM, and whether it survives a replug.
 - Which command switches or persists the active profile.

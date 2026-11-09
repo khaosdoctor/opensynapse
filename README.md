@@ -21,6 +21,7 @@ Right now you can:
 - Change DPI and the DPI stages
 - Export and import profiles as JSON. The first time it runs it backs up every profile on the mouse to `~/.config/opensynapse/devices/<serial>/`
 - See which button you're pressing, live, in the GUI
+- Change the lighting of each zone (static, breath, spectrum, wave, reactive, off) and its brightness. This one goes through [OpenRazer](https://openrazer.github.io/), so it works on any mouse OpenRazer supports, and if the OpenRazer daemon is running it remembers your colors like it does for its own apps
 
 Changes are queued like in GParted, nothing touches the mouse until you hit _Write to device_.
 
@@ -28,7 +29,9 @@ Changes are queued like in GParted, nothing touches the mouse until you hit _Wri
 
 Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is supported, because that's the one I have. The protocol is shared by a bunch of Razer mice, so adding another one should mostly be writing a TOML file (see [Adding your mouse](#adding-your-mouse)).
 
-Things I still haven't figured out: turbo for keyboard keys, media keys like play/pause, and whether profile 0 survives unplugging the mouse. RGB is not here at all, use [OpenRazer](https://openrazer.github.io/) for that.
+Things I still haven't figured out: turbo for keyboard keys, media keys like play/pause, and whether profile 0 survives unplugging the mouse.
+
+Lighting needs the OpenRazer driver installed (`openrazer-driver-dkms` on Arch), I didn't reverse engineer the RGB part since OpenRazer already does it really well.
 
 ## Install
 
@@ -59,6 +62,8 @@ opensynapse dpi 1600
 opensynapse stages 800 1600 3200 --active 2
 opensynapse export my-profile.json
 opensynapse watch                        # prints buttons as you press them
+opensynapse rgb all static ff00aa        # lighting, needs OpenRazer
+opensynapse rgb scroll brightness 128
 ```
 
 `opensynapse help` has the rest.

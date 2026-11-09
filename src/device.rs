@@ -5,8 +5,10 @@ use crate::hid::{self, Hid};
 use serde::Deserialize;
 use std::{env, fs, io, path::PathBuf};
 
-/// Built into the binary. New devices: add a TOML file and a line here.
-const BUILTIN: &[&str] = &[include_str!("../devices/razer-naga-left-handed-2020.toml")];
+/// Built into the binary as (file name without .toml, contents).
+/// New devices: add a TOML file and a line here.
+const BUILTIN: &[(&str, &str)] =
+    &[("razer-naga-left-handed-2020", include_str!("../devices/razer-naga-left-handed-2020.toml"))];
 
 const VARSTORE: u8 = 0x01;
 const CLASS_DPI: u8 = 0x04;
@@ -25,6 +27,12 @@ pub struct DeviceDef {
     pub layers: Vec<String>,
     pub dpi_max: u16,
     pub buttons: Vec<Button>,
+    /// File name without .toml; the protocol file uses the same name.
+    #[serde(skip)]
+    pub file: String,
+    /// The TOML text this was parsed from, for `protocol send`.
+    #[serde(skip)]
+    pub source: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -56,20 +64,23 @@ impl DeviceDef {
 /// Built-in definitions plus any *.toml in ~/.config/opensynapse/devices (user files win).
 pub fn definitions() -> Vec<DeviceDef> {
     let mut defs: Vec<DeviceDef> = Vec::new();
-    let mut add = |src: &str, origin: &str| match toml::from_str::<DeviceDef>(src) {
-        Ok(d) => {
+    let mut add = |src: &str, file: &str, origin: &str| match toml::from_str::<DeviceDef>(src) {
+        Ok(mut d) => {
+            d.file = file.to_string();
+            d.source = src.to_string();
             defs.retain(|x| (x.vid, x.pid) != (d.vid, d.pid));
             defs.push(d);
         }
         Err(e) => eprintln!("skipping device definition {origin}: {e}"),
     };
-    for src in BUILTIN {
-        add(src, "(builtin)");
+    for (file, src) in BUILTIN {
+        add(src, file, "(builtin)");
     }
     let entries = devices_dir().and_then(|d| fs::read_dir(d).ok()).into_iter().flatten().flatten();
     for path in entries.map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "toml")) {
+        let file = path.file_stem().map_or(String::new(), |s| s.to_string_lossy().into_owned());
         if let Ok(src) = fs::read_to_string(&path) {
-            add(&src, &path.display().to_string());
+            add(&src, &file, &path.display().to_string());
         }
     }
     defs

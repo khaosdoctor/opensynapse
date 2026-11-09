@@ -1,11 +1,13 @@
 use opensynapse::action::Action;
 use opensynapse::device::{self, DpiStages, Mouse};
 use opensynapse::rgb::{self, Effect};
-use opensynapse::{input, profile};
-use std::path::Path;
+use opensynapse::{input, profile, protocol};
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode};
 use std::sync::mpsc;
 use std::time::Duration;
-use std::process::ExitCode;
+use std::{env, fs};
 
 const USAGE: &str = "\
 usage: opensynapse <command> [--profile N] [--layer NAME]
@@ -24,6 +26,9 @@ commands:
   rgb <zone|all> brightness N  0-255
   export <file.json>           save keymap (all layers) + DPI of --profile
   import <file.json>           write a saved profile to --profile
+  protocol [file.md]           generate a protocol file skeleton for this mouse (--force overwrites)
+  protocol send [file.md]      open a GitHub issue with the protocol and device file
+                               (--dry-run prints it instead, --yes skips the confirmation)
 
 actions:
   key:[mods+]name   e.g. key:ctrl+1, key:f13, key:shift+a (mods: ctrl shift alt meta rctrl ...)
@@ -38,10 +43,21 @@ struct Opts {
     profile: u8,
     layer: String,
     active: Option<u8>,
+    force: bool,
+    dry_run: bool,
+    yes: bool,
 }
 
 fn parse() -> Result<Opts, String> {
-    let mut o = Opts { args: Vec::new(), profile: 0, layer: "normal".into(), active: None };
+    let mut o = Opts {
+        args: Vec::new(),
+        profile: 0,
+        layer: "normal".into(),
+        active: None,
+        force: false,
+        dry_run: false,
+        yes: false,
+    };
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
         let mut val = || it.next().ok_or(format!("{a} needs a value"));
@@ -49,6 +65,9 @@ fn parse() -> Result<Opts, String> {
             "--profile" => o.profile = val()?.parse().map_err(|_| "bad --profile")?,
             "--layer" => o.layer = val()?,
             "--active" => o.active = Some(val()?.parse().map_err(|_| "bad --active")?),
+            "--force" => o.force = true,
+            "--dry-run" => o.dry_run = true,
+            "--yes" | "-y" => o.yes = true,
             "-h" | "--help" => o.args = vec!["help".into()],
             _ => o.args.push(a),
         }
@@ -171,6 +190,28 @@ fn run(o: Opts) -> Result<(), String> {
             }
             println!("{} > {}", zones.join(","), rest.join(" "));
         }
+        ["protocol", "send", rest @ ..] if rest.len() <= 1 => {
+            let path = rest.first().map_or_else(|| protocol_path(def), PathBuf::from);
+            let text = fs::read_to_string(&path)
+                .map_err(|e| format!("{}: {e} > run `opensynapse protocol` first", path.display()))?;
+            let (title, body) = protocol::issue(&text, mouse);
+            if o.dry_run {
+                println!("title: {title}\n\n{body}");
+                return Ok(());
+            }
+            send_issue(&title, &body, o.yes)?;
+        }
+        ["protocol", rest @ ..] if rest.len() <= 1 => {
+            let path = rest.first().map_or_else(|| protocol_path(def), PathBuf::from);
+            if path.exists() && !o.force {
+                return Err(format!("{} already exists, use --force to overwrite it", path.display()));
+            }
+            if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+                fs::create_dir_all(dir).map_err(e)?;
+            }
+            fs::write(&path, protocol::generate(mouse)).map_err(e)?;
+            println!("wrote {}\nfill in the TODOs, then `opensynapse protocol send` opens an issue with it", path.display());
+        }
         ["export", path] => {
             let file = profile::read(mouse, o.profile).map_err(e)?;
             profile::save(&file, Path::new(path)).map_err(e)?;
@@ -182,6 +223,55 @@ fn run(o: Opts) -> Result<(), String> {
             println!("wrote {n} buttons + DPI to profile {}", o.profile);
         }
         _ => return Err(format!("bad command\n\n{USAGE}")),
+    }
+    Ok(())
+}
+
+/// devices/protocols/<device file>.md inside a checkout of the repo, else ./<device file>.md
+fn protocol_path(def: &opensynapse::device::DeviceDef) -> PathBuf {
+    let name = format!("{}.md", if def.file.is_empty() { "protocol" } else { &def.file });
+    let dir = Path::new("devices/protocols");
+    if dir.is_dir() {
+        return dir.join(name);
+    }
+    PathBuf::from(name)
+}
+
+/// Opens the issue with the GitHub CLI, or prints a link to open it by hand.
+fn send_issue(title: &str, body: &str, yes: bool) -> Result<(), String> {
+    let has_gh = Command::new("gh").arg("--version").output().is_ok_and(|out| out.status.success());
+    if !has_gh {
+        let encode = |s: &str| -> String {
+            s.bytes()
+                .map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") })
+                .collect()
+        };
+        println!(
+            "GitHub CLI (gh) not found. Open this link and paste your protocol file as the issue text:\n\
+             https://github.com/{}/issues/new?title={}",
+            protocol::REPO,
+            encode(title)
+        );
+        return Ok(());
+    }
+    if !yes {
+        print!("This opens a public issue on github.com/{} as your GitHub user. Continue? [y/N] ", protocol::REPO);
+        io::stdout().flush().map_err(|e| e.to_string())?;
+        let mut answer = String::new();
+        io::stdin().read_line(&mut answer).map_err(|e| e.to_string())?;
+        if !matches!(answer.trim(), "y" | "Y" | "yes") {
+            return Err("cancelled".into());
+        }
+    }
+    let file = env::temp_dir().join("opensynapse-protocol-issue.md");
+    fs::write(&file, body).map_err(|e| e.to_string())?;
+    let status = Command::new("gh")
+        .args(["issue", "create", "--repo", protocol::REPO, "--title", title, "--body-file"])
+        .arg(&file)
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !status.success() {
+        return Err("gh issue create failed (try `gh auth login`)".into());
     }
     Ok(())
 }

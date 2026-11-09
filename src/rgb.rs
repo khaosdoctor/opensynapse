@@ -8,7 +8,8 @@
 
 use serde::Serialize;
 use std::path::PathBuf;
-use std::{env, fs, io};
+use std::{fs, io};
+use zbus::Message;
 use zbus::blocking::Connection;
 use zbus::zvariant::DynamicType;
 
@@ -34,7 +35,7 @@ impl Effect {
             // one byte means "random colors" to the driver
             Effect::BreathRandom => ("breath", vec![1]),
             Effect::Spectrum => ("spectrum", b"1".to_vec()),
-            Effect::Wave(reverse) => ("wave", if *reverse { b"2".to_vec() } else { b"1".to_vec() }),
+            Effect::Wave(reverse) => ("wave", vec![if *reverse { b'2' } else { b'1' }]),
             Effect::Reactive { speed, color } => ("reactive", vec![(*speed).clamp(1, 3), color[0], color[1], color[2]]),
         }
     }
@@ -54,17 +55,18 @@ impl Lighting {
         self.daemon.is_some()
     }
 
-    /// Calls razer.device.lighting.<zone>.set<Zone><name> on the daemon.
-    /// Returns None when there's no daemon or it doesn't know this zone.
-    fn daemon_call<B: Serialize + DynamicType>(&self, zone: &str, name: &str, body: &B) -> Option<()> {
-        let (conn, path) = self.daemon.as_ref()?;
-        let mut cap = zone.to_string();
-        cap[..1].make_ascii_uppercase();
-        let iface = format!("razer.device.lighting.{zone}");
-        conn.call_method(Some("org.razer"), path.as_str(), Some(iface.as_str()), format!("set{cap}{name}").as_str(), body)
-            .ok()
-            .map(|_| ())
+    /// False when there's no daemon or it doesn't know this zone.
+    fn daemon_call<B: Serialize + DynamicType>(&self, zone: &str, name: &str, body: &B) -> bool {
+        self.daemon.as_ref().is_some_and(|(conn, path)| call(conn, path, zone, "set", name, body).is_some())
     }
+}
+
+/// Calls razer.device.lighting.<zone>.<verb><Zone><name> on the OpenRazer daemon.
+fn call<B: Serialize + DynamicType>(conn: &Connection, path: &str, zone: &str, verb: &str, name: &str, body: &B) -> Option<Message> {
+    let mut cap = zone.to_string();
+    cap[..1].make_ascii_uppercase();
+    let iface = format!("razer.device.lighting.{zone}");
+    conn.call_method(Some("org.razer"), path, Some(iface.as_str()), format!("{verb}{cap}{name}").as_str(), body).ok()
 }
 
 fn connect_daemon(serial: &str, zone: &str) -> Option<(Connection, String)> {
@@ -73,12 +75,8 @@ fn connect_daemon(serial: &str, zone: &str) -> Option<(Connection, String)> {
     }
     let conn = Connection::session().ok()?;
     let path = format!("/org/razer/device/{serial}");
-    let mut cap = zone.to_string();
-    cap[..1].make_ascii_uppercase();
-    let iface = format!("razer.device.lighting.{zone}");
     // a read that also starts the daemon if it's only D-Bus activatable
-    conn.call_method(Some("org.razer"), path.as_str(), Some(iface.as_str()), format!("get{cap}Brightness").as_str(), &())
-        .ok()?;
+    call(&conn, &path, zone, "get", "Brightness", &())?;
     Some((conn, path))
 }
 
@@ -95,20 +93,19 @@ pub fn find(vid: u16, pid: u16, serial: &str) -> Option<Lighting> {
         .map(|e| e.path())
         .collect();
     dirs.sort();
-    for dir in dirs {
+    dirs.into_iter().find_map(|dir| {
         let mut zones: Vec<String> = fs::read_dir(&dir)
             .ok()?
             .flatten()
             .filter_map(|e| e.file_name().to_string_lossy().strip_suffix("_matrix_effect_static").map(str::to_string))
             .collect();
         if zones.is_empty() {
-            continue;
+            return None;
         }
         zones.sort();
         let daemon = connect_daemon(serial, &zones[0]);
-        return Some(Lighting { dir, zones, daemon, serial: serial.to_string() });
-    }
-    None
+        Some(Lighting { dir, zones, daemon, serial: serial.to_string() })
+    })
 }
 
 fn hint(e: io::Error) -> io::Error {
@@ -126,7 +123,7 @@ impl Lighting {
 
     pub fn set_brightness(&self, zone: &str, value: u8) -> io::Result<()> {
         // the daemon takes a percentage
-        if self.daemon_call(zone, "Brightness", &(f64::from(value) * 100.0 / 255.0,)).is_some() {
+        if self.daemon_call(zone, "Brightness", &(f64::from(value) * 100.0 / 255.0,)) {
             return Ok(());
         }
         fs::write(self.dir.join(format!("{zone}_led_brightness")), value.to_string()).map_err(hint)
@@ -142,7 +139,7 @@ impl Lighting {
             Effect::Wave(reverse) => self.daemon_call(zone, "Wave", &(if reverse { 2i32 } else { 1 },)),
             Effect::Reactive { speed, color: [r, g, b] } => self.daemon_call(zone, "Reactive", &(r, g, b, speed.clamp(1, 3))),
         };
-        if sent.is_some() {
+        if sent {
             return Ok(());
         }
         let (name, data) = effect.file_and_data();
@@ -156,12 +153,7 @@ impl Lighting {
 
 /// "ff00aa" or "#ff00aa" -> [255, 0, 170]
 pub fn parse_color(s: &str) -> Option<[u8; 3]> {
-    let hex = s.trim_start_matches('#');
-    if hex.len() != 6 {
-        return None;
-    }
-    let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
-    Some([byte(0)?, byte(2)?, byte(4)?])
+    crate::action::hex_bytes(s.trim_start_matches('#'))?.try_into().ok()
 }
 
 /// OpenRazer's effect names (daemon and persistence.conf use the same ones).
@@ -181,11 +173,8 @@ fn effect_from(name: &str, colors: &[u8], speed: Option<u8>, wave_dir: Option<i3
 
 /// The last effect the OpenRazer daemon saved for a zone in persistence.conf.
 /// The daemon only writes that file on exit, so prefer Lighting::current_effect.
-pub fn saved_effect(serial: &str, zone: &str) -> Option<Effect> {
-    let home = env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
-    let conf = fs::read_to_string(home.join("openrazer/persistence.conf")).ok()?;
+fn saved_effect(serial: &str, zone: &str) -> Option<Effect> {
+    let conf = fs::read_to_string(crate::device::config_dir()?.join("openrazer/persistence.conf")).ok()?;
     let section = conf.split(&format!("[{serial}]")).nth(1)?.split("\n[").next()?;
     let value = |key: &str| {
         section.lines().find_map(|l| l.strip_prefix(&format!("{zone}_{key} = ")).map(str::trim))
@@ -201,13 +190,7 @@ impl Lighting {
     /// otherwise its saved state (the driver's effect files are write-only).
     pub fn current_effect(&self, zone: &str) -> Option<Effect> {
         let Some((conn, path)) = &self.daemon else { return saved_effect(&self.serial, zone) };
-        let mut cap = zone.to_string();
-        cap[..1].make_ascii_uppercase();
-        let iface = format!("razer.device.lighting.{zone}");
-        let get = |what: &str| {
-            conn.call_method(Some("org.razer"), path.as_str(), Some(iface.as_str()), format!("get{cap}{what}").as_str(), &())
-                .ok()
-        };
+        let get = |what: &str| call(conn, path, zone, "get", what, &());
         let name: String = get("Effect")?.body().deserialize().ok()?;
         let colors: Vec<u8> = get("EffectColors").and_then(|m| m.body().deserialize().ok()).unwrap_or_default();
         let speed: Option<i32> = get("EffectSpeed").and_then(|m| m.body().deserialize().ok());

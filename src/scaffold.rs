@@ -3,7 +3,6 @@
 //! asking the mouse, so there's no per-mouse table to keep up to date.
 
 use crate::hid::{self, Hid};
-use std::fmt::Write;
 use std::io;
 
 const RAZER: u16 = 0x1532;
@@ -11,7 +10,6 @@ const RAZER: u16 = 0x1532;
 const TIDS: [u8; 3] = [0x1f, 0x3f, 0xff];
 
 pub struct Scaffold {
-    pub name: String,
     pub json: String,
     pub transaction_id: u8,
     pub interface: u8,
@@ -35,28 +33,22 @@ fn guess_name(id: u8) -> String {
     name.to_string()
 }
 
-/// Finds the interface and transaction id the mouse answers on, with reads only.
-/// Tries every interface with every known transaction id, so no per-mouse table is needed.
+/// Finds the interface and transaction id the mouse answers on by trying
+/// every interface with every known transaction id, with reads only.
 fn connect(pid: u16) -> io::Result<(Hid, u8, u8)> {
     let mut ifaces = hid::find_all(RAZER, pid);
     if ifaces.is_empty() {
         return Err(io::Error::other(format!("no hidraw node for 1532:{pid:04x}, is it plugged in?")));
     }
     ifaces.sort_by_key(|(n, _)| *n);
-    let tids = TIDS;
     let mut last_err = io::Error::other("the mouse didn't answer on any interface");
     for (iface, path) in &ifaces {
-        for &tid in &tids {
-            let hid = match Hid::open(path, tid) {
-                Ok(h) => h,
-                Err(e) => {
-                    last_err = e;
-                    continue;
-                }
-            };
+        for tid in TIDS {
             // firmware version: a read every Razer mouse answers
-            if hid.command(0x00, 0x81, 0x02, &[]).is_ok() {
-                return Ok((hid, *iface, tid));
+            match Hid::open(path, tid) {
+                Ok(hid) if hid.command(0x00, 0x81, 0x02, &[]).is_ok() => return Ok((hid, *iface, tid)),
+                Ok(_) => {}
+                Err(e) => last_err = e,
             }
         }
     }
@@ -65,47 +57,56 @@ fn connect(pid: u16) -> io::Result<(Hid, u8, u8)> {
 
 /// `name` is what the mouse reports over USB, like "Razer Naga Left Handed".
 pub fn scaffold(pid: u16, name: &str) -> io::Result<Scaffold> {
-    let name = name.to_string();
     let (hid, interface, tid) = connect(pid)?;
 
     // 0x02/0x84: [count, ids...]
-    let ids: Vec<u8> = match hid.command(0x02, 0x84, 0x50, &[]) {
-        Ok(r) => r[9..9 + (r[8] as usize).min(78)].to_vec(),
-        Err(_) => Vec::new(),
-    };
+    let ids: Vec<u8> =
+        hid.command(0x02, 0x84, 0x50, &[]).map(|r| r[9..9 + (r[8] as usize).min(78)].to_vec()).unwrap_or_default();
     // which profiles answer a keymap read for the first button
     let first = ids.first().copied().unwrap_or(0x01);
     let profiles: Vec<u8> =
         (0..=5u8).filter(|&p| hid.command(0x02, 0x8c, 0x0a, &[p, first, 0]).is_ok()).collect();
     let hypershift = hid.command(0x02, 0x8c, 0x0a, &[0, first, 1]).is_ok();
 
-    // written by hand to keep ids in hex and one button per line; writes to a String can't fail
-    let mut t = String::from("// Started by `opensynapse init` with read-only queries. Check every TODO,\n");
-    let _ = writeln!(t, "// then see CONTRIBUTING.md for testing it and sending it.\n{{");
-    let _ = writeln!(t, "  \"name\": {},", serde_json::to_string(&name).unwrap_or_default());
-    let _ = writeln!(t, "  \"vid\": \"0x{RAZER:04x}\",\n  \"pid\": \"0x{pid:04x}\",\n  \"interface\": {interface},\n  \"transaction_id\": \"0x{tid:02x}\",");
-    let _ = writeln!(t, "  \"profiles\": {profiles:?},");
+    let name_json = serde_json::to_string(&name).unwrap_or_default();
     let layers = if hypershift { "[\"normal\", \"hypershift\"]" } else { "[\"normal\"]" };
-    let _ = writeln!(t, "  \"layers\": {layers},");
-    let _ = writeln!(t, "  \"dpi_max\": 16000, // TODO: your mouse's real maximum");
-    if ids.is_empty() {
-        let _ = writeln!(t, "  // TODO: the mouse didn't answer 0x02/0x84 (button list), add buttons by hand");
-    }
+    let todo = if ids.is_empty() {
+        "the mouse didn't answer 0x02/0x84 (button list), add buttons by hand"
+    } else {
+        "name the buttons, `opensynapse dump` shows what each one does and `opensynapse watch` shows the ones you press"
+    };
     let buttons: Vec<String> = ids
         .iter()
         .map(|id| format!("    {{ \"id\": \"0x{id:02x}\", \"name\": \"{}\" }}", guess_name(*id)))
         .collect();
-    if !ids.is_empty() {
-        let _ = writeln!(t, "  // TODO: name the buttons, `opensynapse watch` shows them as you press");
-    }
-    let _ = write!(t, "  \"buttons\": [\n{}\n  ]\n}}\n", buttons.join(",\n"));
-    Ok(Scaffold { name, json: t, transaction_id: tid, interface, buttons: ids.len() })
+    let buttons = buttons.join(",\n");
+    // written by hand to keep ids in hex and one button per line
+    let json = format!(
+        "// Started by `opensynapse init` with read-only queries. Check every TODO,
+// then see https://github.com/{repo}/blob/main/CONTRIBUTING.md for testing it and sending it.
+{{
+  \"name\": {name_json}, // TODO: the product name, it also names the protocol and device files
+  \"vid\": \"0x{RAZER:04x}\",
+  \"pid\": \"0x{pid:04x}\",
+  \"interface\": {interface},
+  \"transaction_id\": \"0x{tid:02x}\",
+  \"profiles\": {profiles:?},
+  \"layers\": {layers},
+  \"dpi_max\": 16000, // TODO: the top DPI on your mouse's Razer product page
+  // TODO: {todo}
+  \"buttons\": [
+{buttons}
+  ]
+}}
+",
+        repo = crate::protocol::REPO
+    );
+    Ok(Scaffold { json, transaction_id: tid, interface, buttons: ids.len() })
 }
 
 /// "Razer Naga Pro (Wired)" -> "razer-naga-pro-wired"
 pub fn slug(name: &str) -> String {
-    let s: String = name.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
-    s.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-")
+    name.to_lowercase().split(|c: char| !c.is_ascii_alphanumeric()).filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-")
 }
 
 #[cfg(test)]

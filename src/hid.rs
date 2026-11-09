@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
 
-pub const REPORT_LEN: usize = 90;
+const REPORT_LEN: usize = 90;
 const STATUS_BUSY: u8 = 0x01;
 const STATUS_OK: u8 = 0x02;
 
@@ -55,8 +55,7 @@ impl Hid {
                     "device rejected command {class:02x}/{id:02x}: status {status:02x}"
                 )));
             }
-            let mut out = [0u8; REPORT_LEN];
-            out.copy_from_slice(&resp[1..]);
+            let [_, out @ ..] = resp;
             return Ok(out);
         }
         Err(io::Error::new(io::ErrorKind::TimedOut, "device stayed busy"))
@@ -70,11 +69,6 @@ impl Hid {
         }
         Ok(())
     }
-}
-
-/// Finds /dev/hidrawN for a USB vid:pid on a given interface number.
-pub fn find(vid: u16, pid: u16, interface: u8) -> Option<PathBuf> {
-    find_all(vid, pid).into_iter().find(|(n, _)| *n == interface).map(|(_, p)| p)
 }
 
 /// Connected Razer USB devices as (pid, name), one entry per device.

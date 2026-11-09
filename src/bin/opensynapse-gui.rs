@@ -1,8 +1,8 @@
 use eframe::egui::{
     self, Align, Align2, Color32, ComboBox, StrokeKind, CornerRadius, DragValue, FontFamily, FontId, Frame, Layout, Margin, RichText, Stroke,
-    TextEdit, TextStyle,
+    TextEdit,
 };
-use opensynapse::action::{Action, key_usage};
+use opensynapse::action::{Action, key_name, key_usage};
 use opensynapse::device::{self, Button, DeviceDef, DpiStages, Mouse};
 use opensynapse::hid;
 use opensynapse::input::{self, Pressed};
@@ -29,10 +29,6 @@ const YELLOW: Color32 = Color32::from_rgb(0xfc, 0xee, 0x0a);
 const DIM: Color32 = Color32::from_rgb(0x5a, 0x5a, 0x7a);
 /// edge of a button whose action is OFF
 const OFF: Color32 = Color32::from_rgb(0x2a, 0x2a, 0x3a);
-
-const MODS: [(&str, u8); 4] = [("CTRL", 0x01), ("SHIFT", 0x02), ("ALT", 0x04), ("META", 0x08)];
-const MOUSE_BUTTONS: [(&str, u8); 7] =
-    [("left", 1), ("right", 2), ("middle", 3), ("back", 4), ("forward", 5), ("wheelup", 9), ("wheeldown", 10)];
 
 /// (title, grid columns, keys): each group renders as its own column.
 const SPECIAL_KEYS: &[(&str, usize, &[&str])] = &[
@@ -86,7 +82,7 @@ impl Editor {
             Action::Key { mods, usage } => {
                 e.kind = Kind::Key;
                 e.mods = *mods;
-                e.key = opensynapse::action::key_name(*usage).unwrap_or(format!("0x{usage:02x}"));
+                e.key = key_name(*usage).unwrap_or(format!("0x{usage:02x}"));
             }
             Action::Mouse(b) => (e.kind, e.mouse) = (Kind::Mouse, *b),
             Action::MouseTurbo { button, interval } => (e.kind, e.mouse, e.rate) = (Kind::Turbo, *button, *interval),
@@ -128,8 +124,6 @@ struct App {
     active: u8,
     path: String,
     last_poll: Instant,
-    /// last (dpi, active stage) seen on the device, to tell device changes from UI edits
-    seen: (u16, u8),
     ctx: egui::Context,
     pressed: Option<Arc<Mutex<Pressed>>>,
     /// button index lit briefly because the mouse changed DPI on its own
@@ -174,17 +168,15 @@ impl App {
             active: 1,
             path: String::new(), // set per device/profile by update_path
             last_poll: Instant::now(),
-            seen: (0, 0),
         };
         app.connect();
         app
     }
 
     fn connect(&mut self) {
-        self.mice = device::detect().unwrap_or_else(|e| {
-            self.status = Err(e.to_string());
-            Vec::new()
-        });
+        let detected = device::detect();
+        let err = detected.as_ref().err().map(|e| e.to_string());
+        self.mice = detected.unwrap_or_default();
         let known: Vec<u16> = self.mice.iter().map(|m| m.def.pid).collect();
         self.unsupported = hid::razer_devices()
             .into_iter()
@@ -192,7 +184,7 @@ impl App {
             .map(|(pid, name)| format!("{name} ({pid:04x})"))
             .collect();
         if self.mice.is_empty() {
-            self.status = Err("NO SUPPORTED DEVICE > run `opensynapse init` for it".into());
+            self.status = Err(err.unwrap_or_else(|| "NO SUPPORTED DEVICE > run `opensynapse init` for it".into()));
             return;
         }
         self.switch_to(self.current.min(self.mice.len() - 1));
@@ -202,7 +194,7 @@ impl App {
         self.current = i;
         let m = &self.mice[i];
         let ctx = self.ctx.clone();
-        // ponytail: the previous listener's threads keep running until their device goes away
+        // the previous listener's threads keep running until their device goes away
         self.pressed = Some(input::listen(m.def.vid, m.def.pid, move || ctx.request_repaint()));
         self.status = match profile::ensure_defaults(m) {
             Ok(0) => Ok(format!("DEVICE > {}", m.def.name.to_uppercase())),
@@ -232,39 +224,35 @@ impl App {
         if let Ok(DpiStages { active, stages }) = m.dpi_stages() {
             (self.active, self.stages) = (active, stages);
         }
-        self.seen = (self.dpi, self.active);
         self.device_dpi = (self.dpi, self.active, self.stages.clone());
         self.select(self.selected);
     }
 
     /// Follows DPI changes made with the mouse's own buttons.
-    fn poll_dpi(&mut self, ctx: &egui::Context) {
-        ctx.request_repaint_after(POLL);
+    fn poll_dpi(&mut self) {
+        self.ctx.request_repaint_after(POLL);
         if self.last_poll.elapsed() < POLL {
             return;
         }
         self.last_poll = Instant::now();
         let Some(m) = self.mice.get(self.current) else { return };
         let (Ok((dpi, _)), Ok(s)) = (m.dpi(), m.dpi_stages()) else { return };
-        if (dpi, s.active) == self.seen {
+        if (dpi, s.active) == (self.device_dpi.0, self.device_dpi.1) {
             return;
         }
         // light up whichever button is mapped to the DPI step that just happened
-        let step = Action::Dpi(if dpi > self.seen.0 { 1 } else { 2 });
+        let step = Action::Dpi(if dpi > self.device_dpi.0 { 1 } else { 2 });
         let button = self.actions.iter().position(|a| a.as_ref() == Some(&step));
         self.flash = button.map(|b| (b, Instant::now()));
-        (self.dpi, self.active, self.seen) = (dpi, s.active, (dpi, s.active));
+        (self.dpi, self.active) = (dpi, s.active);
+        self.device_dpi = (dpi, s.active, s.stages);
     }
 
     fn select(&mut self, i: usize) {
         self.selected = i;
-        if let Some(a) = self.pending(i).cloned().or_else(|| self.actions.get(i).cloned().flatten()) {
+        if let Some(a) = self.effective(i) {
             self.editor = Editor::load(&a);
         }
-    }
-
-    fn report(&mut self, r: Result<String, String>) {
-        self.status = r;
     }
 
     /// Queued action for a button on the profile/layer being shown.
@@ -283,9 +271,13 @@ impl App {
         self.ops.push(op);
     }
 
-    /// What the selected button will do: the queued change, or the device value.
+    /// What a button will do: the queued change, or the device value.
     fn effective(&self, index: usize) -> Option<Action> {
-        self.pending(index).cloned().or_else(|| self.actions.get(index).cloned().flatten())
+        self.pending(index).or(self.device_action(index)).cloned()
+    }
+
+    fn device_action(&self, i: usize) -> Option<&Action> {
+        self.actions.get(i)?.as_ref()
     }
 
     /// SAVE needs a valid action that differs from what the button will already do.
@@ -299,31 +291,35 @@ impl App {
         let valid = (1..=5).contains(&self.stages.len())
             && (1..=self.stages.len() as u8).contains(&self.active)
             && self.stages.iter().chain([&self.dpi]).all(|d| (100..=max).contains(d));
-        let wanted = (self.dpi, self.active, self.stages.clone());
-        let queued = self.ops.iter().any(|o| matches!(o, Op::Dpi { dpi, active, stages } if (*dpi, *active, stages.clone()) == wanted));
-        valid && wanted != self.device_dpi && !queued
+        let wanted = (self.dpi, self.active, &self.stages);
+        let queued = self.ops.iter().any(|o| matches!(o, Op::Dpi { dpi, active, stages } if (*dpi, *active, stages) == wanted));
+        valid && wanted != (self.device_dpi.0, self.device_dpi.1, &self.device_dpi.2) && !queued
     }
 
     fn queue_button(&mut self) {
         let action = match self.editor.build() {
             Ok(a) => a,
-            Err(e) => return self.report(Err(e)),
+            Err(e) => {
+                self.status = Err(e);
+                return;
+            }
         };
         let index = self.selected;
         let name = self.mice.get(self.current).map_or(String::new(), |m| m.def.buttons[index].name.to_uppercase());
         let op = Op::Button { profile: self.profile, layer: self.layer, index, action: action.clone() };
-        if self.actions.get(index).cloned().flatten() == Some(action) {
+        if self.device_action(index) == Some(&action) {
             // back to what the device already has: nothing to do
             self.ops.retain(|o| !o.same_target(&op));
-            return self.report(Ok(format!("{name} REVERTED > nothing to write")));
+            self.status = Ok(format!("{name} REVERTED > nothing to write"));
+            return;
         }
         self.queue(op);
-        self.report(Ok(format!("QUEUED {name} > {}", self.effective(index).map_or(String::new(), |a| a.to_string()))));
+        self.status = Ok(format!("QUEUED {name} > {action}"));
     }
 
     fn queue_dpi(&mut self) {
         self.queue(Op::Dpi { dpi: self.dpi, active: self.active, stages: self.stages.clone() });
-        self.report(Ok(format!("QUEUED DPI {} > STAGE {}", self.dpi, self.active)));
+        self.status = Ok(format!("QUEUED DPI {} > STAGE {}", self.dpi, self.active));
     }
 
     /// Runs the queue in order and stops at the first failure, keeping what's left.
@@ -353,7 +349,6 @@ impl App {
 }
 
 /// A change waiting to be written, like a GParted pending operation.
-#[derive(Clone)]
 enum Op {
     Button { profile: u8, layer: u8, index: usize, action: Action },
     Dpi { dpi: u16, active: u8, stages: Vec<u16> },
@@ -402,8 +397,8 @@ fn mouse_outline(body: egui::Rect) -> Vec<egui::Pos2> {
 fn short(a: &Action) -> String {
     match a {
         Action::Key { mods, usage } => {
-            let mut s: String = MODS.iter().filter(|(_, b)| mods & b != 0).map(|(n, _)| format!("{}+", &n[..1])).collect();
-            s += &opensynapse::action::key_name(*usage).unwrap_or("?".into()).to_uppercase();
+            let mut s: String = opensynapse::action::MODS[..4].iter().filter(|(_, b)| mods & b != 0).map(|(n, _)| format!("{}+", n[..1].to_uppercase())).collect();
+            s += &key_name(*usage).unwrap_or("?".into()).to_uppercase();
             s
         }
         Action::Mouse(b) => match b {
@@ -464,14 +459,8 @@ fn heading(ui: &mut egui::Ui, text: &str) {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.draw(ui);
-    }
-}
-
-impl App {
-    fn draw(&mut self, ui: &mut egui::Ui) {
-        self.poll_dpi(&ui.ctx().clone());
-        self.import_dialog(&ui.ctx().clone());
+        self.poll_dpi();
+        self.import_dialog();
         let bar = Frame::new().fill(PANEL).inner_margin(Margin::same(12)).stroke(Stroke::new(1.0, PINK));
         egui::Panel::top("top").frame(bar).show(ui, |ui| self.top_bar(ui));
 
@@ -480,7 +469,6 @@ impl App {
 
         let status = Frame::new().fill(BG).inner_margin(Margin::symmetric(12, 6));
         let (text, color) = match &self.status {
-            Ok(s) if s.is_empty() => ("> READY".to_string(), DIM),
             Ok(s) => (format!("> {s}"), CYAN),
             Err(e) => (format!("! {e}"), PINK),
         };
@@ -512,7 +500,6 @@ impl App {
             ui.label(RichText::new("lighting goes through the OpenRazer driver, install openrazer-driver-dkms").color(DIM));
             return;
         };
-        let zones = light.zones.clone();
         ui.horizontal(|ui| {
             ui.label(RichText::new("> LIGHTING").color(PINK).strong());
             ui.add_space(12.0);
@@ -529,8 +516,7 @@ impl App {
         let mut apply: Option<(usize, bool)> = None; // (card, brightness only)
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-            for i in 0..shown {
-                let z = &mut self.zone_ui[i];
+            for (i, z) in self.zone_ui.iter_mut().take(shown).enumerate() {
                 let title = if self.sync_zones { "ALL ZONES".to_string() } else { z.name.to_uppercase() };
                 Frame::new().fill(PANEL).stroke(Stroke::new(1.0, DIM)).inner_margin(Margin::same(14)).show(ui, |ui| {
                     ui.set_width(ui.available_width().min(760.0));
@@ -563,20 +549,19 @@ impl App {
         });
 
         let Some((card, brightness_only)) = apply else { return };
-        let targets: Vec<usize> = if self.sync_zones { (0..zones.len()).collect() } else { vec![card] };
+        let targets: Vec<usize> = if self.sync_zones { (0..self.zone_ui.len()).collect() } else { vec![card] };
         let source = self.zone_ui[card].clone();
-        let mut result = Ok(());
-        for &t in &targets {
+        let result = targets.iter().try_for_each(|&t| {
             let z = &mut self.zone_ui[t];
             if self.sync_zones {
-                let name = z.name.clone();
-                *z = ZoneUi { name, ..source.clone() };
+                *z = ZoneUi { name: z.name.clone(), ..source.clone() };
             }
-            result = result.and_then(|_| light.set_brightness(&z.name, z.brightness));
-            if !brightness_only {
-                result = result.and_then(|_| light.set_effect(&z.name, &z.effect()));
+            light.set_brightness(&z.name, z.brightness)?;
+            if brightness_only {
+                return Ok(());
             }
-        }
+            light.set_effect(&z.name, &z.effect())
+        });
         let what = if brightness_only { format!("BRIGHTNESS {}", source.brightness) } else { format!("{:?}", source.effect()) };
         let names: Vec<String> = targets.iter().map(|&t| self.zone_ui[t].name.to_uppercase()).collect();
         self.status = result.map(|_| format!("LIGHTING {} > {what}", names.join(","))).map_err(|e| e.to_string());
@@ -800,7 +785,6 @@ impl App {
         }
         ui.add_space(24.0);
 
-
         // pending operations, pinned to the bottom of the sidebar (bottom_up: first added = lowest)
         ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
             ui.add_enabled_ui(!self.ops.is_empty(), |ui| {
@@ -817,8 +801,8 @@ impl App {
             if self.ops.is_empty() {
                 ui.label(RichText::new("no pending changes").color(DIM).small());
             }
-            let Some(def) = self.mice.get(self.current).map(|m| m.def.clone()) else { return };
-            // ponytail: newest 12 only, a scroll area here would eat the whole sidebar
+            let Some(def) = self.mice.get(self.current).map(|m| &m.def) else { return };
+            // newest 12 only, a scroll area here would eat the whole sidebar
             const SHOWN: usize = 12;
             let mut remove = None;
             let hidden = self.ops.len().saturating_sub(SHOWN);
@@ -827,7 +811,7 @@ impl App {
                     if ui.small_button("✗").clicked() {
                         remove = Some(i);
                     }
-                    ui.label(RichText::new(op.describe(&def)).color(Color32::WHITE).small());
+                    ui.label(RichText::new(op.describe(def)).color(Color32::WHITE).small());
                 });
             }
             if hidden > 0 {
@@ -835,7 +819,7 @@ impl App {
             }
             if let Some(i) = remove {
                 let op = self.ops.remove(i);
-                self.status = Ok(format!("REMOVED {}", op.describe(&def)));
+                self.status = Ok(format!("REMOVED {}", op.describe(def)));
             }
             heading(ui, &format!("PENDING ({})", self.ops.len()));
         });
@@ -844,8 +828,8 @@ impl App {
     fn export(&mut self) {
         let Some(m) = self.mice.get(self.current) else { return };
         let path = PathBuf::from(&self.path);
-        let r = profile::read(m, self.profile).and_then(|f| profile::save(&f, &path));
-        self.report(r.map(|_| format!("P{} SAVED > {}", self.profile, path.display())).map_err(|e| e.to_string()));
+        let r = profile::export(m, self.profile, &path);
+        self.status = r.map(|_| format!("P{} SAVED > {}", self.profile, path.display())).map_err(|e| e.to_string());
     }
 
     /// Queues the differences between a profile file and the device.
@@ -855,16 +839,17 @@ impl App {
         let plan = file.and_then(|f| profile::plan(m, self.profile, &f).map(|p| (f, p)));
         let (file, plan) = match plan {
             Ok(x) => x,
-            Err(e) => return self.report(Err(e.to_string())),
+            Err(e) => {
+                self.status = Err(e.to_string());
+                return;
+            }
         };
-        let ids: Vec<u8> = m.def.buttons.iter().map(|b| b.id).collect();
         let n = plan.len();
-        for (layer, id, action) in plan {
-            let Some(index) = ids.iter().position(|&b| b == id) else { continue };
+        self.queue(Op::Dpi { dpi: file.dpi, active: file.active_stage, stages: file.dpi_stages });
+        for (layer, index, action) in plan {
             self.queue(Op::Button { profile: self.profile, layer, index, action });
         }
-        self.queue(Op::Dpi { dpi: file.dpi, active: file.active_stage, stages: file.dpi_stages });
-        self.report(Ok(format!("P{} LOADED > {n} BUTTON CHANGES + DPI QUEUED", self.profile)));
+        self.status = Ok(format!("P{} LOADED > {n} BUTTON CHANGES + DPI QUEUED", self.profile));
     }
 
     fn buttons(&mut self, ui: &mut egui::Ui) {
@@ -872,7 +857,7 @@ impl App {
             ui.label(RichText::new("NO LINK").color(PINK).size(28.0));
             return;
         };
-        let buttons = m.def.buttons.clone();
+        let buttons = &m.def.buttons;
         let lit: Vec<bool> = (0..buttons.len()).map(|i| self.lit(i)).collect();
         if lit.contains(&true) {
             ui.ctx().request_repaint_after(Duration::from_millis(100)); // let highlights fade
@@ -884,66 +869,54 @@ impl App {
         let view_height = ui.available_height();
         egui::ScrollArea::vertical().max_height(view_height).show(ui, |ui| {
             if !placed.is_empty() {
-                clicked = self.mouse_view(ui, &buttons, &placed, &lit, view_height).or(clicked);
+                clicked = self.mouse_view(ui, buttons, &placed, &lit, view_height);
             }
-            let mut groups: Vec<&str> = Vec::new();
-            for &i in &loose {
-                if !groups.contains(&buttons[i].group.as_str()) {
-                    groups.push(&buttons[i].group);
-                }
-            }
-            for g in &groups {
-                heading(ui, &g.to_uppercase());
-                egui::Grid::new(g).spacing([8.0, 8.0]).show(ui, |ui| {
-                    for (col, &i) in loose.iter().filter(|&&i| buttons[i].group == *g).enumerate() {
-                        let pending = self.pending(i).cloned();
-                        let action = pending.clone().or_else(|| self.actions.get(i).cloned().flatten());
-                        let mark = if pending.is_some() { " *" } else { "" };
-                        let off = action.as_ref() == Some(&Action::Disabled);
-                        let text = action.map_or("??".into(), |a| format!("{a}{mark}"));
-                        let accent = match (lit[i], i == self.selected, pending.is_some()) {
-                            (true, ..) => YELLOW,
-                            (_, true, _) => CYAN,
-                            (.., true) => PINK,
-                            _ if off => OFF,
-                            _ => DIM,
-                        };
-                        let card = Frame::new().fill(CARD).stroke(Stroke::new(1.0, accent)).inner_margin(Margin::same(8));
-                        let r = card
-                            .show(ui, |ui| {
-                                ui.set_min_width(150.0);
-                                ui.label(RichText::new(buttons[i].name.to_uppercase()).color(accent).small());
-                                ui.label(RichText::new(text).color(if off { DIM } else { Color32::WHITE }));
-                            })
-                            .response
-                            .interact(egui::Sense::click());
-                        if r.clicked() {
-                            clicked = Some(i);
-                        }
-                        if (col + 1) % 4 == 0 {
-                            ui.end_row();
-                        }
+            egui::Grid::new("buttons").spacing([8.0, 8.0]).show(ui, |ui| {
+                for (col, &i) in loose.iter().enumerate() {
+                    let pending = self.pending(i).is_some();
+                    let action = self.effective(i);
+                    let mark = if pending { " *" } else { "" };
+                    let off = action.as_ref() == Some(&Action::Disabled);
+                    let text = action.map_or("??".into(), |a| format!("{a}{mark}"));
+                    let accent = match (lit[i], i == self.selected, pending) {
+                        (true, ..) => YELLOW,
+                        (_, true, _) => CYAN,
+                        (.., true) => PINK,
+                        _ if off => OFF,
+                        _ => DIM,
+                    };
+                    let card = Frame::new().fill(CARD).stroke(Stroke::new(1.0, accent)).inner_margin(Margin::same(8));
+                    let r = card
+                        .show(ui, |ui| {
+                            ui.set_min_width(150.0);
+                            ui.label(RichText::new(buttons[i].name.to_uppercase()).color(accent).small());
+                            ui.label(RichText::new(text).color(if off { DIM } else { Color32::WHITE }));
+                        })
+                        .response
+                        .interact(egui::Sense::click());
+                    if r.clicked() {
+                        clicked = Some(i);
                     }
-                });
-                ui.add_space(12.0);
-            }
+                    if (col + 1) % 4 == 0 {
+                        ui.end_row();
+                    }
+                }
+            });
         });
         if let Some(i) = clicked {
             self.select(i);
         }
-
     }
 
     /// Draws a mouse body and the positioned buttons on it. Returns a clicked button.
     fn mouse_view(&self, ui: &mut egui::Ui, buttons: &[Button], placed: &[usize], lit: &[bool], max_height: f32) -> Option<usize> {
-        // fixed 16:10 canvas so `at` percentages mean the same thing at any window size
-        // grow to fill the height given, keeping 16:10
+        // 16:10 canvas so `at` percentages mean the same thing at any window size
         let fit_height = max_height.max(200.0) / USED_HEIGHT;
         let w = ui.available_width().min(fit_height * 1.6).min(MAX_VIEW_WIDTH);
         let k = w / (460.0 * 1.6); // everything below scales with the canvas
         let (full, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), w / 1.6 * USED_HEIGHT), egui::Sense::hover());
         let rect = egui::Rect::from_min_size(egui::pos2(full.center().x - w / 2.0, full.top()), egui::vec2(w, w / 1.6));
-        let at =|x: f32, y: f32| rect.min + egui::vec2(rect.width() * x / 100.0, rect.height() * y / 100.0);
+        let at = |x: f32, y: f32| rect.min + egui::vec2(rect.width() * x / 100.0, rect.height() * y / 100.0);
         let p = ui.painter_at(rect);
 
         let marker = |i: usize| {
@@ -980,9 +953,11 @@ impl App {
         for &i in placed {
             let r = marker(i);
             let resp = ui.interact(r, ui.scope_id().with(("btn", i)), egui::Sense::click());
-            let pending = self.pending(i).cloned();
-            let off = self.effective(i) == Some(Action::Disabled);
-            let (fill, edge, text) = match (lit[i], i == self.selected, resp.hovered(), pending.is_some()) {
+            let pending = self.pending(i).is_some();
+            // queued changes show what the button will do after APPLY
+            let shown = self.effective(i);
+            let off = shown == Some(Action::Disabled);
+            let (fill, edge, text) = match (lit[i], i == self.selected, resp.hovered(), pending) {
                 (true, ..) => (YELLOW, YELLOW, BG),
                 (_, true, ..) => (BG, CYAN, CYAN),
                 (_, _, true, _) => (BG, CYAN, Color32::WHITE),
@@ -992,9 +967,7 @@ impl App {
             };
             p.rect_filled(r, CornerRadius::ZERO, fill);
             p.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, edge), StrokeKind::Inside);
-            // queued changes show what the button will do after APPLY
-            let shown = pending.clone().or_else(|| self.actions.get(i).cloned().flatten());
-            let mark = if pending.is_some() { "*" } else { "" };
+            let mark = if pending { "*" } else { "" };
             let label = shown.as_ref().map_or("??".into(), |a| format!("{}{mark}", short(a)));
             p.text(r.center(), Align2::CENTER_CENTER, label, FontId::monospace(11.0 * k), text);
             let tip = shown.map_or(String::new(), |a| a.to_string());
@@ -1008,12 +981,7 @@ impl App {
     /// Held right now, or a DPI button that just changed the DPI.
     fn lit(&self, i: usize) -> bool {
         let flashing = self.flash.is_some_and(|(f, t)| f == i && t.elapsed() < Duration::from_millis(400));
-        let held = || {
-            let action = self.actions.get(i).cloned().flatten();
-            let pressed = self.pressed.as_ref().and_then(|p| p.lock().ok());
-            action.zip(pressed).is_some_and(|(a, p)| p.triggers(&a))
-        };
-        flashing || held()
+        flashing || self.device_action(i).is_some_and(|a| self.pressed.as_ref().and_then(|p| p.lock().ok()).is_some_and(|p| p.triggers(a)))
     }
 
     fn editor_ui(&mut self, ui: &mut egui::Ui, name: &str) {
@@ -1068,11 +1036,11 @@ impl App {
     }
 
     /// Asks before IMPORT queues changes over the selected profile.
-    fn import_dialog(&mut self, ctx: &egui::Context) {
+    fn import_dialog(&mut self) {
         if !self.confirm_import {
             return;
         }
-        let modal = egui::Modal::new(egui::Id::unique("confirm-import")).show(ctx, |ui| {
+        let modal = egui::Modal::new(egui::Id::unique("confirm-import")).show(&self.ctx, |ui| {
             ui.set_max_width(420.0);
             ui.label(RichText::new("! OVERWRITE PROFILE").color(PINK).strong());
             ui.add_space(6.0);
@@ -1116,7 +1084,7 @@ impl App {
         ui.horizontal(|ui| match e.kind {
             Kind::Key => {} // laid out as columns below
             Kind::Mouse | Kind::Turbo => {
-                for (n, v) in MOUSE_BUTTONS {
+                for &(n, v) in &opensynapse::action::MOUSE[..7] {
                     if chip(ui, &n.to_uppercase(), e.mouse == v).clicked() {
                         e.mouse = v;
                     }
@@ -1151,8 +1119,8 @@ impl App {
                 ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
                 ui.label(RichText::new("COMMON KEYS").color(DIM).small());
                 egui::Grid::new("mods").spacing([6.0, 6.0]).show(ui, |ui| {
-                    for (i, (label, bit)) in MODS.iter().enumerate() {
-                        if chip(ui, label, e.mods & bit != 0).clicked() {
+                    for (i, (label, bit)) in opensynapse::action::MODS[..4].iter().enumerate() {
+                        if chip(ui, &label.to_uppercase(), e.mods & bit != 0).clicked() {
                             e.mods ^= bit;
                         }
                         if i % 2 == 1 {
@@ -1191,7 +1159,6 @@ fn cyberpunk(ctx: &egui::Context) {
     v.override_text_color = Some(Color32::from_rgb(0xd0, 0xd0, 0xe8));
     v.selection.bg_fill = PINK;
     v.selection.stroke = Stroke::new(1.0, BG);
-    v.hyperlink_color = CYAN;
     for (w, stroke) in [
         (&mut v.widgets.noninteractive, DIM),
         (&mut v.widgets.inactive, DIM),
@@ -1206,9 +1173,8 @@ fn cyberpunk(ctx: &egui::Context) {
     }
     ctx.set_visuals(v);
     ctx.all_styles_mut(|s| {
-        for (style, font) in s.text_styles.iter_mut() {
-            let size = if *style == TextStyle::Heading { 20.0 } else { font.size };
-            *font = FontId::new(size, FontFamily::Monospace);
+        for font in s.text_styles.values_mut() {
+            *font = FontId::new(font.size, FontFamily::Monospace);
         }
     });
 }
@@ -1217,8 +1183,6 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1000.0, 760.0])
-            .with_title("opensynapse")
-            .with_app_id("opensynapse")
             .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../../assets/icon.png")).unwrap_or_default()),
         ..Default::default()
     };

@@ -1,4 +1,4 @@
-//! Device definitions (devices/*.jsonc) and the commands we know how to send.
+//! Device definitions (built-in devices/*.jsonc plus ~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc) and the commands we know how to send.
 
 use crate::action::Action;
 use crate::hid::{self, Hid};
@@ -31,7 +31,7 @@ pub fn strip_comments(src: &str) -> String {
 }
 
 /// Ids in the device files are hex strings ("0x40"), like the protocol docs.
-pub fn hex<'de, D: Deserializer<'de>, T: TryFrom<u64>>(d: D) -> Result<T, D::Error> {
+fn hex<'de, D: Deserializer<'de>, T: TryFrom<u64>>(d: D) -> Result<T, D::Error> {
     let s = String::deserialize(d)?;
     u64::from_str_radix(s.trim_start_matches("0x"), 16)
         .ok()
@@ -50,9 +50,8 @@ pub struct DeviceDef {
     pub vid: u16,
     #[serde(deserialize_with = "hex")]
     pub pid: u16,
-    #[serde(default)]
     pub interface: u8,
-    #[serde(default = "default_tid", deserialize_with = "hex")]
+    #[serde(deserialize_with = "hex")]
     pub transaction_id: u8,
     pub profiles: Vec<u8>,
     pub layers: Vec<String>,
@@ -71,16 +70,9 @@ pub struct Button {
     #[serde(deserialize_with = "hex")]
     pub id: u8,
     pub name: String,
-    #[serde(default)]
-    pub group: String,
     /// Optional [x, y] in percent of the mouse view. The mouse body is drawn at
-    /// x 30..70, y 2..74; anything outside it gets a side plate. Devices where no button has `at` get a plain grid.
-    #[serde(default)]
+    /// x 30..70, y 2..74; buttons left of x 30 or right of x 70 get a side plate. Devices where no button has `at` get a plain grid.
     pub at: Option<[f32; 2]>,
-}
-
-fn default_tid() -> u8 {
-    0x1f
 }
 
 impl DeviceDef {
@@ -98,7 +90,8 @@ pub fn definitions() -> Vec<DeviceDef> {
     let mut defs: Vec<DeviceDef> = Vec::new();
     let mut add = |src: &str, file: &str, origin: &str| match serde_json::from_str::<DeviceDef>(&strip_comments(src)) {
         Ok(mut d) => {
-            d.file = file.to_string();
+            // user files are all "buttons.jsonc", so their repo name comes from the mouse name
+            d.file = if file.is_empty() { crate::scaffold::slug(&d.name) } else { file.to_string() };
             d.source = src.to_string();
             defs.retain(|x| (x.vid, x.pid) != (d.vid, d.pid));
             defs.push(d);
@@ -111,25 +104,27 @@ pub fn definitions() -> Vec<DeviceDef> {
     let entries = devices_dir().and_then(|d| fs::read_dir(d).ok()).into_iter().flatten().flatten();
     for path in entries.map(|e| e.path().join("buttons.jsonc")) {
         let Ok(src) = fs::read_to_string(&path) else { continue };
-        // the repo file name comes from the mouse name, "buttons" says nothing
-        let file = serde_json::from_str::<DeviceDef>(&strip_comments(&src)).map_or(String::new(), |d| crate::scaffold::slug(&d.name));
-        add(&src, &file, &path.display().to_string());
+        add(&src, "", &path.display().to_string());
     }
     defs
 }
 
-/// Folder name for a mouse model: its USB id, "1532-008d".
-pub fn storage_id(vid: u16, pid: u16) -> String {
-    format!("{vid:04x}-{pid:04x}")
+/// ~/.config/opensynapse/devices/<vid-pid> (like 1532-008d) for one mouse model.
+pub fn model_dir(vid: u16, pid: u16) -> Option<PathBuf> {
+    devices_dir().map(|d| d.join(format!("{vid:04x}-{pid:04x}")))
 }
 
-/// ~/.config/opensynapse/devices: one folder per model (see `storage_id`) with
-/// its saved profiles and, for mice without a built-in definition, buttons.jsonc.
+/// ~/.config/opensynapse/devices: one folder per model (see `model_dir`) with
+/// its saved profiles and an optional buttons.jsonc, which wins over a built-in definition.
 pub fn devices_dir() -> Option<PathBuf> {
+    config_dir().map(|c| c.join("opensynapse/devices"))
+}
+
+/// $XDG_CONFIG_HOME, or ~/.config.
+pub fn config_dir() -> Option<PathBuf> {
     env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
-        .map(|c| c.join("opensynapse/devices"))
 }
 
 pub struct Mouse {
@@ -148,13 +143,12 @@ pub struct DpiStages {
 pub fn detect() -> io::Result<Vec<Mouse>> {
     let mut found = Vec::new();
     for def in definitions() {
-        let Some(path) = hid::find(def.vid, def.pid, def.interface) else { continue };
+        let Some((_, path)) = hid::find_all(def.vid, def.pid).into_iter().find(|(n, _)| *n == def.interface) else {
+            continue;
+        };
         let hid = Hid::open(&path, def.transaction_id).map_err(|e| {
-            let hint = if e.kind() == io::ErrorKind::PermissionDenied {
-                " > install udev/70-opensynapse.rules (see README)"
-            } else {
-                ""
-            };
+            let denied = e.kind() == io::ErrorKind::PermissionDenied;
+            let hint = if denied { " > install udev/70-opensynapse.rules (see README)" } else { "" };
             io::Error::new(e.kind(), format!("{}: {e}{hint}", path.display()))
         })?;
         let mut mouse = Mouse { def, hid, serial: String::new() };
@@ -188,12 +182,8 @@ impl Mouse {
     /// Factory serial, fixed per physical unit (survives replugs and renames).
     fn read_serial(&self) -> io::Result<String> {
         let r = self.hid.command(0x00, 0x82, 0x16, &[])?;
-        Ok(String::from_utf8_lossy(&r[8..8 + 0x16]).trim_end_matches('\0').trim().to_string())
-    }
-
-    /// Folder name for this model's saved profiles and device file.
-    pub fn storage_id(&self) -> String {
-        storage_id(self.def.vid, self.def.pid)
+        // ends up in file names and D-Bus paths, so nothing like "../"
+        Ok(String::from_utf8_lossy(&r[8..8 + 0x16]).chars().filter(char::is_ascii_alphanumeric).collect())
     }
 
     pub fn firmware(&self) -> io::Result<String> {

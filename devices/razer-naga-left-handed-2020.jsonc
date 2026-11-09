@@ -1,7 +1,7 @@
 // Verified on hardware, firmware v1.0. See protocols/razer-naga-left-handed-2020.md.
 //
 // `at` places a button on the drawn mouse as [x, y], in percent of the view.
-// The body is drawn at x 30..70, y 2..74; buttons outside it get a side plate.
+// The body is drawn at x 30..70, y 2..74; buttons left of x 30 or right of x 70 get a side plate.
 // Leave `at` out on every button to get a plain grid instead.
 {
   "name": "Razer Naga Left-Handed Edition 2020",
@@ -13,27 +13,27 @@
   "layers": ["normal", "hypershift"],
   "dpi_max": 20000,
   "buttons": [
-    { "id": "0x01", "name": "left", "group": "main", "at": [40, 28] },
-    { "id": "0x02", "name": "right", "group": "main", "at": [60, 28] },
-    { "id": "0x09", "name": "wheel-up", "group": "main", "at": [50, 10] },
-    { "id": "0x03", "name": "middle", "group": "main", "at": [50, 18] },
-    { "id": "0x0a", "name": "wheel-down", "group": "main", "at": [50, 26] },
-    { "id": "0x34", "name": "tilt-left", "group": "main", "at": [42, 16] },
-    { "id": "0x35", "name": "tilt-right", "group": "main", "at": [58, 16] },
-    { "id": "0x0b", "name": "dpi-up", "group": "top", "at": [50, 34] },
-    { "id": "0x0c", "name": "dpi-down", "group": "top", "at": [50, 40] },
-    { "id": "0x0e", "name": "profile", "group": "bottom", "at": [50, 62] },
-    { "id": "0x40", "name": "thumb1", "group": "thumb", "at": [78, 30] },
-    { "id": "0x41", "name": "thumb2", "group": "thumb", "at": [86, 30] },
-    { "id": "0x42", "name": "thumb3", "group": "thumb", "at": [94, 30] },
-    { "id": "0x43", "name": "thumb4", "group": "thumb", "at": [78, 40] },
-    { "id": "0x44", "name": "thumb5", "group": "thumb", "at": [86, 40] },
-    { "id": "0x45", "name": "thumb6", "group": "thumb", "at": [94, 40] },
-    { "id": "0x46", "name": "thumb7", "group": "thumb", "at": [78, 50] },
-    { "id": "0x47", "name": "thumb8", "group": "thumb", "at": [86, 50] },
-    { "id": "0x48", "name": "thumb9", "group": "thumb", "at": [94, 50] },
-    { "id": "0x49", "name": "thumb10", "group": "thumb", "at": [78, 60] },
-    { "id": "0x4a", "name": "thumb11", "group": "thumb", "at": [86, 60] },
-    { "id": "0x4b", "name": "thumb12", "group": "thumb", "at": [94, 60] }
+    { "id": "0x01", "name": "left", "at": [40, 28] },
+    { "id": "0x02", "name": "right", "at": [60, 28] },
+    { "id": "0x09", "name": "wheel-up", "at": [50, 10] },
+    { "id": "0x03", "name": "middle", "at": [50, 18] },
+    { "id": "0x0a", "name": "wheel-down", "at": [50, 26] },
+    { "id": "0x34", "name": "tilt-left", "at": [42, 16] },
+    { "id": "0x35", "name": "tilt-right", "at": [58, 16] },
+    { "id": "0x0b", "name": "dpi-up", "at": [50, 34] },
+    { "id": "0x0c", "name": "dpi-down", "at": [50, 40] },
+    { "id": "0x0e", "name": "profile", "at": [50, 62] },
+    { "id": "0x40", "name": "thumb1", "at": [78, 30] },
+    { "id": "0x41", "name": "thumb2", "at": [86, 30] },
+    { "id": "0x42", "name": "thumb3", "at": [94, 30] },
+    { "id": "0x43", "name": "thumb4", "at": [78, 40] },
+    { "id": "0x44", "name": "thumb5", "at": [86, 40] },
+    { "id": "0x45", "name": "thumb6", "at": [94, 40] },
+    { "id": "0x46", "name": "thumb7", "at": [78, 50] },
+    { "id": "0x47", "name": "thumb8", "at": [86, 50] },
+    { "id": "0x48", "name": "thumb9", "at": [94, 50] },
+    { "id": "0x49", "name": "thumb10", "at": [78, 60] },
+    { "id": "0x4a", "name": "thumb11", "at": [86, 60] },
+    { "id": "0x4b", "name": "thumb12", "at": [94, 60] }
   ]
 }

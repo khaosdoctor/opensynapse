@@ -85,7 +85,7 @@ impl Action {
     }
 }
 
-const MOUSE: &[(&str, u8)] = &[
+pub const MOUSE: &[(&str, u8)] = &[
     ("left", 0x01),
     ("right", 0x02),
     ("middle", 0x03),
@@ -96,11 +96,11 @@ const MOUSE: &[(&str, u8)] = &[
     ("wheelleft", 0x68),
     ("wheelright", 0x69),
 ];
-const MODS: &[(&str, u8)] = &[("ctrl", 0x01), ("shift", 0x02), ("alt", 0x04), ("meta", 0x08), ("rctrl", 0x10), ("rshift", 0x20), ("ralt", 0x40), ("rmeta", 0x80)];
+pub const MODS: &[(&str, u8)] = &[("ctrl", 0x01), ("shift", 0x02), ("alt", 0x04), ("meta", 0x08), ("rctrl", 0x10), ("rshift", 0x20), ("ralt", 0x40), ("rmeta", 0x80)];
 const DPI: &[(&str, u8)] = &[("up", 0x01), ("down", 0x02), ("up-wrap", 0x06), ("down-wrap", 0x07)];
 const PROFILE: &[(&str, u8)] = &[("next", 0x01), ("prev", 0x02), ("next-wrap", 0x04), ("prev-wrap", 0x05)];
 /// HID consumer page usages (0x0C).
-pub const MEDIA: &[(&str, u16)] = &[
+const MEDIA: &[(&str, u16)] = &[
     ("playpause", 0xcd),
     ("next", 0xb5),
     ("prev", 0xb6),
@@ -172,17 +172,17 @@ const SYMBOLS: &[(&str, u8)] = &[
     ("/", 0x38),
 ];
 
-// ponytail: linear scan over 256 usages, fine for a handful of lookups
+// linear scan over 256 usages, fine for a handful of lookups
 pub fn key_usage(name: &str) -> Option<u8> {
     let name = name.to_lowercase();
     lookup(SYMBOLS, &name).or_else(|| (0..=255u8).find(|&u| key_name(u).as_deref() == Some(name.as_str())))
 }
 
-fn lookup(table: &[(&str, u8)], name: &str) -> Option<u8> {
+fn lookup<T: Copy>(table: &[(&str, T)], name: &str) -> Option<T> {
     table.iter().find(|(n, _)| *n == name).map(|(_, v)| *v)
 }
 
-fn rlookup(table: &[(&str, u8)], value: u8) -> String {
+fn rlookup<T: Copy + PartialEq + fmt::LowerHex>(table: &[(&str, T)], value: T) -> String {
     table.iter().find(|(_, v)| *v == value).map_or(format!("0x{value:02x}"), |(n, _)| n.to_string())
 }
 
@@ -191,6 +191,11 @@ fn parse_u8(s: &str) -> Option<u8> {
         Some(hex) => u8::from_str_radix(hex, 16).ok(),
         None => s.parse().ok(),
     }
+}
+
+/// "ff00aa" -> [255, 0, 170], None on odd length or non-hex.
+pub fn hex_bytes(s: &str) -> Option<Vec<u8>> {
+    (0..s.len()).step_by(2).map(|i| s.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok())).collect()
 }
 
 /// `ctrl+shift+a` style text for a modifier mask and a key.
@@ -217,10 +222,7 @@ impl fmt::Display for Action {
             Action::Mouse(b) => write!(f, "mouse:{}", rlookup(MOUSE, *b)),
             Action::Key { mods, usage } => write!(f, "key:{}", key_text(*mods, *usage)),
             Action::KeyTurbo { mods, usage, interval } => write!(f, "keyturbo:{}:{interval}", key_text(*mods, *usage)),
-            Action::Media(u) => match MEDIA.iter().find(|(_, v)| v == u) {
-                Some((name, _)) => write!(f, "media:{name}"),
-                None => write!(f, "media:0x{u:04x}"),
-            },
+            Action::Media(u) => write!(f, "media:{}", rlookup(MEDIA, *u)),
             Action::Dpi(op) => write!(f, "dpi:{}", rlookup(DPI, *op)),
             Action::DpiStage(n) => write!(f, "dpi:stage{n}"),
             Action::Profile(op) => write!(f, "profile:{}", rlookup(PROFILE, *op)),
@@ -255,10 +257,7 @@ impl FromStr for Action {
                 let (mods, usage) = parse_key(key).ok_or_else(bad)?;
                 Ok(Action::KeyTurbo { mods, usage, interval: ms.parse().map_err(|_| bad())? })
             }
-            "media" => MEDIA
-                .iter()
-                .find(|(n, _)| *n == rest)
-                .map(|(_, v)| *v)
+            "media" => lookup(MEDIA, rest)
                 .or_else(|| u16::from_str_radix(rest.strip_prefix("0x")?, 16).ok())
                 .map(Action::Media)
                 .ok_or_else(bad),
@@ -267,24 +266,17 @@ impl FromStr for Action {
                 None => lookup(DPI, rest).map(Action::Dpi).ok_or_else(bad),
             },
             // `profile:0x04` is the old syntax (a raw step op), `profile:3` jumps to profile 3
-            "profile" => match rest.strip_prefix("0x") {
-                Some(hex) => u8::from_str_radix(hex, 16).map(Action::Profile).map_err(|_| bad()),
-                None => lookup(PROFILE, rest)
-                    .map(Action::Profile)
-                    .or_else(|| rest.parse().ok().map(Action::ProfileSet))
-                    .ok_or_else(bad),
-            },
+            "profile" if rest.starts_with("0x") => parse_u8(rest).map(Action::Profile).ok_or_else(bad),
+            "profile" => lookup(PROFILE, rest)
+                .map(Action::Profile)
+                .or_else(|| rest.parse().ok().map(Action::ProfileSet))
+                .ok_or_else(bad),
             "turbo" => {
                 let (btn, ms) = rest.split_once(':').ok_or_else(bad)?;
                 let button = lookup(MOUSE, btn).or_else(|| parse_u8(btn)).ok_or_else(bad)?;
                 Ok(Action::MouseTurbo { button, interval: ms.parse().map_err(|_| bad())? })
             }
-            "raw" => (0..rest.len())
-                .step_by(2)
-                .map(|i| rest.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok()))
-                .collect::<Option<Vec<u8>>>()
-                .map(Action::Raw)
-                .ok_or_else(bad),
+            "raw" if !rest.is_empty() => hex_bytes(rest).map(Action::Raw).ok_or_else(bad),
             _ => Err(bad()),
         }
     }

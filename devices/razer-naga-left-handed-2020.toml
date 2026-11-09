@@ -1,4 +1,4 @@
-# Verified on hardware, firmware v1.0. See PROTOCOL.md.
+# Verified on hardware, firmware v1.0. See protocols/razer-naga-left-handed-2020.md.
 #
 # `at = [x, y]` places a button on the drawn mouse, in percent of the view.
 # The body is drawn at x 30..70, y 2..74; buttons outside it get a side plate.

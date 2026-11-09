@@ -35,9 +35,9 @@ A mouse is a single TOML file. The best way to start is copying [the Naga one](d
 
 6. **Optionally, add `at = [x, y]` to the buttons** so they show up on the drawn mouse in the GUI. The body is drawn at x 30..70 and y 2..74 (in percent), anything outside that gets a side plate. If you skip it you get a grid, which is fine.
 
-Then copy the file into `devices/`, add it to the `BUILTIN` list in [`src/device.rs`](src/device.rs) and open a PR. Mention the firmware version (`opensynapse export` writes it to the profile file) and anything that behaved differently from the Naga.
+7. **Write the protocol file.** Next to the device file goes `devices/protocols/<same-name>.md`, where you write down what you found and how, so the next person with a similar mouse doesn't start from zero. [PROTOCOL.md](PROTOCOL.md) explains what goes in it and has a template, and the [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example. If you couldn't make your mouse work, send the protocol file anyway, what you found is still super useful.
 
-If your mouse answers with different command ids or a different transaction id, that's super useful to know too, write down what you found in the PR even if you couldn't make it work.
+Then copy the device file into `devices/`, add it to the `BUILTIN` list in [`src/device.rs`](src/device.rs) and open a PR with both files. Mention the firmware version (`opensynapse export` writes it to the profile file).
 
 ## Using an agent
 
@@ -45,7 +45,8 @@ I did the whole reverse engineering for the Naga with Claude Code, and it works 
 
 ```text
 I want to add support for my Razer mouse to opensynapse, the repo you're in.
-Read README.md, CONTRIBUTING.md and PROTOCOL.md first, and use
+Read README.md, CONTRIBUTING.md, PROTOCOL.md and
+devices/protocols/razer-naga-left-handed-2020.md first, and use
 devices/razer-naga-left-handed-2020.toml as the template.
 
 Rules:
@@ -69,8 +70,36 @@ Steps:
    ~/.config/opensynapse/devices/ and check `opensynapse dump` matches
    what you read.
 5. Do one write test on a single button following the rules above.
-6. If the mouse answers differently from what PROTOCOL.md describes,
-   write down what you found so I can add it to the PR.
+6. Write devices/protocols/<my-mouse>.md following the template in
+   PROTOCOL.md, marking every finding as verified or inferred.
 ```
 
 Keep an eye on what it does, it's your mouse.
+
+If you already have a device file (or you did the probing by hand) and only want the protocol file written, paste this instead:
+
+```text
+Write the protocol file for my Razer mouse in opensynapse, the repo you're in.
+Read PROTOCOL.md for what goes in it and the template, and
+devices/protocols/razer-naga-left-handed-2020.md as an example.
+My device file is devices/<my-mouse>.toml.
+
+Rules:
+- Only send GET commands (command id with bit 0x80 set), use tools/probe.py.
+  Don't write anything to the mouse.
+- Only write down what you actually saw. Mark each finding as verified
+  (seen working on the mouse) or inferred (read back fine, or matches the
+  Naga, but not seen working). Anything you couldn't explain goes under
+  Unknowns.
+- Only document what's different from the common frame in PROTOCOL.md.
+
+Steps:
+1. Find my mouse with lsusb and the /dev/hidraw node for its interface.
+2. Run tools/probe.py over classes 0x00 to 0x0f and note which reads answer.
+3. Read the button list (0x02/0x84) and what each button does (0x02/0x8c
+   with [profile, button, layer]) and compare with my device file.
+4. Ask me to press buttons with `opensynapse watch` running if you need to
+   confirm which id is which button.
+5. Write devices/protocols/<my-mouse>.md with the same name as the
+   device file.
+```

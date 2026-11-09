@@ -1,66 +1,76 @@
-# Razer Naga Left-Handed Edition 2020 keymap protocol
+# Writing a protocol file
 
-Device: USB `1532:008d`, firmware v1.0. Synapse 4 calls it device 141, edition 0 (`Nagalhe_UI`).
+Every mouse in opensynapse has two files: the device file in [`devices/`](devices/) that the app reads, and a protocol file in [`devices/protocols/`](devices/protocols/) with the same name, where you write down what you found out about the mouse and how. The app never reads the protocol file, it's for the next person (or agent) who needs to know why the device file looks the way it does, or who has a similar mouse and wants a head start.
 
-All findings come from talking to the real device on Linux through `/dev/hidraw` on interface 0. Synapse was never run, and its shipped UI, installer and driver package don't contain the packet encoder.
+If you're adding a mouse, write one. The [Naga Left-Handed 2020 file](devices/protocols/razer-naga-left-handed-2020.md) is a complete example.
 
-## Transport
+## What's the same on every Razer mouse
 
-90-byte HID feature report on interface 0, no report ID. It's the same frame openrazer uses:
+You don't have to repeat this part in your file, only what's different on your mouse.
+
+The mouse talks through a 90-byte HID feature report, usually on USB interface 0, with no report id:
 
 | Offset | Field |
 |---|---|
-| 0 | status (`02` ok, `01` busy, `03` fail, `05` unsupported) |
-| 1 | transaction id (`0x1f` works) |
+| 0 | status: `02` ok, `01` busy, `03` fail, `05` unsupported |
+| 1 | transaction id (`0x1f` on newer mice, older ones use `0xff` or `0x3f`) |
 | 5 | data size |
 | 6 | command class |
-| 7 | command id (bit `0x80` = get) |
-| 8..87 | args |
-| 88 | XOR of bytes 2..87 |
+| 7 | command id, bit `0x80` set means it's a read |
+| 8..87 | arguments |
+| 88 | XOR of bytes 2 to 87 |
 
-## Keymap commands (class `0x02`)
+You send the report with `HIDIOCSFEATURE` and keep reading it back with `HIDIOCGFEATURE` until the status stops being busy. `tools/probe.py` already does all of this.
+
+## Finding things out
+
+Always start with reads. A read has the `0x80` bit set on the command id, and it doesn't change anything on the mouse, so you can try as many as you want.
+
+1. **Find the class.** `python3 tools/probe.py /dev/hidrawN` tries every read command in classes `0x00` to `0x0f` and prints the ones that answer. On the Naga the keymap is class `0x02`, DPI is `0x04` and serial/firmware are `0x00`, which seems to be common on newer Razer mice.
+2. **Look at what comes back with empty arguments.** Some reads answer right away (the Naga's `0x02/0x84` lists every button id), others need arguments.
+3. **Retry with arguments.** A read that fails with no arguments usually wants a profile, a button and a layer: `python3 tools/probe.py /dev/hidrawN 0x02 --args 014000` asks profile 1, button `0x40`, layer 0.
+4. **Decode the answer against what you know.** If a thumb button sends `1` today and the reply ends in `1e`, that's the HID usage for `1`, so you found the key byte.
+
+Only then try a write, and only on one button: send it, read it back, press the button, and set it back to what it was.
+
+**A write that reads back fine doesn't prove anything.** The Naga stores almost any byte you send without checking it, so the only proof that an encoding does what you think is pressing the button and seeing it happen (`opensynapse watch` shows that once you have a device file).
+
+## Template
+
+Copy this into `devices/protocols/<same-name-as-the-toml>.md` and fill it in. Leave sections out if they're the same as the Naga, but say so.
+
+```markdown
+# <Mouse name> keymap protocol
+
+Device: USB `1532:xxxx`, firmware vX.Y. Device file: [`<name>.toml`](../<name>.toml).
+
+How you found it: probing on Linux, a USB capture of Synapse, etc.
+
+## Transport
+
+Interface, transaction id, anything that's different from the common frame in PROTOCOL.md.
+
+## Keymap commands
 
 | Command | Args | Status |
 |---|---|---|
-| `0x8c` get button | `[profile, button, layer]` | reply echoes args, then the action. Verified. |
-| `0x0c` set button | `[profile, button, layer, action...]`, size `0x0a` | Verified: status ok, read-back matches, keypress observed. |
-| `0x84` list buttons | none | `count` + button ids |
-| `0x8e` bulk dump | `[profile, button, layer]` | 8-byte entries, layout not decoded |
-| `0x82` | none | `08 1c 08 1c`, meaning unknown |
-
-Layer `0` is normal and `1` is Hypershift. Profiles `0`..`2` answer. Writing profile `0` changes the live behaviour and leaves profile `1` untouched.
+| `0x02/0x8c` get button | `[profile, button, layer]` | verified / inferred |
 
 ## Button ids
 
 | Id | Button |
 |---|---|
-| `01` / `02` | left / right |
-| `03` | middle |
-| `09` / `0a` | wheel up / down |
-| `34` / `35` | wheel tilt left / right |
-| `0b` / `0c` | DPI up / down |
-| `0e` | profile button |
-| `40`..`4b` | thumb grid 1..12 (`40 + n - 1`) |
 
 ## Action encoding
 
 | Type | Bytes | Meaning |
 |---|---|---|
-| `01` mouse | `01 01 <btn>` | `01` left, `02` right, `03` middle, `09`/`0a` wheel |
-| `02` keyboard | `02 <?> <mod> <hid usage>` | `mod` is the HID modifier bitmask |
-| `06` DPI | `06 01 <n>` | `01` up, `02` down |
-| `07` profile | `07 01 <n>` | `04` on the profile button (cycle?) |
-| `0e` tilt | `0e 01 <n> 00 <rate>` | `0a`/`09` with `0x14` |
+
+## DPI and other commands
 
 ## Unknowns
 
-The mouse doesn't validate actions on write: on thumb1 it stored every type byte from `0x01` to `0x1f` exactly as sent (only type `0x00`, and `0x14` with a 6-byte payload, came back rewritten). A write that's accepted and reads back fine says nothing about what the button will do, so new action types have to be checked by pressing the button and watching the input reports.
+What you saw but couldn't explain, and what you didn't try.
+```
 
-- The second keyboard byte. It's `02` on most profile 0/1 layer-0 keys and `01` elsewhere. Writing `02` worked.
-- Whether profile 0 lives in RAM, and whether it survives a replug.
-- Which command switches or persists the active profile.
-- Macro storage (class `0x06` answers many ids with empty data).
-
-## Tools
-
-`tools/probe.py /dev/hidrawN [class ...] [--args hex]` sends GET commands only.
+Mark everything as **verified** (you saw it work on the mouse) or **inferred** (it read back right, or it matched another mouse, but you didn't see it happen). That difference is the most useful thing in the file.

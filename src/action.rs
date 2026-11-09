@@ -1,4 +1,4 @@
-//! What a button does, and its on-wire encoding (see PROTOCOL.md).
+//! What a button does, and its on-wire encoding (see devices/protocols/).
 
 use std::fmt;
 use std::str::FromStr;

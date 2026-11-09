@@ -15,7 +15,7 @@ My lawyers say I have to write this so:
 
 Razer doesn't ship Synapse for Linux, and my Naga's thumb grid was basically useless here. keyd and friends can remap what the mouse sends, but the remap lives on the computer, not on the mouse, and some things you just can't reach that way.
 
-So I reverse engineered how the mouse stores its keymap (it's all HID feature reports, the details are in [PROTOCOL.md](PROTOCOL.md)) and wrote this. It talks to the mouse directly, so the mapping is saved on the mouse itself and goes with it to any computer.
+So I reverse engineered how the mouse stores its keymap (it's all HID feature reports, the details for the Naga are in [`devices/protocols/`](devices/protocols/razer-naga-left-handed-2020.md)) and wrote this. It talks to the mouse directly, so the mapping is saved on the mouse itself and goes with it to any computer.
 
 Right now you can:
 

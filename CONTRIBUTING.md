@@ -35,7 +35,7 @@ A mouse is a single TOML file. The best way to start is copying [the Naga one](d
 
 6. **Optionally, add `at = [x, y]` to the buttons** so they show up on the drawn mouse in the GUI. The body is drawn at x 30..70 and y 2..74 (in percent), anything outside that gets a side plate. If you skip it you get a grid, which is fine.
 
-7. **Write the protocol file.** Next to the device file goes `devices/protocols/<same-name>.md`, where you write down what you found and how, so the next person with a similar mouse doesn't start from zero. [PROTOCOL.md](PROTOCOL.md) explains what goes in it and has a template, and the [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example. If you couldn't make your mouse work, send the protocol file anyway, what you found is still super useful.
+7. **Write the protocol file (nice to have).** It's not required, but it helps a lot: next to the device file goes `devices/protocols/<same-name>.md`, where you write down what you found and how, and that's what helps the next person decode a similar mouse instead of starting from zero. [PROTOCOL.md](PROTOCOL.md) explains what goes in it, has a template and [a prompt so an agent writes it for you](PROTOCOL.md#using-an-agent). The [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example. If you couldn't make your mouse work, send the protocol file anyway, what you found is still super useful.
 
 Then copy the device file into `devices/`, add it to the `BUILTIN` list in [`src/device.rs`](src/device.rs) and open a PR with both files. Mention the firmware version (`opensynapse export` writes it to the profile file).
 
@@ -76,30 +76,4 @@ Steps:
 
 Keep an eye on what it does, it's your mouse.
 
-If you already have a device file (or you did the probing by hand) and only want the protocol file written, paste this instead:
-
-```text
-Write the protocol file for my Razer mouse in opensynapse, the repo you're in.
-Read PROTOCOL.md for what goes in it and the template, and
-devices/protocols/razer-naga-left-handed-2020.md as an example.
-My device file is devices/<my-mouse>.toml.
-
-Rules:
-- Only send GET commands (command id with bit 0x80 set), use tools/probe.py.
-  Don't write anything to the mouse.
-- Only write down what you actually saw. Mark each finding as verified
-  (seen working on the mouse) or inferred (read back fine, or matches the
-  Naga, but not seen working). Anything you couldn't explain goes under
-  Unknowns.
-- Only document what's different from the common frame in PROTOCOL.md.
-
-Steps:
-1. Find my mouse with lsusb and the /dev/hidraw node for its interface.
-2. Run tools/probe.py over classes 0x00 to 0x0f and note which reads answer.
-3. Read the button list (0x02/0x84) and what each button does (0x02/0x8c
-   with [profile, button, layer]) and compare with my device file.
-4. Ask me to press buttons with `opensynapse watch` running if you need to
-   confirm which id is which button.
-5. Write devices/protocols/<my-mouse>.md with the same name as the
-   device file.
-```
+If you already have a device file and only want the protocol file written, [PROTOCOL.md has a prompt for that](PROTOCOL.md#using-an-agent).

@@ -74,3 +74,36 @@ What you saw but couldn't explain, and what you didn't try.
 ```
 
 Mark everything as **verified** (you saw it work on the mouse) or **inferred** (it read back right, or it matched another mouse, but you didn't see it happen). That difference is the most useful thing in the file.
+
+## Using an agent
+
+You can have an agent (Claude Code or whatever you use) do the probing and write the file. Open it in this repo with the mouse plugged in and paste this:
+
+```text
+Write the protocol file for my Razer mouse in opensynapse, the repo you're in.
+Read PROTOCOL.md for what goes in it and the template, and
+devices/protocols/razer-naga-left-handed-2020.md as an example.
+My device file is devices/<my-mouse>.toml (if I don't have one yet, say so
+and stop).
+
+Rules:
+- Only send GET commands (command id with bit 0x80 set), use tools/probe.py.
+  Don't write anything to the mouse.
+- Only write down what you actually saw. Mark each finding as verified
+  (seen working on the mouse) or inferred (read back fine, or matches the
+  Naga, but not seen working). Anything you couldn't explain goes under
+  Unknowns.
+- Only document what's different from the common frame in PROTOCOL.md.
+
+Steps:
+1. Find my mouse with lsusb and the /dev/hidraw node for its interface.
+2. Run tools/probe.py over classes 0x00 to 0x0f and note which reads answer.
+3. Read the button list (0x02/0x84) and what each button does (0x02/0x8c
+   with [profile, button, layer]) and compare with my device file.
+4. Ask me to press buttons with `opensynapse watch` running if you need to
+   confirm which id is which button.
+5. Write devices/protocols/<my-mouse>.md with the same name as the
+   device file.
+```
+
+Read what it wrote before you send it, agents like to sound more sure than they are.

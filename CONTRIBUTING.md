@@ -14,7 +14,7 @@ A mouse is a single TOML file, like [the Naga one](devices/razer-naga-left-hande
    opensynapse init
    ```
 
-   It finds your Razer mouse, looks up its transaction id and interface in a list taken from OpenRGB ([`devices/known-mice.toml`](devices/known-mice.toml)), asks the mouse for its buttons and profiles, and writes `~/.config/opensynapse/devices/<serial>/buttons.toml`, in the same folder where your mouse's profiles are saved. It only reads from the mouse, so it can't change anything. Common buttons get a name, the rest are called `btn-0xNN`.
+   It finds your Razer mouse, looks up its transaction id and interface in a list taken from OpenRGB ([`devices/known-mice.toml`](devices/known-mice.toml)), asks the mouse for its buttons and profiles, and writes `~/.config/opensynapse/devices/<usb id>/buttons.toml` (like `1532-008d`), in the same folder where your mouse's profiles are saved. It only reads from the mouse, so it can't change anything. Common buttons get a name, the rest are called `btn-0xNN`.
 
 2. **Name the buttons.** `opensynapse dump` shows what each button does today (a key, a mouse button, DPI up...), which is usually enough to know which one it is, and `opensynapse watch` prints the names as you press them. Rename them in the file, and fix the `dpi_max` and any other `TODO`.
 
@@ -54,7 +54,7 @@ Rules:
 
 Steps:
 1. Run `opensynapse init` to start the device file in
-   ~/.config/opensynapse/devices/<serial>/buttons.toml. If it can't talk to my mouse, find the
+   ~/.config/opensynapse/devices/<vid-pid>/buttons.toml. If it can't talk to my mouse, find the
    /dev/hidraw node and transaction id by hand with tools/probe.py.
 2. Run `opensynapse dump` and work out which id is which physical button
    from what each one does. Ask me to press buttons with

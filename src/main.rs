@@ -250,7 +250,7 @@ fn init(args: &[&str], force: bool) -> Result<(), String> {
     let s = scaffold::scaffold(pid, &hid_name).map_err(|e| e.to_string())?;
     let path = match args.get(1) {
         Some(p) => PathBuf::from(p),
-        None => device::devices_dir().ok_or("no config dir")?.join(device::storage_id(&s.serial, 0x1532, pid)).join("buttons.toml"),
+        None => device::devices_dir().ok_or("no config dir")?.join(device::storage_id(0x1532, pid)).join("buttons.toml"),
     };
     if path.exists() && !force {
         return Err(format!("{} already exists, use --force to overwrite it", path.display()));

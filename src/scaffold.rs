@@ -36,8 +36,6 @@ pub struct Scaffold {
     pub transaction_id: u8,
     pub interface: u8,
     pub buttons: usize,
-    /// factory serial, empty if the mouse doesn't report one
-    pub serial: String,
 }
 
 /// Common button ids (razerqdhid, Naga) so the file starts with some names.
@@ -102,9 +100,6 @@ pub fn scaffold(pid: u16, fallback_name: &str) -> io::Result<Scaffold> {
     let profiles: Vec<u8> =
         (0..=5u8).filter(|&p| hid.command(0x02, 0x8c, 0x0a, &[p, first, 0]).is_ok()).collect();
     let hypershift = hid.command(0x02, 0x8c, 0x0a, &[0, first, 1]).is_ok();
-    let serial = hid
-        .command(0x00, 0x82, 0x16, &[])
-        .map_or(String::new(), |r| String::from_utf8_lossy(&r[8..8 + 0x16]).trim_end_matches('\0').trim().to_string());
 
     let mut t = String::new();
     // writes to a String can't fail
@@ -123,7 +118,7 @@ pub fn scaffold(pid: u16, fallback_name: &str) -> io::Result<Scaffold> {
     for id in &ids {
         let _ = writeln!(t, "\n[[buttons]]\nid = 0x{id:02x}\nname = \"{}\" # TODO: check with `opensynapse watch`", guess_name(*id));
     }
-    Ok(Scaffold { name, toml: t, transaction_id: tid, interface, buttons: ids.len(), serial })
+    Ok(Scaffold { name, toml: t, transaction_id: tid, interface, buttons: ids.len() })
 }
 
 /// "Razer Naga Pro (Wired)" -> "razer-naga-pro-wired"

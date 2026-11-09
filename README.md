@@ -21,7 +21,7 @@ Right now you can:
 
 - Remap any button to a key (with modifiers), a mouse button, a mouse button on turbo, DPI up/down or nothing at all, on both the normal and the Hypershift layer
 - Change DPI and the DPI stages
-- Export and import profiles as JSON. The first time it runs it backs up every profile on the mouse to `~/.config/opensynapse/devices/<serial>/`
+- Export and import profiles as JSON. The first time it runs it backs up every profile on the mouse to `~/.config/opensynapse/devices/<usb id>/` (like `1532-008d`)
 - See which button you're pressing, live, in the GUI
 - Change the lighting of each zone (static, breath, spectrum, wave, reactive, off) and its brightness. This one goes through [OpenRazer](https://openrazer.github.io/), so it works on any mouse OpenRazer supports, and if the OpenRazer daemon is running it remembers your colors like it does for its own apps
 

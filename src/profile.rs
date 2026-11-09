@@ -93,7 +93,7 @@ pub fn apply(mouse: &Mouse, profile: u8, file: &ProfileFile) -> io::Result<usize
     Ok(written)
 }
 
-/// ~/.config/opensynapse/devices/<serial>/<profile>.json
+/// ~/.config/opensynapse/devices/<vid-pid>/<profile>.json
 pub fn default_path(mouse: &Mouse, profile: u8) -> Option<PathBuf> {
     crate::device::devices_dir().map(|d| d.join(mouse.storage_id()).join(format!("{profile}.json")))
 }

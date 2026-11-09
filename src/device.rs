@@ -86,15 +86,12 @@ pub fn definitions() -> Vec<DeviceDef> {
     defs
 }
 
-/// Folder name for one physical mouse: its serial, or vid-pid without one.
-pub fn storage_id(serial: &str, vid: u16, pid: u16) -> String {
-    if serial.is_empty() {
-        return format!("{vid:04x}-{pid:04x}");
-    }
-    serial.to_string()
+/// Folder name for a mouse model: its USB id, "1532-008d".
+pub fn storage_id(vid: u16, pid: u16) -> String {
+    format!("{vid:04x}-{pid:04x}")
 }
 
-/// ~/.config/opensynapse/devices: one folder per mouse (see `storage_id`) with
+/// ~/.config/opensynapse/devices: one folder per model (see `storage_id`) with
 /// its saved profiles and, for mice without a built-in definition, buttons.toml.
 pub fn devices_dir() -> Option<PathBuf> {
     env::var_os("XDG_CONFIG_HOME")
@@ -162,9 +159,9 @@ impl Mouse {
         Ok(String::from_utf8_lossy(&r[8..8 + 0x16]).trim_end_matches('\0').trim().to_string())
     }
 
-    /// Folder name for this unit's saved profiles: the serial, or vid-pid without one.
+    /// Folder name for this model's saved profiles and device file.
     pub fn storage_id(&self) -> String {
-        storage_id(&self.serial, self.def.vid, self.def.pid)
+        storage_id(self.def.vid, self.def.pid)
     }
 
     pub fn firmware(&self) -> io::Result<String> {

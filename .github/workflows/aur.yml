@@ -6,11 +6,16 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # A tag that doesn't match Cargo.toml would publish a package whose
       # binary reports a different version, so stop before touching the AUR.
@@ -38,7 +43,7 @@ jobs:
 
       # Regenerates sha256sums (updpkgsums) and .SRCINFO in its own container.
       - if: steps.check-secret.outputs.has_key == 'true'
-        uses: KSXGitHub/github-actions-deploy-aur@v4
+        uses: KSXGitHub/github-actions-deploy-aur@084b0d9b15415bf9cdb65d44dad1efe37a354050 # v4.2.0
         with:
           pkgname: opensynapse
           pkgbuild: ./contrib/aur/opensynapse/PKGBUILD

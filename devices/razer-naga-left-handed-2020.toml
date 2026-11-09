@@ -1,0 +1,145 @@
+# Verified on hardware, firmware v1.0. See PROTOCOL.md.
+#
+# `at = [x, y]` places a button on the drawn mouse, in percent of the view.
+# The body is drawn at x 30..70, y 2..74; buttons outside it get a side plate.
+# Leave `at` out on every button to get a plain grid instead.
+name = "Razer Naga Left-Handed Edition 2020"
+vid = 0x1532
+pid = 0x008d
+interface = 0
+transaction_id = 0x1f
+profiles = [0, 1, 2]
+layers = ["normal", "hypershift"]
+dpi_max = 20000
+
+[[buttons]]
+id = 0x01
+name = "left"
+group = "main"
+at = [40, 28]
+
+[[buttons]]
+id = 0x02
+name = "right"
+group = "main"
+at = [60, 28]
+
+[[buttons]]
+id = 0x09
+name = "wheel-up"
+group = "main"
+at = [50, 10]
+
+[[buttons]]
+id = 0x03
+name = "middle"
+group = "main"
+at = [50, 18]
+
+[[buttons]]
+id = 0x0a
+name = "wheel-down"
+group = "main"
+at = [50, 26]
+
+[[buttons]]
+id = 0x34
+name = "tilt-left"
+group = "main"
+at = [42, 16]
+
+[[buttons]]
+id = 0x35
+name = "tilt-right"
+group = "main"
+at = [58, 16]
+
+[[buttons]]
+id = 0x0b
+name = "dpi-up"
+group = "top"
+at = [50, 34]
+
+[[buttons]]
+id = 0x0c
+name = "dpi-down"
+group = "top"
+at = [50, 40]
+
+[[buttons]]
+id = 0x0e
+name = "profile"
+group = "bottom"
+at = [50, 62]
+
+[[buttons]]
+id = 0x40
+name = "thumb1"
+group = "thumb"
+at = [78, 30]
+
+[[buttons]]
+id = 0x41
+name = "thumb2"
+group = "thumb"
+at = [86, 30]
+
+[[buttons]]
+id = 0x42
+name = "thumb3"
+group = "thumb"
+at = [94, 30]
+
+[[buttons]]
+id = 0x43
+name = "thumb4"
+group = "thumb"
+at = [78, 40]
+
+[[buttons]]
+id = 0x44
+name = "thumb5"
+group = "thumb"
+at = [86, 40]
+
+[[buttons]]
+id = 0x45
+name = "thumb6"
+group = "thumb"
+at = [94, 40]
+
+[[buttons]]
+id = 0x46
+name = "thumb7"
+group = "thumb"
+at = [78, 50]
+
+[[buttons]]
+id = 0x47
+name = "thumb8"
+group = "thumb"
+at = [86, 50]
+
+[[buttons]]
+id = 0x48
+name = "thumb9"
+group = "thumb"
+at = [94, 50]
+
+[[buttons]]
+id = 0x49
+name = "thumb10"
+group = "thumb"
+at = [78, 60]
+
+[[buttons]]
+id = 0x4a
+name = "thumb11"
+group = "thumb"
+at = [86, 60]
+
+[[buttons]]
+id = 0x4b
+name = "thumb12"
+group = "thumb"
+at = [94, 60]

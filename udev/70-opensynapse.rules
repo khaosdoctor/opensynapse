@@ -1,0 +1,8 @@
+# Lets the logged-in user talk to Razer devices over hidraw, which opensynapse
+# needs for remapping and DPI. `uaccess` grants access only to the user at the
+# active seat (no world-writable nodes). Must sort before 73-seat-late.rules.
+#
+# Install:
+#   sudo install -m644 udev/70-opensynapse.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload && sudo udevadm trigger
+KERNEL=="hidraw*", SUBSYSTEMS=="usb", ATTRS{idVendor}=="1532", TAG+="uaccess"

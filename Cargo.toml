@@ -1,0 +1,26 @@
+[package]
+name = "opensynapse"
+version = "0.1.0"
+edition = "2024"
+description = "Remap buttons, turbo and DPI on Razer mice from Linux"
+license = "GPL-2.0-or-later"
+
+[[bin]]
+name = "opensynapse"
+path = "src/main.rs"
+
+[[bin]]
+name = "opensynapse-gui"
+path = "src/bin/opensynapse-gui.rs"
+required-features = ["gui"]
+
+[dependencies]
+eframe = { version = "0.37.0", optional = true }
+libc = "0.2.191"
+rfd = { version = "0.18.0", optional = true }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+toml = "1.2.1"
+
+[features]
+gui = ["dep:eframe", "dep:rfd"]

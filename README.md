@@ -27,6 +27,10 @@ Right now you can:
 
 In the GUI, changes are queued like in GParted and nothing touches the mouse until you hit ***WRITE TO DEVICE***. CLI commands write right away.
 
+![The buttons tab: the Naga drawn with what each button does, the DPI stages and the remap editor](docs/screenshots/buttons.png)
+
+![The lighting tab: effect and brightness for each zone](docs/screenshots/lighting.png)
+
 ## Current status
 
 Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is supported, because that's the one I have. The protocol is shared by a bunch of Razer mice, so adding another one should mostly be writing a JSONC file (see [Adding your mouse](#adding-your-mouse)).

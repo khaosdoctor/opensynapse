@@ -1,0 +1,50 @@
+name: aur
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # A tag that doesn't match Cargo.toml would publish a package whose
+      # binary reports a different version, so stop before touching the AUR.
+      - name: check tag matches Cargo.toml
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          crate=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "$tag" != "$crate" ]; then
+            echo "tag v$tag does not match Cargo.toml version $crate"
+            exit 1
+          fi
+          sed -i "s/^pkgver=.*/pkgver=$tag/" contrib/aur/opensynapse/PKGBUILD
+
+      # Job-level `if:` can't read the secrets context, so check for AUR_KEY
+      # here and skip the deploy step until the secret exists.
+      - id: check-secret
+        env:
+          AUR_KEY: ${{ secrets.AUR_KEY }}
+        run: |
+          if [ -n "$AUR_KEY" ]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Regenerates sha256sums (updpkgsums) and .SRCINFO in its own container.
+      - if: steps.check-secret.outputs.has_key == 'true'
+        uses: KSXGitHub/github-actions-deploy-aur@v4
+        with:
+          pkgname: opensynapse
+          pkgbuild: ./contrib/aur/opensynapse/PKGBUILD
+          updpkgsums: true
+          commit_username: Lucas Santos
+          commit_email: hello@lsantos.dev
+          ssh_private_key: ${{ secrets.AUR_KEY }}
+          commit_message: "Update to ${{ github.ref_name }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519

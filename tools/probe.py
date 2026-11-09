@@ -2,7 +2,7 @@
 """Read-only probe of the Razer 90-byte feature-report protocol.
 
 Sends only GET commands (command id with bit 0x80 set) and prints which
-class/id pairs the device answers. Usage: probe.py /dev/hidrawN [class ...]
+class/id pairs the device answers. Usage: probe.py /dev/hidrawN [class ...] [--args HEX]
 """
 import fcntl
 import os
@@ -22,10 +22,10 @@ HIDIOCSFEATURE = ioc(0x06, REPORT_LEN + 1)
 HIDIOCGFEATURE = ioc(0x07, REPORT_LEN + 1)
 
 
-def build(tid, cls, cid, size=0x50, args=b""):
+def build(tid, cls, cid, args=b""):
     r = bytearray(REPORT_LEN)
     r[1] = tid
-    r[5] = size
+    r[5] = 0x50
     r[6] = cls
     r[7] = cid
     r[8:8 + len(args)] = args
@@ -40,7 +40,7 @@ def send(fd, report):
     fcntl.ioctl(fd, HIDIOCSFEATURE, bytes([0]) + report)
     for _ in range(20):
         time.sleep(0.005)
-        buf = bytearray([0]) + bytearray(REPORT_LEN)
+        buf = bytearray(REPORT_LEN + 1)
         fcntl.ioctl(fd, HIDIOCGFEATURE, buf)
         resp = buf[1:]
         if resp[0] != 0x01:
@@ -51,7 +51,6 @@ def send(fd, report):
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
-    # optional trailing "--args 01400" hex payload sent with every GET
     argv = sys.argv[2:]
     args = b""
     if "--args" in argv:
@@ -70,6 +69,8 @@ def main():
             if resp[0] != 0x02:
                 continue
             payload = bytes(resp[8:8 + resp[5]]).rstrip(b"\0")
+            if (cls, cid) == (0x00, 0x82):
+                payload = b""  # factory serial, keep it out of protocol files posted publicly
             print(f"class 0x{cls:02x} id 0x{cid:02x} size={resp[5]:3d} data={payload.hex()}")
     os.close(fd)
 

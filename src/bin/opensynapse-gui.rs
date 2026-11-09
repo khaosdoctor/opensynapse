@@ -192,7 +192,7 @@ impl App {
             .map(|(pid, name)| format!("{name} ({pid:04x})"))
             .collect();
         if self.mice.is_empty() {
-            self.status = Err("NO SUPPORTED DEVICE > add a devices/*.toml for it".into());
+            self.status = Err("NO SUPPORTED DEVICE > run `opensynapse init` for it".into());
             return;
         }
         self.switch_to(self.current.min(self.mice.len() - 1));

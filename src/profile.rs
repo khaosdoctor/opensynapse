@@ -93,9 +93,11 @@ pub fn apply(mouse: &Mouse, profile: u8, file: &ProfileFile) -> io::Result<usize
     Ok(written)
 }
 
-/// ~/.config/opensynapse/devices/<vid-pid>/<profile>.json
+/// ~/.config/opensynapse/devices/<vid-pid>/<serial>-<profile>.json, or
+/// <profile>.json when the mouse doesn't report a serial.
 pub fn default_path(mouse: &Mouse, profile: u8) -> Option<PathBuf> {
-    crate::device::devices_dir().map(|d| d.join(mouse.storage_id()).join(format!("{profile}.json")))
+    let name = if mouse.serial.is_empty() { format!("{profile}.json") } else { format!("{}-{profile}.json", mouse.serial) };
+    crate::device::devices_dir().map(|d| d.join(mouse.storage_id()).join(name))
 }
 
 /// Creates the device's profile folder and saves any profile that has no file

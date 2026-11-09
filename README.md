@@ -21,7 +21,7 @@ Right now you can:
 
 - Remap any button to a key (with modifiers), a mouse button, a mouse button on turbo, DPI up/down or nothing at all, on both the normal and the Hypershift layer
 - Change DPI and the DPI stages
-- Export and import profiles as JSON. The first time it runs it backs up every profile on the mouse to `~/.config/opensynapse/devices/<usb id>/` (like `1532-008d`)
+- Export and import profiles as JSON. The first time it runs it backs up every profile on the mouse to `~/.config/opensynapse/devices/<usb id>/<serial>-<profile>.json` (like `1532-008d/PM2313H16100284-0.json`)
 - See which button you're pressing, live, in the GUI
 - Change the lighting of each zone (static, breath, spectrum, wave, reactive, off) and its brightness. This one goes through [OpenRazer](https://openrazer.github.io/), so it works on any mouse OpenRazer supports, and if the OpenRazer daemon is running it remembers your colors like it does for its own apps
 
@@ -29,7 +29,7 @@ Changes are queued like in GParted, nothing touches the mouse until you hit _Wri
 
 ## Current status
 
-Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is supported, because that's the one I have. The protocol is shared by a bunch of Razer mice, so adding another one should mostly be writing a TOML file (see [Adding your mouse](#adding-your-mouse)).
+Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is supported, because that's the one I have. The protocol is shared by a bunch of Razer mice, so adding another one should mostly be writing a JSON file (see [Adding your mouse](#adding-your-mouse)).
 
 Things I still haven't figured out: turbo for keyboard keys, media keys like play/pause, and whether profile 0 survives unplugging the mouse.
 
@@ -75,7 +75,7 @@ opensynapse protocol send                # share it as a GitHub issue
 
 ## Adding your mouse
 
-**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single TOML file in [`devices/`](devices/) with its USB ids and the list of buttons, and `opensynapse init` writes most of it for you by asking your mouse, without changing anything on it.
+**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single JSON file in [`devices/`](devices/) with its USB ids and the list of buttons, and `opensynapse init` writes most of it for you by asking your mouse, without changing anything on it.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the step by step, and a prompt you can paste into Claude Code (or whatever agent you use) to do the whole thing with it, which is how I did the Naga. Once it works, `opensynapse protocol` writes down what your mouse does and `opensynapse protocol send` shares it with me as an issue, so it helps the next person even if your mouse isn't fully supported yet.
 

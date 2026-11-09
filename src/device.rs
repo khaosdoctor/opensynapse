@@ -1,14 +1,31 @@
-//! Device definitions (devices/*.toml) and the commands we know how to send.
+//! Device definitions (devices/*.json) and the commands we know how to send.
 
 use crate::action::Action;
 use crate::hid::{self, Hid};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::{env, fs, io, path::PathBuf};
 
-/// Built into the binary as (file name without .toml, contents).
-/// New devices: add a TOML file and a line here.
+/// Built into the binary as (file name without .json, contents).
+/// New devices: add a JSON file and a line here.
 const BUILTIN: &[(&str, &str)] =
-    &[("razer-naga-left-handed-2020", include_str!("../devices/razer-naga-left-handed-2020.toml"))];
+    &[("razer-naga-left-handed-2020", include_str!("../devices/razer-naga-left-handed-2020.json"))];
+
+/// Ids in the device files are hex strings ("0x40") so they match the
+/// protocol docs and probe output; plain numbers work too.
+pub fn hex<'de, D: Deserializer<'de>, T: TryFrom<u64>>(d: D) -> Result<T, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Raw {
+        Num(u64),
+        Str(String),
+    }
+    let n = match Raw::deserialize(d)? {
+        Raw::Num(n) => n,
+        Raw::Str(s) => u64::from_str_radix(s.trim_start_matches("0x"), 16)
+            .map_err(|_| serde::de::Error::custom(format!("bad hex '{s}'")))?,
+    };
+    T::try_from(n).map_err(|_| serde::de::Error::custom(format!("{n:#x} is too big")))
+}
 
 const VARSTORE: u8 = 0x01;
 const CLASS_DPI: u8 = 0x04;
@@ -17,26 +34,29 @@ const CLASS_KEYMAP: u8 = 0x02;
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeviceDef {
     pub name: String,
+    #[serde(deserialize_with = "hex")]
     pub vid: u16,
+    #[serde(deserialize_with = "hex")]
     pub pid: u16,
     #[serde(default)]
     pub interface: u8,
-    #[serde(default = "default_tid")]
+    #[serde(default = "default_tid", deserialize_with = "hex")]
     pub transaction_id: u8,
     pub profiles: Vec<u8>,
     pub layers: Vec<String>,
     pub dpi_max: u16,
     pub buttons: Vec<Button>,
-    /// File name without .toml; the protocol file uses the same name.
+    /// File name without .json; the protocol file uses the same name.
     #[serde(skip)]
     pub file: String,
-    /// The TOML text this was parsed from, for `protocol send`.
+    /// The JSON text this was parsed from, for `protocol send`.
     #[serde(skip)]
     pub source: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Button {
+    #[serde(deserialize_with = "hex")]
     pub id: u8,
     pub name: String,
     #[serde(default)]
@@ -61,10 +81,10 @@ impl DeviceDef {
     }
 }
 
-/// Built-in definitions plus ~/.config/opensynapse/devices/<id>/buttons.toml (user files win).
+/// Built-in definitions plus ~/.config/opensynapse/devices/<vid-pid>/buttons.json (user files win).
 pub fn definitions() -> Vec<DeviceDef> {
     let mut defs: Vec<DeviceDef> = Vec::new();
-    let mut add = |src: &str, file: &str, origin: &str| match toml::from_str::<DeviceDef>(src) {
+    let mut add = |src: &str, file: &str, origin: &str| match serde_json::from_str::<DeviceDef>(src) {
         Ok(mut d) => {
             d.file = file.to_string();
             d.source = src.to_string();
@@ -77,10 +97,10 @@ pub fn definitions() -> Vec<DeviceDef> {
         add(src, file, "(builtin)");
     }
     let entries = devices_dir().and_then(|d| fs::read_dir(d).ok()).into_iter().flatten().flatten();
-    for path in entries.map(|e| e.path().join("buttons.toml")) {
+    for path in entries.map(|e| e.path().join("buttons.json")) {
         let Ok(src) = fs::read_to_string(&path) else { continue };
         // the repo file name comes from the mouse name, "buttons" says nothing
-        let file = toml::from_str::<DeviceDef>(&src).map_or(String::new(), |d| crate::scaffold::slug(&d.name));
+        let file = serde_json::from_str::<DeviceDef>(&src).map_or(String::new(), |d| crate::scaffold::slug(&d.name));
         add(&src, &file, &path.display().to_string());
     }
     defs
@@ -92,7 +112,7 @@ pub fn storage_id(vid: u16, pid: u16) -> String {
 }
 
 /// ~/.config/opensynapse/devices: one folder per model (see `storage_id`) with
-/// its saved profiles and, for mice without a built-in definition, buttons.toml.
+/// its saved profiles and, for mice without a built-in definition, buttons.json.
 pub fn devices_dir() -> Option<PathBuf> {
     env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)

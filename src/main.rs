@@ -13,7 +13,7 @@ const USAGE: &str = "\
 usage: opensynapse <command> [--profile N] [--layer NAME]
 
 commands:
-  init [pid] [file.toml]       start a device file for a mouse that doesn't have one (read-only)
+  init [pid] [file.json]       start a device file for a mouse that doesn't have one (read-only)
   list                         connected mice and their buttons
   dump                         every button's action
   get <button>                 one button's action
@@ -91,7 +91,7 @@ fn run(o: Opts) -> Result<(), String> {
     }
     let mice = device::detect().map_err(|e| e.to_string())?;
     // ponytail: first mouse only, add --device when someone has two
-    let mouse: &Mouse = mice.first().ok_or("no supported Razer mouse found (see devices/*.toml)")?;
+    let mouse: &Mouse = mice.first().ok_or("no supported Razer mouse found (see devices/*.json)")?;
     let def = &mouse.def;
     let layer = def.layer(&o.layer).ok_or(format!("unknown layer '{}', have {:?}", o.layer, def.layers))?;
     let button = |name: &str| def.button(name).map(|b| b.id).ok_or(format!("unknown button '{name}'"));
@@ -235,7 +235,7 @@ fn run(o: Opts) -> Result<(), String> {
     Ok(())
 }
 
-/// `init [pid] [file.toml]`: starts a device file for a mouse without one.
+/// `init [pid] [file.json]`: starts a device file for a mouse without one.
 fn init(args: &[&str], force: bool) -> Result<(), String> {
     let connected = hid::razer_devices();
     let known_pids: Vec<u16> = device::definitions().iter().map(|d| d.pid).collect();
@@ -250,7 +250,7 @@ fn init(args: &[&str], force: bool) -> Result<(), String> {
     let s = scaffold::scaffold(pid, &hid_name).map_err(|e| e.to_string())?;
     let path = match args.get(1) {
         Some(p) => PathBuf::from(p),
-        None => device::devices_dir().ok_or("no config dir")?.join(device::storage_id(0x1532, pid)).join("buttons.toml"),
+        None => device::devices_dir().ok_or("no config dir")?.join(device::storage_id(0x1532, pid)).join("buttons.json"),
     };
     if path.exists() && !force {
         return Err(format!("{} already exists, use --force to overwrite it", path.display()));
@@ -258,7 +258,7 @@ fn init(args: &[&str], force: bool) -> Result<(), String> {
     if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    fs::write(&path, &s.toml).map_err(|e| e.to_string())?;
+    fs::write(&path, &s.json).map_err(|e| e.to_string())?;
     println!(
         "wrote {}\n{} on interface {}, transaction id 0x{:02x}, {} buttons found\n\
          name the buttons (`opensynapse watch` shows them as you press), then see CONTRIBUTING.md",

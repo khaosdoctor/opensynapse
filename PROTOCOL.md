@@ -55,12 +55,12 @@ That opens a GitHub issue on this repo with your protocol file and your device f
 
 ## Template
 
-If you want to write it by hand, copy this into `devices/protocols/<same-name-as-the-toml>.md` and fill it in. Leave sections out if they're the same as the Naga, but say so.
+If you want to write it by hand, copy this into `devices/protocols/<same-name-as-the-device-file>.md` and fill it in. Leave sections out if they're the same as the Naga, but say so.
 
 ```markdown
 # <Mouse name> keymap protocol
 
-Device: USB `1532:xxxx`, firmware vX.Y. Device file: [`<name>.toml`](../<name>.toml).
+Device: USB `1532:xxxx`, firmware vX.Y. Device file: [`<name>.json`](../<name>.json).
 
 How you found it: probing on Linux, a USB capture of Synapse, etc.
 
@@ -98,7 +98,7 @@ Mark everything as **verified** (you saw it work on the mouse) or **inferred** (
 Before you probe, check what other people already found, a lot of Razer mice share the same commands:
 
 - [razerqdhid](https://github.com/geezmolycos/razerqdhid) (MIT) reverse engineered the Basilisk V3, which uses the same keymap commands as the Naga. Its docs cover [button actions](https://github.com/geezmolycos/razerqdhid/blob/main/docs/cmd_button-en.md), [macros](https://github.com/geezmolycos/razerqdhid/blob/main/docs/cmd_macro-en.md) and [profiles](https://github.com/geezmolycos/razerqdhid/blob/main/docs/cmd_profile-en.md). Most of the action types in the Naga file came from there.
-- [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) (GPL-2.0-or-later) has the transaction id, interface and HID usage for almost every Razer device in `Controllers/RazerController/RazerDevices.cpp` and `RazerControllerDetect.cpp`. `opensynapse init` uses that list to start your device file.
+- [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) (GPL-2.0-or-later) has the transaction id, interface and HID usage for almost every Razer device in `Controllers/RazerController/RazerDevices.cpp` and `RazerControllerDetect.cpp`. The transaction ids `opensynapse init` tries (`0x1f`, `0x3f`, `0xff`) come from there.
 - [OpenRazer](https://github.com/openrazer/openrazer) (GPL-2.0-or-later) has no button remapping, but its driver picks the transaction id per mouse in `driver/razermouse_driver.c`, and issues [#2845](https://github.com/openrazer/openrazer/issues/2845) (Basilisk Ultimate remapping) and [#2031](https://github.com/openrazer/openrazer/issues/2031) (keyboard remapping) have useful captures.
 
 ## Using an agent
@@ -109,7 +109,7 @@ You can have an agent (Claude Code or whatever you use) do the probing and write
 Write the protocol file for my Razer mouse in opensynapse, the repo you're in.
 Read PROTOCOL.md for what goes in it and the template, and
 devices/protocols/razer-naga-left-handed-2020.md as an example.
-My device file is devices/<my-mouse>.toml (if I don't have one yet, say so
+My device file is devices/<my-mouse>.json (if I don't have one yet, say so
 and stop).
 
 Rules:

@@ -87,7 +87,9 @@ pub fn razer_devices() -> Vec<(u16, String)> {
         let Some(id) = field("HID_ID=0003:00001532:") else { continue };
         let Ok(pid) = u16::from_str_radix(&id, 16) else { continue };
         if !found.iter().any(|(p, _)| *p == pid) {
-            found.push((pid, field("HID_NAME=").unwrap_or_default()));
+            // HID_NAME is "<manufacturer> <product>", and Razer puts "Razer" in both
+            let name = field("HID_NAME=").unwrap_or_default().replacen("Razer Razer ", "Razer ", 1);
+            found.push((pid, name));
         }
     }
     found

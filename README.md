@@ -25,6 +25,9 @@ Right now you can:
 - See which button you're pressing, live, in the GUI
 - Change the lighting of each zone (static, breath, spectrum, wave, reactive, off) and its brightness. This one goes through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports, and if the OpenRazer daemon is running it remembers your colors like it does for its own apps
 
+> [!NOTE]
+> Lighting is still untested, so it may not work on your mouse yet.
+
 In the GUI, changes are queued like in GParted and nothing touches the mouse until you hit ***WRITE TO DEVICE***. CLI commands write right away.
 
 ![The buttons tab: the Naga drawn with what each button does, the DPI stages and the remap editor](docs/screenshots/buttons.png)

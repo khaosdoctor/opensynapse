@@ -6,17 +6,7 @@ All findings come from talking to the real device on Linux through `/dev/hidraw`
 
 ## Transport
 
-90-byte HID feature report on interface 0, no report ID. It's the same frame openrazer uses:
-
-| Offset | Field |
-|---|---|
-| 0 | status (`02` ok, `01` busy, `03` fail, `05` unsupported) |
-| 1 | transaction id (`0x1f` works) |
-| 5 | data size |
-| 6 | command class |
-| 7 | command id (bit `0x80` = get) |
-| 8..87 | args |
-| 88 | XOR of bytes 2..87 |
+The common frame from [PROTOCOL.md](../../PROTOCOL.md#whats-the-same-on-every-razer-mouse), on interface 0 with transaction id `0x1f`.
 
 ## Keymap commands (class `0x02`)
 
@@ -67,10 +57,5 @@ razerqdhid also documents macros (types `03`, `04`, `05`, `0f`, stored in class 
 The mouse doesn't validate actions on write: on thumb1 it stored every type byte from `0x01` to `0x1f` exactly as sent (only type `0x00`, and `0x14` with a 6-byte payload, came back rewritten). A write that's accepted and reads back fine says nothing about what the button will do, so new action types have to be checked by pressing the button and watching the input reports.
 
 - Some defaults read back with a length that doesn't match the data: keys on the Hypershift layer and thumb9 read `02 01 00 <usage>`, and the tilt defaults read `0e 01 <btn> 00 14`. They work, so the firmware seems to ignore the length on those. Writing the documented length works too.
-- Profile 0 should be the "direct" profile, applied right away but lost on power off, with profiles 1 to 5 stored on the mouse (razerqdhid). On the Naga, writing profile 0 changed the live behaviour and left profile 1 alone, the replug part is untested.
+- Profile 0 should be the "direct" profile, applied right away but lost on power off, with profiles 1 to 5 stored on the mouse (razerqdhid). Whether it survives a replug is untested.
 - No command to set the active profile is known. A button set to `07 02 03 <n>` should switch profiles.
-- `0x02/0x82` and `0x02/0x8e` aren't documented anywhere we looked.
-
-## Tools
-
-`tools/probe.py /dev/hidrawN [class ...] [--args hex]` sends GET commands only.

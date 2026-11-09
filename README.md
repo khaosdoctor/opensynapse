@@ -2,7 +2,7 @@
 
 # opensynapse
 
-> Remap buttons and set DPI on Razer mice from Linux.
+> Remap buttons, set DPI and lighting on Razer mice from Linux.
 
 > [!WARNING]
 > **This is a work in progress.** It works on my mouse and that's about it for now. Expect things to change, break and get renamed.
@@ -21,11 +21,11 @@ Right now you can:
 
 - Remap any button to a key (with modifiers), a mouse button, a mouse button on turbo, DPI up/down or nothing at all, on both the normal and the Hypershift layer
 - Change DPI and the DPI stages
-- Export and import profiles as JSON. The first time it runs it backs up every profile on the mouse to `~/.config/opensynapse/devices/<usb id>/<serial>-<profile>.json` (like `1532-008d/PM2313H16100284-0.json`)
+- Export and import profiles as JSON. The first time the GUI opens a mouse it backs up every profile on it to `~/.config/opensynapse/devices/<vid-pid>/<serial>-<profile>.json`
 - See which button you're pressing, live, in the GUI
-- Change the lighting of each zone (static, breath, spectrum, wave, reactive, off) and its brightness. This one goes through [OpenRazer](https://openrazer.github.io/), so it works on any mouse OpenRazer supports, and if the OpenRazer daemon is running it remembers your colors like it does for its own apps
+- Change the lighting of each zone (static, breath, spectrum, wave, reactive, off) and its brightness. This one goes through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports, and if the OpenRazer daemon is running it remembers your colors like it does for its own apps
 
-Changes are queued like in GParted, nothing touches the mouse until you hit _Write to device_.
+In the GUI, changes are queued like in GParted and nothing touches the mouse until you hit ***WRITE TO DEVICE***. CLI commands write right away.
 
 ## Current status
 
@@ -33,17 +33,16 @@ Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is supported, bec
 
 Things I still haven't figured out: turbo for keyboard keys, media keys like play/pause, and whether profile 0 survives unplugging the mouse.
 
-Lighting needs the OpenRazer driver installed (`openrazer-driver-dkms` on Arch), I didn't reverse engineer the RGB part since OpenRazer already does it really well.
-
 ## Install
 
-You need Rust and a Linux box. Then:
+You need [Rust](https://rustup.rs) and a Linux box. Then:
 
 ```sh
-cargo build --release --features gui
+git clone https://github.com/khaosdoctor/opensynapse && cd opensynapse
+cargo install --path . --features gui
 ```
 
-That gives you two binaries in `target/release`, `opensynapse` (the CLI) and `opensynapse-gui`. If you only want the CLI, drop the `--features gui`.
+That puts `opensynapse` (the CLI) and `opensynapse-gui` in `~/.cargo/bin`. If you only want the CLI, drop the `--features gui`.
 
 Your user also needs access to the mouse's raw HID device, otherwise you'll get a permission denied:
 
@@ -67,7 +66,7 @@ opensynapse watch                        # prints buttons as you press them
 opensynapse rgb all static ff00aa        # lighting, needs OpenRazer
 opensynapse rgb scroll brightness 128
 opensynapse init                         # start a device file for an unsupported mouse
-opensynapse protocol                     # protocol file for your mouse, see CONTRIBUTING.md
+opensynapse protocol                     # protocol file for your mouse, see PROTOCOL.md
 opensynapse protocol send                # share it as a GitHub issue
 ```
 
@@ -75,9 +74,9 @@ opensynapse protocol send                # share it as a GitHub issue
 
 ## Adding your mouse
 
-**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single JSONC file (JSON with comments) in [`devices/`](devices/) with its USB ids and the list of buttons, and `opensynapse init` writes most of it for you by asking your mouse, without changing anything on it.
+**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single JSONC file (JSON with comments) with its USB ids and the list of buttons. `opensynapse init` writes most of it for you to `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` by asking your mouse, without changing anything on it, and the finished ones go in [`devices/`](devices/).
 
-[CONTRIBUTING.md](CONTRIBUTING.md) has the step by step, and a prompt you can paste into Claude Code (or whatever agent you use) to do the whole thing with it, which is how I did the Naga. Once it works, `opensynapse protocol` writes down what your mouse does and `opensynapse protocol send` shares it with me as an issue, so it helps the next person even if your mouse isn't fully supported yet.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the step by step, and a prompt you can paste into Claude Code (or whatever agent you use) to do the whole thing with it, which is how I did the Naga.
 
 ## AI usage
 

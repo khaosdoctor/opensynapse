@@ -26,12 +26,14 @@ You send the report with `HIDIOCSFEATURE` and keep reading it back with `HIDIOCG
 
 Always start with reads. A read has the `0x80` bit set on the command id, and it doesn't change anything on the mouse, so you can try as many as you want.
 
-1. **Find the class.** `python3 tools/probe.py /dev/hidrawN` tries every read command in classes `0x00` to `0x0f` and prints the ones that answer. On the Naga the keymap is class `0x02`, DPI is `0x04` and serial/firmware are `0x00`, which seems to be common on newer Razer mice.
+`ls -l /sys/class/hidraw/ | grep -i 1532:<pid>` shows which node is which: use the one whose path has `:1.0` (interface 0), or the interface `opensynapse init` printed.
+
+1. **Find the class.** `python3 tools/probe.py /dev/hidrawN` tries every read command in classes `0x00` to `0x0f` and prints the ones that answer. On the Naga the keymap is class `0x02`, DPI is `0x04` and serial/firmware are `0x00`, which seems to be common on newer Razer mice. probe.py sends transaction id `0x1f`. If the `firmware:` line doesn't say `status=ok`, change `tid = 0x1F` in `tools/probe.py` to the `transaction_id` in your device file (`opensynapse init` prints it), or try `0x3F` and `0xFF` if you don't have one.
 2. **Look at what comes back with empty arguments.** Some reads answer right away (the Naga's `0x02/0x84` lists every button id), others need arguments.
-3. **Retry with arguments.** A read that fails with no arguments usually wants a profile, a button and a layer: `python3 tools/probe.py /dev/hidrawN 0x02 --args 014000` asks profile 1, button `0x40`, layer 0.
+3. **Retry with arguments.** Some reads only show up once you pass arguments, usually a profile, a button and a layer: `python3 tools/probe.py /dev/hidrawN 0x02 --args 004000` sends profile 0 (the live one, what `opensynapse dump` shows), button `0x40` (use a button id from the `0x84` list instead of `40`), layer 0 to every read in class `0x02`, and the `id 0x8c` line is that button's action.
 4. **Decode the answer against what you know.** If a thumb button sends `1` today and the reply ends in `1e`, that's the HID usage for `1`, so you found the key byte.
 
-Only then try a write, and only on one button: send it, read it back, press the button, and set it back to what it was.
+Only then try a write, with `opensynapse set` once you have a device file, and only on one button: `set` reads it back and errors if it didn't stick, then press the button and set it back to what it was.
 
 **A write that reads back fine doesn't prove anything.** The Naga stores almost any byte you send without checking it, so the only proof that an encoding does what you think is pressing the button and seeing it happen (`opensynapse watch` shows that once you have a device file).
 
@@ -43,7 +45,7 @@ Once your device file works (`opensynapse dump` shows the right buttons), you do
 opensynapse protocol
 ```
 
-That writes `devices/protocols/<your device file name>.md` (or `./<name>.md` outside the repo) with everything it can know on its own: the USB ids, firmware, interface, transaction id, a table with every button id and what it does on each layer, and the DPI. It only reads from the mouse. Everything only you can know is marked `TODO`, fill those in.
+That writes `devices/protocols/<slug>.md` (like `razer-naga-left-handed-2020.md`, see [the slug](CONTRIBUTING.md#adding-a-mouse), or `./<slug>.md` when you're not in the repo root), with everything it can know on its own: the USB ids, firmware, interface, transaction id, a table with every button id and what it does on each layer, and the DPI. It only reads from the mouse. Everything only you can know is marked `TODO`, fill those in.
 
 When it's done, send it:
 
@@ -51,16 +53,16 @@ When it's done, send it:
 opensynapse protocol send
 ```
 
-That opens a GitHub issue on this repo with your protocol file and your device file, using the [GitHub CLI](https://cli.github.com/) as your user (it asks before posting, `--dry-run` shows you what it would send). If you don't have `gh`, it prints a link to open the issue by hand. If you'd rather open a PR, add both files under `devices/` yourself.
+That opens a GitHub issue on this repo with your protocol file and your device file, using the [GitHub CLI](https://cli.github.com/) as your user (it asks before posting, `--dry-run` shows you what it would send). If you don't have `gh`, it prints a link to open the issue by hand. If you'd rather open a PR, see [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-mouse).
 
 ## Template
 
-If you want to write it by hand, copy this into `devices/protocols/<same-name-as-the-device-file>.md` and fill it in. Leave sections out if they're the same as the Naga, but say so.
+If you want to write it by hand, copy this into `devices/protocols/<slug>.md` ([slug](CONTRIBUTING.md#adding-a-mouse)) and fill it in. If a section is the same as the Naga's, keep the heading and write "Same as the Naga" under it.
 
 ```markdown
 # <Mouse name> keymap protocol
 
-Device: USB `1532:xxxx`, firmware vX.Y. Device file: [`<name>.jsonc`](../<name>.jsonc).
+Device: USB `1532:xxxx`, firmware vX.Y. Device file: [`<slug>.jsonc`](../<slug>.jsonc).
 
 How you found it: probing on Linux, a USB capture of Synapse, etc.
 
@@ -109,8 +111,9 @@ You can have an agent (Claude Code or whatever you use) do the probing and write
 Write the protocol file for my Razer mouse in opensynapse, the repo you're in.
 Read PROTOCOL.md for what goes in it and the template, and
 devices/protocols/razer-naga-left-handed-2020.md as an example.
-My device file is devices/<my-mouse>.jsonc (if I don't have one yet, say so
-and stop).
+My device file is ~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc
+(from `opensynapse init`), or the mouse is built in under devices/. If
+neither exists, say so and stop.
 
 Rules:
 - Only send GET commands (command id with bit 0x80 set), use tools/probe.py.
@@ -119,17 +122,19 @@ Rules:
   (seen working on the mouse) or inferred (read back fine, or matches the
   Naga, but not seen working). Anything you couldn't explain goes under
   Unknowns.
-- Only document what's different from the common frame in PROTOCOL.md.
 
 Steps:
-1. Find my mouse with lsusb and the /dev/hidraw node for its interface.
+1. Find the /dev/hidraw node for the interface in my device file
+   (`ls -l /sys/class/hidraw/`).
 2. Run tools/probe.py over classes 0x00 to 0x0f and note which reads answer.
-3. Read the button list (0x02/0x84) and what each button does (0x02/0x8c
-   with [profile, button, layer]) and compare with my device file.
-4. Ask me to press buttons with `opensynapse watch` running if you need to
-   confirm which id is which button.
-5. Run `opensynapse protocol` to generate devices/protocols/<my-mouse>.md
-   and fill in every TODO with what you found. Don't send it, I'll review
+3. Read the button list (0x02/0x84), then run tools/probe.py on class 0x02
+   with --args <profile><button><layer> and read the id 0x8c line for what
+   each button does. Compare with my device file.
+4. Ask me to press buttons while `timeout 20 opensynapse watch` runs if you
+   need to confirm which id is which button.
+5. Run `opensynapse protocol` to generate devices/protocols/<slug>.md
+   and fill in every TODO with what you found. If that file already
+   exists, edit it instead and never pass --force. Don't send it, I'll review
    it and run `opensynapse protocol send` myself.
 ```
 

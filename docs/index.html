@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>opensynapse</title>
+<meta name="description" content="Remap buttons, set DPI and lighting on Razer mice from Linux.">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<style>
+  /* colours from src/bin/opensynapse-gui.rs */
+  :root {
+    --bg: #07070d;
+    --panel: #0e0e1a;
+    --card: #141424;
+    --cyan: #00f0ff;
+    --pink: #ff2a6d;
+    --yellow: #fcee0a;
+    --dim: #5a5a7a;
+    --text: #c8c8dc;
+    --mono: ui-monospace, "JetBrains Mono", "Fira Code", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.65 var(--mono);
+    background-image: linear-gradient(rgba(0, 240, 255, .03) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(0, 240, 255, .03) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 48px 16px 64px; }
+  a { color: var(--cyan); text-underline-offset: 3px; }
+  a:hover { color: var(--pink); }
+  h1, h2 { font-weight: 700; letter-spacing: .04em; margin: 0; }
+  h2 {
+    color: var(--pink);
+    font-size: 1.05rem;
+    text-transform: uppercase;
+    margin: 56px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--dim);
+  }
+  h2::before { content: "// "; color: var(--dim); }
+  p { margin: 0 0 14px; }
+  code {
+    color: var(--yellow);
+    background: var(--panel);
+    padding: 1px 5px;
+    border-radius: 3px;
+    overflow-wrap: anywhere;
+  }
+  pre {
+    background: var(--panel);
+    border: 1px solid var(--dim);
+    border-left: 3px solid var(--cyan);
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 0 0 16px;
+    font-size: .88rem;
+    line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; color: var(--text); overflow-wrap: normal; }
+  .c { color: var(--dim); }
+  .p { color: var(--pink); user-select: none; }
+  ul { padding-left: 20px; margin: 0 0 14px; }
+  li { margin-bottom: 8px; }
+  li::marker { color: var(--pink); content: "> "; }
+  .ui { color: var(--pink); font-weight: 700; font-style: italic; }
+
+  header { text-align: center; }
+  header img { width: 128px; height: 128px; }
+  header h1 {
+    color: var(--pink);
+    font-size: clamp(2rem, 8vw, 3.2rem);
+    margin-top: 12px;
+    text-shadow: 0 0 18px rgba(255, 42, 109, .55);
+  }
+  .tagline { color: var(--cyan); margin: 8px 0 24px; }
+  .links { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+  .btn {
+    display: inline-block;
+    padding: 8px 18px;
+    border: 1px solid var(--pink);
+    color: var(--pink);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    font-size: .85rem;
+  }
+  .btn:hover { background: var(--pink); color: var(--bg); }
+  .btn.alt { border-color: var(--cyan); color: var(--cyan); }
+  .btn.alt:hover { background: var(--cyan); color: var(--bg); }
+
+  .box {
+    background: var(--panel);
+    border: 1px solid var(--dim);
+    padding: 14px 16px;
+    margin: 0 0 16px;
+  }
+  .box.warn { border-color: var(--yellow); }
+  .box.warn strong { color: var(--yellow); }
+  .box.legal { border-color: var(--dim); color: var(--dim); font-size: .88rem; }
+  .box p:last-child { margin-bottom: 0; }
+
+  .shots { display: grid; gap: 16px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--dim); padding: 8px; }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { color: var(--dim); font-size: .85rem; padding: 8px 4px 0; }
+
+  .device {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    align-items: baseline;
+    background: var(--card);
+    border-left: 3px solid var(--yellow);
+    padding: 12px 16px;
+    margin: 0 0 16px;
+  }
+  .device strong { color: #fff; }
+  .device code { background: var(--bg); }
+
+  .help { border: 1px solid var(--pink); box-shadow: 0 0 24px rgba(255, 42, 109, .2); }
+  .help strong { color: var(--pink); }
+
+  footer {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 24px 16px 40px;
+    color: var(--dim);
+    font-size: .8rem;
+    border-top: 1px solid var(--panel);
+  }
+
+  @media (max-width: 480px) {
+    body { font-size: 14px; }
+    main { padding-top: 32px; }
+    header img { width: 96px; height: 96px; }
+    pre { font-size: .8rem; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.svg" alt="opensynapse icon">
+    <h1>opensynapse</h1>
+    <p class="tagline">Remap buttons, set DPI and lighting on Razer mice from Linux.</p>
+    <div class="links">
+      <a class="btn" href="https://github.com/khaosdoctor/opensynapse">GitHub</a>
+      <a class="btn alt" href="#install">Install</a>
+      <a class="btn alt" href="#add-your-mouse">Add your mouse</a>
+    </div>
+  </header>
+
+  <h2 id="status-note">Before you start</h2>
+  <div class="box warn">
+    <p><strong>This is a work in progress.</strong> It works on my mouse and that's about it for now. Expect things to change, break and get renamed.</p>
+  </div>
+  <p>My lawyers say I have to write this so:</p>
+  <div class="box legal">
+    <p>Not affiliated with, endorsed by, or supported by Razer Inc. Everything here is distributed as-is and with no warranty.</p>
+  </div>
+
+  <h2 id="what">What is it</h2>
+  <p>Razer doesn't ship Synapse for Linux, and my Naga's thumb grid was basically useless here. keyd and friends can remap what the mouse sends, but the remap lives on the computer, not on the mouse, and some things you just can't reach that way.</p>
+  <p>So I reverse engineered how the mouse stores its keymap (it's all HID feature reports, the details for the Naga are in <a href="https://github.com/khaosdoctor/opensynapse/blob/main/devices/protocols/razer-naga-left-handed-2020.md"><code>devices/protocols/</code></a>) and wrote this. It talks to the mouse directly, so the mapping is saved on the mouse itself and goes with it to any computer. There's a GUI and a CLI, both written in Rust.</p>
+  <p>Right now you can:</p>
+  <ul>
+    <li>Remap any button to a key (with modifiers), a mouse button, a mouse button on turbo, DPI up/down or nothing at all, on both the normal and the Hypershift layer</li>
+    <li>Change DPI and the DPI stages</li>
+    <li>Export and import profiles as JSON. The first time the GUI opens a mouse it backs up every profile on it to <code>~/.config/opensynapse/devices/&lt;vid-pid&gt;/&lt;serial&gt;-&lt;profile&gt;.json</code></li>
+    <li>See which button you're pressing, live, in the GUI</li>
+    <li>Change the lighting of each zone (static, breath, spectrum, wave, reactive, off) and its brightness. This one goes through <a href="https://openrazer.github.io/">OpenRazer</a> (install <code>openrazer-driver-dkms</code> on Arch), so it works on any mouse OpenRazer supports, and if the OpenRazer daemon is running it remembers your colors like it does for its own apps</li>
+  </ul>
+  <p>In the GUI, changes are queued like in GParted and nothing touches the mouse until you hit <span class="ui">WRITE TO DEVICE</span>. CLI commands write right away.</p>
+
+  <h2 id="screenshots">Screenshots</h2>
+  <div class="shots">
+    <figure>
+      <img src="screenshots/buttons.png" alt="The opensynapse GUI showing the mouse buttons and what each one is mapped to" loading="lazy">
+      <figcaption>Buttons: pick a button on the mouse and choose what it does.</figcaption>
+    </figure>
+    <figure>
+      <img src="screenshots/lighting.png" alt="The opensynapse GUI lighting tab with the effect and brightness of each zone" loading="lazy">
+      <figcaption>Lighting: effect, color and brightness for each zone.</figcaption>
+    </figure>
+  </div>
+
+  <h2 id="status">Current status</h2>
+  <div class="device">
+    <strong>Razer Naga Left-Handed Edition 2020</strong>
+    <code>1532:008d</code>
+  </div>
+  <p>That's the only supported mouse, because that's the one I have. The protocol is shared by a bunch of Razer mice, so adding another one should mostly be writing a JSONC file (see <a href="#add-your-mouse">Add your mouse</a>).</p>
+  <p>Things I still haven't figured out: turbo for keyboard keys, media keys like play/pause, and whether profile 0 survives unplugging the mouse.</p>
+
+  <h2 id="install">Install</h2>
+  <p>You need <a href="https://rustup.rs">Rust</a> and a Linux box. Then:</p>
+<pre><code><span class="p">$ </span>git clone https://github.com/khaosdoctor/opensynapse &amp;&amp; cd opensynapse
+<span class="p">$ </span>cargo install --path . --features gui</code></pre>
+  <p>That puts <code>opensynapse</code> (the CLI) and <code>opensynapse-gui</code> in <code>~/.cargo/bin</code>. If you only want the CLI, drop the <code>--features gui</code>.</p>
+  <p>Your user also needs access to the mouse's raw HID device, otherwise you'll get a permission denied:</p>
+<pre><code><span class="p">$ </span>sudo install -m644 udev/70-opensynapse.rules /etc/udev/rules.d/
+<span class="p">$ </span>sudo udevadm control --reload &amp;&amp; sudo udevadm trigger</code></pre>
+
+  <h2 id="usage">Usage</h2>
+  <p>The GUI is the easy way, just run <code>opensynapse-gui</code>. For headless use there's the CLI:</p>
+<pre><code>opensynapse dump                         <span class="c"># every button and what it does</span>
+opensynapse set thumb1 key:ctrl+1        <span class="c"># remap a button</span>
+opensynapse set thumb2 key:f13 --layer hypershift
+opensynapse dpi 1600
+opensynapse stages 800 1600 3200 --active 2
+opensynapse export my-profile.json
+opensynapse watch                        <span class="c"># prints buttons as you press them</span>
+opensynapse rgb all static ff00aa        <span class="c"># lighting, needs OpenRazer</span>
+opensynapse rgb scroll brightness 128
+opensynapse init                         <span class="c"># start a device file for an unsupported mouse</span>
+opensynapse protocol                     <span class="c"># protocol file for your mouse, see PROTOCOL.md</span>
+opensynapse protocol send                <span class="c"># share it as a GitHub issue</span></code></pre>
+  <p><code>opensynapse help</code> has the rest.</p>
+
+  <h2 id="add-your-mouse">Add your mouse</h2>
+  <div class="box help">
+    <p><strong>I need your help here.</strong> I only have one Razer mouse, so if you have another one, please add it.</p>
+    <p>Every mouse is a single JSONC file (JSON with comments) with its USB ids and the list of buttons. <code>opensynapse init</code> writes most of it for you to <code>~/.config/opensynapse/devices/&lt;vid-pid&gt;/buttons.jsonc</code> by asking your mouse, without changing anything on it, and the finished ones go in <a href="https://github.com/khaosdoctor/opensynapse/tree/main/devices"><code>devices/</code></a>.</p>
+    <p><a href="https://github.com/khaosdoctor/opensynapse/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a> has the step by step, and a prompt you can paste into Claude Code (or whatever agent you use) to do the whole thing with it, which is how I did the Naga.</p>
+  </div>
+  <div class="links">
+    <a class="btn" href="https://github.com/khaosdoctor/opensynapse/blob/main/CONTRIBUTING.md">Read CONTRIBUTING.md</a>
+    <a class="btn alt" href="https://github.com/khaosdoctor/opensynapse/tree/main/devices">See the device files</a>
+  </div>
+
+  <h2 id="ai">AI usage</h2>
+  <p>I used AI a lot on this, including for the reverse engineering part, and I checked everything against the real mouse, but there is probably something I missed. If you find it, open an <a href="https://github.com/khaosdoctor/opensynapse/issues">issue</a>.</p>
+</main>
+<footer>
+  <p>opensynapse is open source, <a href="https://github.com/khaosdoctor/opensynapse">khaosdoctor/opensynapse</a> on GitHub. Not affiliated with, endorsed by, or supported by Razer Inc.</p>
+</footer>
+</body>
+</html>

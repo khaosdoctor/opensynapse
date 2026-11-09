@@ -40,7 +40,15 @@ Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is supported, bec
 
 ## Install
 
-You need [Rust](https://rustup.rs) and a Linux box. Then:
+On Arch, it's on the AUR. The package also installs the udev rule, so you can skip the rest of this section:
+
+```sh
+yay -S opensynapse      # builds the latest release
+yay -S opensynapse-bin  # same release, prebuilt
+yay -S opensynapse-git  # builds the latest main
+```
+
+Anywhere else, you need [Rust](https://rustup.rs) and a Linux box. Then:
 
 ```sh
 git clone https://github.com/khaosdoctor/opensynapse && cd opensynapse

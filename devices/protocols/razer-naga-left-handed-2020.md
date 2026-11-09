@@ -28,7 +28,7 @@ All findings come from talking to the real device on Linux through `/dev/hidraw`
 | `0x8e` bulk dump | `[profile, button, layer]` | 8-byte entries, layout not decoded |
 | `0x82` | none | `08 1c 08 1c`, meaning unknown |
 
-Layer `0` is normal and `1` is Hypershift. Profiles `0`..`2` answer. Writing profile `0` changes the live behaviour and leaves profile `1` untouched.
+Layer `0` is normal and `1` is Hypershift. Profiles `0`..`5` answer reads, writes were only tried on `0`. Writing profile `0` changes the live behaviour and leaves profile `1` untouched.
 
 ## Button ids
 
@@ -44,22 +44,32 @@ Layer `0` is normal and `1` is Hypershift. Profiles `0`..`2` answer. Writing pro
 
 ## Action encoding
 
-| Type | Bytes | Meaning |
-|---|---|---|
-| `01` mouse | `01 01 <btn>` | `01` left, `02` right, `03` middle, `09`/`0a` wheel |
-| `02` keyboard | `02 <?> <mod> <hid usage>` | `mod` is the HID modifier bitmask |
-| `06` DPI | `06 01 <n>` | `01` up, `02` down |
-| `07` profile | `07 01 <n>` | `04` on the profile button (cycle?) |
-| `0e` tilt | `0e 01 <n> 00 <rate>` | `0a`/`09` with `0x14` |
+Every action is `[type, length of the data, data...]`, the same layout [razerqdhid](https://github.com/geezmolycos/razerqdhid/blob/main/docs/cmd_button-en.md) documents for the Basilisk V3.
+
+| Type | Bytes | Meaning | Status |
+|---|---|---|---|
+| `00` off | `00 00` | button does nothing | inferred |
+| `01` mouse | `01 01 <btn>` | `01` left, `02` right, `03` middle, `04` back, `05` forward, `09`/`0a` wheel, `68`/`69` wheel left/right | verified (left/right/wheel) |
+| `02` keyboard | `02 02 <mod> <hid usage>` | `mod` is the HID modifier bitmask | verified |
+| `06` DPI | `06 01 <op>` | `01` up, `02` down, `06`/`07` up/down with wrap | verified (read back as defaults) |
+| `06` DPI stage | `06 02 03 <n>` | jump to stage n | razerqdhid, untested |
+| `07` profile | `07 01 <op>` | `01` next, `02` previous, `04`/`05` with wrap. The bottom button's default is `04` | read back, not pressed |
+| `07` profile | `07 02 03 <n>` | jump to profile n | razerqdhid, untested |
+| `0a` media | `0a 02 <usage u16 BE>` | HID consumer usage, `00 cd` play/pause, `00 e9` volume up | razerqdhid, untested |
+| `0c` hypershift | `0c 01 01` | hold for the Hypershift layer | razerqdhid, untested |
+| `0d` key turbo | `0d 04 <mod> <usage> <ms u16 BE>` | repeat a key every ms | razerqdhid, untested |
+| `0e` mouse turbo | `0e 03 <btn> <ms u16 BE>` | repeat a button every ms | the tilt defaults read `0e 01 ...` (see below), writing `03` reads back fine |
+
+razerqdhid also documents macros (types `03`, `04`, `05`, `0f`, stored in class `0x06`), double-click (`0b`) and power control (`09`), none of them tried on the Naga.
 
 ## Unknowns
 
 The mouse doesn't validate actions on write: on thumb1 it stored every type byte from `0x01` to `0x1f` exactly as sent (only type `0x00`, and `0x14` with a 6-byte payload, came back rewritten). A write that's accepted and reads back fine says nothing about what the button will do, so new action types have to be checked by pressing the button and watching the input reports.
 
-- The second keyboard byte. It's `02` on most profile 0/1 layer-0 keys and `01` elsewhere. Writing `02` worked.
-- Whether profile 0 lives in RAM, and whether it survives a replug.
-- Which command switches or persists the active profile.
-- Macro storage (class `0x06` answers many ids with empty data).
+- Some defaults read back with a length that doesn't match the data: keys on the Hypershift layer and thumb9 read `02 01 00 <usage>`, and the tilt defaults read `0e 01 <btn> 00 14`. They work, so the firmware seems to ignore the length on those. Writing the documented length works too.
+- Profile 0 should be the "direct" profile, applied right away but lost on power off, with profiles 1 to 5 stored on the mouse (razerqdhid). On the Naga, writing profile 0 changed the live behaviour and left profile 1 alone, the replug part is untested.
+- No command to set the active profile is known. A button set to `07 02 03 <n>` should switch profiles.
+- `0x02/0x82` and `0x02/0x8e` aren't documented anywhere we looked.
 
 ## Tools
 

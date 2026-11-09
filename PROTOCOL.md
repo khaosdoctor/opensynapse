@@ -93,6 +93,14 @@ What you saw but couldn't explain, and what you didn't try.
 
 Mark everything as **verified** (you saw it work on the mouse) or **inferred** (it read back right, or it matched another mouse, but you didn't see it happen). That difference is the most useful thing in the file.
 
+## Sources
+
+Before you probe, check what other people already found, a lot of Razer mice share the same commands:
+
+- [razerqdhid](https://github.com/geezmolycos/razerqdhid) (MIT) reverse engineered the Basilisk V3, which uses the same keymap commands as the Naga. Its docs cover [button actions](https://github.com/geezmolycos/razerqdhid/blob/main/docs/cmd_button-en.md), [macros](https://github.com/geezmolycos/razerqdhid/blob/main/docs/cmd_macro-en.md) and [profiles](https://github.com/geezmolycos/razerqdhid/blob/main/docs/cmd_profile-en.md). Most of the action types in the Naga file came from there.
+- [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) (GPL-2.0-or-later) has the transaction id, interface and HID usage for almost every Razer device in `Controllers/RazerController/RazerDevices.cpp` and `RazerControllerDetect.cpp`. `opensynapse init` uses that list to start your device file.
+- [OpenRazer](https://github.com/openrazer/openrazer) (GPL-2.0-or-later) has no button remapping, but its driver picks the transaction id per mouse in `driver/razermouse_driver.c`, and issues [#2845](https://github.com/openrazer/openrazer/issues/2845) (Basilisk Ultimate remapping) and [#2031](https://github.com/openrazer/openrazer/issues/2031) (keyboard remapping) have useful captures.
+
 ## Using an agent
 
 You can have an agent (Claude Code or whatever you use) do the probing and write the file. Open it in this repo with the mouse plugged in and paste this:

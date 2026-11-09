@@ -35,9 +35,27 @@ Only then try a write, and only on one button: send it, read it back, press the 
 
 **A write that reads back fine doesn't prove anything.** The Naga stores almost any byte you send without checking it, so the only proof that an encoding does what you think is pressing the button and seeing it happen (`opensynapse watch` shows that once you have a device file).
 
+## Generating the file
+
+Once your device file works (`opensynapse dump` shows the right buttons), you don't have to start from an empty file:
+
+```sh
+opensynapse protocol
+```
+
+That writes `devices/protocols/<your device file name>.md` (or `./<name>.md` outside the repo) with everything it can know on its own: the USB ids, firmware, interface, transaction id, a table with every button id and what it does on each layer, and the DPI. It only reads from the mouse. Everything only you can know is marked `TODO`, fill those in.
+
+When it's done, send it:
+
+```sh
+opensynapse protocol send
+```
+
+That opens a GitHub issue on this repo with your protocol file and your device file, using the [GitHub CLI](https://cli.github.com/) as your user (it asks before posting, `--dry-run` shows you what it would send). If you don't have `gh`, it prints a link to open the issue by hand. If you'd rather open a PR, add both files under `devices/` yourself.
+
 ## Template
 
-Copy this into `devices/protocols/<same-name-as-the-toml>.md` and fill it in. Leave sections out if they're the same as the Naga, but say so.
+If you want to write it by hand, copy this into `devices/protocols/<same-name-as-the-toml>.md` and fill it in. Leave sections out if they're the same as the Naga, but say so.
 
 ```markdown
 # <Mouse name> keymap protocol
@@ -102,8 +120,9 @@ Steps:
    with [profile, button, layer]) and compare with my device file.
 4. Ask me to press buttons with `opensynapse watch` running if you need to
    confirm which id is which button.
-5. Write devices/protocols/<my-mouse>.md with the same name as the
-   device file.
+5. Run `opensynapse protocol` to generate devices/protocols/<my-mouse>.md
+   and fill in every TODO with what you found. Don't send it, I'll review
+   it and run `opensynapse protocol send` myself.
 ```
 
 Read what it wrote before you send it, agents like to sound more sure than they are.

@@ -35,9 +35,9 @@ A mouse is a single TOML file. The best way to start is copying [the Naga one](d
 
 6. **Optionally, add `at = [x, y]` to the buttons** so they show up on the drawn mouse in the GUI. The body is drawn at x 30..70 and y 2..74 (in percent), anything outside that gets a side plate. If you skip it you get a grid, which is fine.
 
-7. **Write the protocol file (nice to have).** It's not required, but it helps a lot: next to the device file goes `devices/protocols/<same-name>.md`, where you write down what you found and how, and that's what helps the next person decode a similar mouse instead of starting from zero. [PROTOCOL.md](PROTOCOL.md) explains what goes in it, has a template and [a prompt so an agent writes it for you](PROTOCOL.md#using-an-agent). The [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example. If you couldn't make your mouse work, send the protocol file anyway, what you found is still super useful.
+7. **Write the protocol file (nice to have).** It's not required, but it helps a lot: next to the device file goes `devices/protocols/<same-name>.md`, where you write down what you found and how, and that's what helps the next person decode a similar mouse instead of starting from zero. `opensynapse protocol` generates most of it for you from your device file, you only fill in the TODOs. [PROTOCOL.md](PROTOCOL.md) explains what goes in it and has [a prompt so an agent fills it in for you](PROTOCOL.md#using-an-agent). The [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example. If you couldn't make your mouse work, send the protocol file anyway, what you found is still super useful.
 
-Then copy the device file into `devices/`, add it to the `BUILTIN` list in [`src/device.rs`](src/device.rs) and open a PR with both files. Mention the firmware version (`opensynapse export` writes it to the profile file).
+Then send it. The quickest way is `opensynapse protocol send`, which opens an issue here with your protocol and device files (it asks before posting, `--dry-run` shows what it would send). If you prefer a PR, copy the device file into `devices/` and the protocol file into `devices/protocols/`, add the device to the `BUILTIN` list in [`src/device.rs`](src/device.rs) and open it with both files.
 
 ## Using an agent
 
@@ -70,8 +70,9 @@ Steps:
    ~/.config/opensynapse/devices/ and check `opensynapse dump` matches
    what you read.
 5. Do one write test on a single button following the rules above.
-6. Write devices/protocols/<my-mouse>.md following the template in
-   PROTOCOL.md, marking every finding as verified or inferred.
+6. Run `opensynapse protocol` to generate devices/protocols/<my-mouse>.md
+   and fill in its TODOs, marking every finding as verified or inferred.
+   Don't send it, I'll review it and send it myself.
 ```
 
 Keep an eye on what it does, it's your mouse.

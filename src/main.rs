@@ -11,7 +11,7 @@ use std::time::Duration;
 use std::fs;
 
 const USAGE: &str = "\
-usage: opensynapse <command> [--profile N] [--layer NAME]
+usage: opensynapse <command> [--profile N] [--layer NAME] [--device PID]
 
 commands:
   init [pid] [file.jsonc]      start a device file for a mouse that doesn't have one (read-only)
@@ -42,7 +42,8 @@ actions:
   media:playpause|next|prev|stop|mute|volumeup|volumedown, keyturbo:[mods+]key:ms,
   hypershift (hold for the Hypershift layer)
 
-profile defaults to 0 (the live slot), layer to normal.";
+profile defaults to 0 (the live slot), layer to normal, device to the first mouse in `list`
+(PID is the hex after the colon, like 008d).";
 
 #[derive(Default)]
 struct Opts {
@@ -50,6 +51,7 @@ struct Opts {
     profile: u8,
     layer: String,
     active: Option<u8>,
+    device: Option<u16>,
     force: bool,
     dry_run: bool,
     yes: bool,
@@ -64,6 +66,7 @@ fn parse() -> Result<Opts, Box<dyn Error>> {
             "--profile" => o.profile = val()?.parse().map_err(|_| "bad --profile")?,
             "--layer" => o.layer = val()?,
             "--active" => o.active = Some(val()?.parse().map_err(|_| "bad --active")?),
+            "--device" => o.device = Some(u16::from_str_radix(&val()?, 16).map_err(|_| "bad --device, use the pid like 008d")?),
             "--force" => o.force = true,
             "--dry-run" => o.dry_run = true,
             "--yes" | "-y" => o.yes = true,
@@ -84,8 +87,10 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
         return init(&args[1..], o.force);
     }
     let mice = device::detect()?;
-    // first mouse only, add --device when someone has two
-    let mouse = mice.first().ok_or("no supported Razer mouse found (if a device file was skipped above, fix it; otherwise run `opensynapse init`)")?;
+    let mouse = match o.device {
+        Some(pid) => mice.iter().find(|m| m.def.pid == pid).ok_or(format!("no supported mouse with pid {pid:04x}, see `opensynapse list`"))?,
+        None => mice.first().ok_or("no supported Razer mouse found (if a device file was skipped above, fix it; otherwise run `opensynapse init`)")?,
+    };
     let def = &mouse.def;
     if !def.profiles.contains(&o.profile) {
         return Err(format!("unknown profile {}, have {:?}", o.profile, def.profiles).into());
@@ -336,6 +341,8 @@ fn parse_effect(name: &str, args: &[&str]) -> Result<Effect, String> {
 }
 
 fn main() -> ExitCode {
+    // Rust ignores SIGPIPE, so `opensynapse dump | head` panicked; exit quietly like other CLIs
+    unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
     match parse().and_then(run) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

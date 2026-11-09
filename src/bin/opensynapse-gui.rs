@@ -1210,7 +1210,11 @@ fn cyberpunk(ctx: &egui::Context) {
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1000.0, 760.0]).with_title("opensynapse"),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1000.0, 760.0])
+            .with_title("opensynapse")
+            .with_app_id("opensynapse")
+            .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../../assets/icon.png")).unwrap_or_default()),
         ..Default::default()
     };
     eframe::run_native(

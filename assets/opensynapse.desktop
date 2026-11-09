@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=opensynapse
+Comment=Remap buttons, DPI and lighting on Razer mice
+Exec=opensynapse-gui
+Icon=opensynapse
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=razer;mouse;remap;dpi;rgb;

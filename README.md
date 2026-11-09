@@ -13,9 +13,9 @@ My lawyers say I have to write this so:
 
 ## What is it
 
-Razer doesn't ship Synapse for Linux, and my Naga's thumb grid was basically useless here. keyd and friends can remap what the mouse sends, but the remap lives on the computer, not on the mouse, and some things you just can't reach that way.
+Razer doesn't ship Synapse for Linux. keyd and friends can remap what the mouse sends, but the remap lives on the computer, not on the mouse, and some things you just can't reach that way. I also happen to have a Naga and a Linux, so that was pretty annoying.
 
-So I reverse engineered how the mouse stores its keymap (it's all HID feature reports, the details for the Naga are in [`devices/protocols/`](devices/protocols/razer-naga-left-handed-2020.md)) and wrote this. It talks to the mouse directly, so the mapping is saved on the mouse itself and goes with it to any computer.
+This is the reverse engineered version of synapse with how the mouse stores its keymap (the details are in [`devices/protocols/`](devices/protocols/razer-naga-left-handed-2020.md)). It talks to the mouse directly, so the mapping is saved on the mouse itself and goes with it to any computer.
 
 Right now you can:
 
@@ -23,12 +23,12 @@ Right now you can:
 - Change DPI and the DPI stages
 - Export and import profiles as JSON. The first time the GUI opens a mouse it backs up every profile on it to `~/.config/opensynapse/devices/<vid-pid>/<serial>-<profile>.json`
 - See which button you're pressing, live, in the GUI
-- Change the lighting of each zone (static, breath, spectrum, wave, reactive, off) and its brightness. This one goes through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports, and if the OpenRazer daemon is running it remembers your colors like it does for its own apps
+- Change the lighting and brightness of zones. This one goes through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports, and if the OpenRazer daemon is running it will use your colors like it does for its own apps
 
 > [!NOTE]
-> Lighting is still untested, so it may not work on your mouse yet.
+> Lighting is still untested, so it may not work at all
 
-In the GUI, changes are queued like in GParted and nothing touches the mouse until you hit ***WRITE TO DEVICE***. CLI commands write right away.
+In the GUI, changes are queued until you hit ***WRITE TO DEVICE***. CLI commands write right away.
 
 ![The buttons tab: the Naga drawn with what each button does, the DPI stages and the remap editor](docs/screenshots/buttons.png)
 
@@ -37,8 +37,6 @@ In the GUI, changes are queued like in GParted and nothing touches the mouse unt
 ## Current status
 
 Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is supported, because that's the one I have. The protocol is shared by a bunch of Razer mice, so adding another one should mostly be writing a JSONC file (see [Adding your mouse](#adding-your-mouse)).
-
-Things I still haven't figured out: turbo for keyboard keys, media keys like play/pause, and whether profile 0 survives unplugging the mouse.
 
 ## Install
 

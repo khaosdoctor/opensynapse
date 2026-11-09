@@ -89,7 +89,7 @@ impl Editor {
                 e.key = opensynapse::action::key_name(*usage).unwrap_or(format!("0x{usage:02x}"));
             }
             Action::Mouse(b) => (e.kind, e.mouse) = (Kind::Mouse, *b),
-            Action::MouseTurbo { button, rate } => (e.kind, e.mouse, e.rate) = (Kind::Turbo, *button, *rate),
+            Action::MouseTurbo { button, interval } => (e.kind, e.mouse, e.rate) = (Kind::Turbo, *button, *interval),
             Action::Dpi(n) => (e.kind, e.dpi_up) = (Kind::Dpi, *n == 1),
             Action::Disabled => e.kind = Kind::Disabled,
             _ => e.raw = a.encode().iter().map(|b| format!("{b:02x}")).collect(),
@@ -104,7 +104,7 @@ impl Editor {
                 Action::Key { mods: self.mods, usage }
             }
             Kind::Mouse => Action::Mouse(self.mouse),
-            Kind::Turbo => Action::MouseTurbo { button: self.mouse, rate: self.rate },
+            Kind::Turbo => Action::MouseTurbo { button: self.mouse, interval: self.rate },
             Kind::Dpi => Action::Dpi(if self.dpi_up { 1 } else { 2 }),
             Kind::Disabled => Action::Disabled,
             Kind::Raw => format!("raw:{}", self.raw.trim()).parse()?,
@@ -418,9 +418,14 @@ fn short(a: &Action) -> String {
         }
         .into(),
         Action::MouseTurbo { button, .. } => format!("T:{}", short(&Action::Mouse(*button))),
-        Action::Dpi(1) => "DPI+".into(),
+        Action::KeyTurbo { mods, usage, .. } => format!("T:{}", short(&Action::Key { mods: *mods, usage: *usage })),
+        Action::Media(_) => "MEDIA".into(),
+        Action::Dpi(1 | 6) => "DPI+".into(),
         Action::Dpi(_) => "DPI-".into(),
+        Action::DpiStage(n) => format!("DPI{n}"),
         Action::Profile(_) => "PROF".into(),
+        Action::ProfileSet(n) => format!("P{n}"),
+        Action::Hypershift => "HYPER".into(),
         Action::Disabled => "OFF".into(),
         Action::Raw(_) => "RAW".into(),
     }
@@ -1117,8 +1122,8 @@ impl App {
                     }
                 }
                 if e.kind == Kind::Turbo {
-                    ui.label(RichText::new("RATE").color(DIM));
-                    ui.add(DragValue::new(&mut e.rate).range(1..=255));
+                    ui.label(RichText::new("EVERY").color(DIM));
+                    ui.add(DragValue::new(&mut e.rate).range(1..=2000).suffix(" ms"));
                 }
             }
             Kind::Dpi => {

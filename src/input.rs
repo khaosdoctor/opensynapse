@@ -41,7 +41,7 @@ impl Pressed {
     pub fn triggers(&self, action: &Action) -> bool {
         match action {
             Action::Key { usage: 0, mods } => (0..8).any(|i| mods & (1 << i) != 0 && self.key_down(0xe0 + i)),
-            Action::Key { usage, .. } => self.key_down(*usage),
+            Action::Key { usage, .. } | Action::KeyTurbo { usage, .. } => self.key_down(*usage),
             Action::Mouse(b) | Action::MouseTurbo { button: b, .. } => self.mouse_down(*b),
             _ => false,
         }

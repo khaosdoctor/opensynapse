@@ -33,8 +33,12 @@ commands:
 actions:
   key:[mods+]name   e.g. key:ctrl+1, key:f13, key:shift+a (mods: ctrl shift alt meta rctrl ...)
   mouse:name        left right middle back forward wheelup wheeldown
-  turbo:button:rate repeat a mouse button (rate unit unknown, device default 20)
-  dpi:up|down, profile:0xNN, disabled, raw:hex
+  turbo:button:ms   repeat a mouse button every ms milliseconds
+  dpi:up|down|up-wrap|down-wrap|stageN, profile:next|prev|next-wrap|prev-wrap|N,
+  disabled, raw:hex
+  untested on hardware yet (encodings from razerqdhid):
+  media:playpause|next|prev|stop|mute|volumeup|volumedown, keyturbo:[mods+]key:ms,
+  hypershift (hold for the Hypershift layer)
 
 profile defaults to 0 (the live slot), layer to normal.";
 

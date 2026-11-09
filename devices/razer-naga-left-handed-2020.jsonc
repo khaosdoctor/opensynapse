@@ -1,5 +1,9 @@
+// Verified on hardware, firmware v1.0. See protocols/razer-naga-left-handed-2020.md.
+//
+// `at` places a button on the drawn mouse as [x, y], in percent of the view.
+// The body is drawn at x 30..70, y 2..74; buttons outside it get a side plate.
+// Leave `at` out on every button to get a plain grid instead.
 {
-  "_comment": "Verified on hardware, firmware v1.0. See protocols/razer-naga-left-handed-2020.md. `at` is [x, y] in percent of the drawn mouse, see CONTRIBUTING.md.",
   "name": "Razer Naga Left-Handed Edition 2020",
   "vid": "0x1532",
   "pid": "0x008d",

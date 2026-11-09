@@ -80,21 +80,24 @@ pub fn scaffold(pid: u16, name: &str) -> io::Result<Scaffold> {
     let hypershift = hid.command(0x02, 0x8c, 0x0a, &[0, first, 1]).is_ok();
 
     // written by hand to keep ids in hex and one button per line; writes to a String can't fail
-    let mut t = String::from("{\n");
-    let _ = writeln!(t, "  \"_comment\": \"Started by `opensynapse init` with read-only queries. Fix every _todo, then see CONTRIBUTING.md.\",");
+    let mut t = String::from("// Started by `opensynapse init` with read-only queries. Check every TODO,\n");
+    let _ = writeln!(t, "// then see CONTRIBUTING.md for testing it and sending it.\n{{");
     let _ = writeln!(t, "  \"name\": {},", serde_json::to_string(&name).unwrap_or_default());
     let _ = writeln!(t, "  \"vid\": \"0x{RAZER:04x}\",\n  \"pid\": \"0x{pid:04x}\",\n  \"interface\": {interface},\n  \"transaction_id\": \"0x{tid:02x}\",");
     let _ = writeln!(t, "  \"profiles\": {profiles:?},");
     let layers = if hypershift { "[\"normal\", \"hypershift\"]" } else { "[\"normal\"]" };
     let _ = writeln!(t, "  \"layers\": {layers},");
-    let _ = writeln!(t, "  \"dpi_max\": 16000,\n  \"_todo\": \"set dpi_max to your mouse's real maximum\",");
+    let _ = writeln!(t, "  \"dpi_max\": 16000, // TODO: your mouse's real maximum");
     if ids.is_empty() {
-        let _ = writeln!(t, "  \"_todo_buttons\": \"the mouse didn't answer 0x02/0x84 (button list), add buttons by hand\",");
+        let _ = writeln!(t, "  // TODO: the mouse didn't answer 0x02/0x84 (button list), add buttons by hand");
     }
     let buttons: Vec<String> = ids
         .iter()
-        .map(|id| format!("    {{ \"id\": \"0x{id:02x}\", \"name\": \"{}\", \"_todo\": \"check with opensynapse watch\" }}", guess_name(*id)))
+        .map(|id| format!("    {{ \"id\": \"0x{id:02x}\", \"name\": \"{}\" }}", guess_name(*id)))
         .collect();
+    if !ids.is_empty() {
+        let _ = writeln!(t, "  // TODO: name the buttons, `opensynapse watch` shows them as you press");
+    }
     let _ = write!(t, "  \"buttons\": [\n{}\n  ]\n}}\n", buttons.join(",\n"));
     Ok(Scaffold { name, json: t, transaction_id: tid, interface, buttons: ids.len() })
 }
@@ -108,6 +111,13 @@ pub fn slug(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jsonc_comments() {
+        let src = "// head\n{ \"a\": \"x // y /* z */\", /* note\n */ \"b\": 1 } // end";
+        let v: serde_json::Value = serde_json::from_str(&crate::device::strip_comments(src)).unwrap();
+        assert_eq!((v["a"].as_str(), v["b"].as_u64()), (Some("x // y /* z */"), Some(1)));
+    }
 
     #[test]
     fn slugs() {

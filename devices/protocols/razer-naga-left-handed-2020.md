@@ -1,6 +1,6 @@
 # Razer Naga Left-Handed Edition 2020 keymap protocol
 
-Device: USB `1532:008d`, firmware v1.0. Synapse 4 calls it device 141, edition 0 (`Nagalhe_UI`). Device file: [`razer-naga-left-handed-2020.json`](../razer-naga-left-handed-2020.json).
+Device: USB `1532:008d`, firmware v1.0. Synapse 4 calls it device 141, edition 0 (`Nagalhe_UI`). Device file: [`razer-naga-left-handed-2020.jsonc`](../razer-naga-left-handed-2020.jsonc).
 
 All findings come from talking to the real device on Linux through `/dev/hidraw` on interface 0. Synapse was never run, and its shipped UI, installer and driver package don't contain the packet encoder.
 

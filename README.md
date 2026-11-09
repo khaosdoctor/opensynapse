@@ -29,7 +29,7 @@ Changes are queued like in GParted, nothing touches the mouse until you hit _Wri
 
 ## Current status
 
-Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is supported, because that's the one I have. The protocol is shared by a bunch of Razer mice, so adding another one should mostly be writing a JSON file (see [Adding your mouse](#adding-your-mouse)).
+Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is supported, because that's the one I have. The protocol is shared by a bunch of Razer mice, so adding another one should mostly be writing a JSONC file (see [Adding your mouse](#adding-your-mouse)).
 
 Things I still haven't figured out: turbo for keyboard keys, media keys like play/pause, and whether profile 0 survives unplugging the mouse.
 
@@ -75,7 +75,7 @@ opensynapse protocol send                # share it as a GitHub issue
 
 ## Adding your mouse
 
-**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single JSON file in [`devices/`](devices/) with its USB ids and the list of buttons, and `opensynapse init` writes most of it for you by asking your mouse, without changing anything on it.
+**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single JSONC file (JSON with comments) in [`devices/`](devices/) with its USB ids and the list of buttons, and `opensynapse init` writes most of it for you by asking your mouse, without changing anything on it.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the step by step, and a prompt you can paste into Claude Code (or whatever agent you use) to do the whole thing with it, which is how I did the Naga. Once it works, `opensynapse protocol` writes down what your mouse does and `opensynapse protocol send` shares it with me as an issue, so it helps the next person even if your mouse isn't fully supported yet.
 

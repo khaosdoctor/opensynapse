@@ -1,12 +1,12 @@
 # Contributing
 
-The thing I need the most is mice. I only have one Razer mouse, so every other model depends on someone who owns it sending a device file. If you have a Razer mouse that isn't in [`devices/`](devices/), please add it, it's mostly writing a JSON file and testing it on your own mouse.
+The thing I need the most is mice. I only have one Razer mouse, so every other model depends on someone who owns it sending a device file. If you have a Razer mouse that isn't in [`devices/`](devices/), please add it, it's mostly writing a JSONC file and testing it on your own mouse.
 
 Bug fixes and features are welcome too, open an issue first if it's something big so we can talk about it.
 
 ## Adding a mouse
 
-A mouse is a single JSON file, like [the Naga one](devices/razer-naga-left-handed-2020.json). Ids are hex strings (`"0x40"`) so they match what the mouse and the protocol files say, and since JSON has no comments, notes go in `_comment` or `_todo` fields, which are ignored.
+A mouse is a single JSONC file (JSON with `//` and `/* */` comments), like [the Naga one](devices/razer-naga-left-handed-2020.jsonc). Ids are hex strings (`"0x40"`) so they match what the mouse and the protocol files say.
 
 1. **Start the file.** With the mouse plugged in, run:
 
@@ -14,7 +14,7 @@ A mouse is a single JSON file, like [the Naga one](devices/razer-naga-left-hande
    opensynapse init
    ```
 
-   It finds your Razer mouse, figures out which interface and transaction id it answers on, asks it for its buttons and profiles, and writes `~/.config/opensynapse/devices/<usb id>/buttons.json` (like `1532-008d`), in the same folder where your mouse's profiles are saved. It only reads from the mouse, so it can't change anything. Common buttons get a name, the rest are called `btn-0xNN`, and everything you need to check has a `_todo` next to it.
+   It finds your Razer mouse, figures out which interface and transaction id it answers on, asks it for its buttons and profiles, and writes `~/.config/opensynapse/devices/<usb id>/buttons.jsonc` (like `1532-008d`), in the same folder where your mouse's profiles are saved. It only reads from the mouse, so it can't change anything. Common buttons get a name, the rest are called `btn-0xNN`, and everything you need to check has a `// TODO` next to it.
 
 2. **Name the buttons.** `opensynapse dump` shows what each button does today (a key, a mouse button, DPI up...), which is usually enough to know which one it is, and `opensynapse watch` prints the names as you press them. Rename them in the file, and fix the `dpi_max` and any other `TODO`.
 
@@ -31,7 +31,7 @@ A mouse is a single JSON file, like [the Naga one](devices/razer-naga-left-hande
 
 5. **Write the protocol file (nice to have).** It's not required, but it helps a lot: next to the device file goes `devices/protocols/<same-name>.md`, where you write down what you found and how, and that's what helps the next person decode a similar mouse instead of starting from zero. `opensynapse protocol` generates most of it for you from your device file, you only fill in the TODOs. [PROTOCOL.md](PROTOCOL.md) explains what goes in it and has [a prompt so an agent fills it in for you](PROTOCOL.md#using-an-agent). The [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example. If you couldn't make your mouse work, send the protocol file anyway, what you found is still super useful.
 
-Then send it. The quickest way is `opensynapse protocol send`, which opens an issue here with your protocol and device files (it asks before posting, `--dry-run` shows what it would send). If you prefer a PR, copy `buttons.json` into `devices/` as `<your-mouse>.json` and the protocol file into `devices/protocols/`, add the device to the `BUILTIN` list in [`src/device.rs`](src/device.rs) and open it with both files.
+Then send it. The quickest way is `opensynapse protocol send`, which opens an issue here with your protocol and device files (it asks before posting, `--dry-run` shows what it would send). If you prefer a PR, copy `buttons.jsonc` into `devices/` as `<your-mouse>.jsonc` and the protocol file into `devices/protocols/`, add the device to the `BUILTIN` list in [`src/device.rs`](src/device.rs) and open it with both files.
 
 ## Using an agent
 
@@ -41,7 +41,7 @@ I did the whole reverse engineering for the Naga with Claude Code, and it works 
 I want to add support for my Razer mouse to opensynapse, the repo you're in.
 Read README.md, CONTRIBUTING.md, PROTOCOL.md and
 devices/protocols/razer-naga-left-handed-2020.md first, and use
-devices/razer-naga-left-handed-2020.json as the template.
+devices/razer-naga-left-handed-2020.jsonc as the template.
 
 Rules:
 - Only send GET commands (command id with bit 0x80 set) while exploring.
@@ -54,14 +54,14 @@ Rules:
 
 Steps:
 1. Run `opensynapse init` to start the device file in
-   ~/.config/opensynapse/devices/<vid-pid>/buttons.json. If it can't talk to my mouse, find the
+   ~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc. If it can't talk to my mouse, find the
    /dev/hidraw node and transaction id by hand with tools/probe.py.
 2. Run `opensynapse dump` and work out which id is which physical button
    from what each one does. Ask me to press buttons with
    `opensynapse watch` running if you need to.
 3. Rename the buttons, fix dpi_max and every other TODO in the file.
 4. Do one write test on a single button following the rules above.
-5. Copy the finished file to devices/<my-mouse>.json.
+5. Copy the finished file to devices/<my-mouse>.jsonc.
 6. Run `opensynapse protocol` to generate devices/protocols/<my-mouse>.md
    and fill in its TODOs, marking every finding as verified or inferred.
    Don't send it, I'll review it and send it myself.

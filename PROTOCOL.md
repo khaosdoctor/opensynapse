@@ -60,7 +60,7 @@ If you want to write it by hand, copy this into `devices/protocols/<same-name-as
 ```markdown
 # <Mouse name> keymap protocol
 
-Device: USB `1532:xxxx`, firmware vX.Y. Device file: [`<name>.json`](../<name>.json).
+Device: USB `1532:xxxx`, firmware vX.Y. Device file: [`<name>.jsonc`](../<name>.jsonc).
 
 How you found it: probing on Linux, a USB capture of Synapse, etc.
 
@@ -109,7 +109,7 @@ You can have an agent (Claude Code or whatever you use) do the probing and write
 Write the protocol file for my Razer mouse in opensynapse, the repo you're in.
 Read PROTOCOL.md for what goes in it and the template, and
 devices/protocols/razer-naga-left-handed-2020.md as an example.
-My device file is devices/<my-mouse>.json (if I don't have one yet, say so
+My device file is devices/<my-mouse>.jsonc (if I don't have one yet, say so
 and stop).
 
 Rules:

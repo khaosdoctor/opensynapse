@@ -1,14 +1,59 @@
-//! Device definitions (devices/*.json) and the commands we know how to send.
+//! Device definitions (devices/*.jsonc) and the commands we know how to send.
 
 use crate::action::Action;
 use crate::hid::{self, Hid};
 use serde::{Deserialize, Deserializer};
 use std::{env, fs, io, path::PathBuf};
 
-/// Built into the binary as (file name without .json, contents).
-/// New devices: add a JSON file and a line here.
+/// Built into the binary as (file name without .jsonc, contents).
+/// New devices: add a JSONC file and a line here.
 const BUILTIN: &[(&str, &str)] =
-    &[("razer-naga-left-handed-2020", include_str!("../devices/razer-naga-left-handed-2020.json"))];
+    &[("razer-naga-left-handed-2020", include_str!("../devices/razer-naga-left-handed-2020.jsonc"))];
+
+/// Device files are JSONC: blanks out `//` and `/* */` comments outside
+/// strings (keeping newlines, so serde's line numbers still match).
+pub fn strip_comments(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
+    let mut chars = src.chars().peekable();
+    let mut in_str = false;
+    while let Some(c) = chars.next() {
+        if in_str {
+            out.push(c);
+            if c == '\\' {
+                out.extend(chars.next());
+            } else if c == '"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match (c, chars.peek()) {
+            ('"', _) => {
+                in_str = true;
+                out.push(c);
+            }
+            ('/', Some('/')) => {
+                while chars.peek().is_some_and(|&n| n != '\n') {
+                    chars.next();
+                }
+            }
+            ('/', Some('*')) => {
+                chars.next();
+                let mut prev = ' ';
+                for n in chars.by_ref() {
+                    if n == '\n' {
+                        out.push('\n');
+                    }
+                    if prev == '*' && n == '/' {
+                        break;
+                    }
+                    prev = n;
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
 
 /// Ids in the device files are hex strings ("0x40") so they match the
 /// protocol docs and probe output; plain numbers work too.
@@ -46,7 +91,7 @@ pub struct DeviceDef {
     pub layers: Vec<String>,
     pub dpi_max: u16,
     pub buttons: Vec<Button>,
-    /// File name without .json; the protocol file uses the same name.
+    /// File name without .jsonc; the protocol file uses the same name.
     #[serde(skip)]
     pub file: String,
     /// The JSON text this was parsed from, for `protocol send`.
@@ -81,10 +126,10 @@ impl DeviceDef {
     }
 }
 
-/// Built-in definitions plus ~/.config/opensynapse/devices/<vid-pid>/buttons.json (user files win).
+/// Built-in definitions plus ~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc (user files win).
 pub fn definitions() -> Vec<DeviceDef> {
     let mut defs: Vec<DeviceDef> = Vec::new();
-    let mut add = |src: &str, file: &str, origin: &str| match serde_json::from_str::<DeviceDef>(src) {
+    let mut add = |src: &str, file: &str, origin: &str| match serde_json::from_str::<DeviceDef>(&strip_comments(src)) {
         Ok(mut d) => {
             d.file = file.to_string();
             d.source = src.to_string();
@@ -97,10 +142,10 @@ pub fn definitions() -> Vec<DeviceDef> {
         add(src, file, "(builtin)");
     }
     let entries = devices_dir().and_then(|d| fs::read_dir(d).ok()).into_iter().flatten().flatten();
-    for path in entries.map(|e| e.path().join("buttons.json")) {
+    for path in entries.map(|e| e.path().join("buttons.jsonc")) {
         let Ok(src) = fs::read_to_string(&path) else { continue };
         // the repo file name comes from the mouse name, "buttons" says nothing
-        let file = serde_json::from_str::<DeviceDef>(&src).map_or(String::new(), |d| crate::scaffold::slug(&d.name));
+        let file = serde_json::from_str::<DeviceDef>(&strip_comments(&src)).map_or(String::new(), |d| crate::scaffold::slug(&d.name));
         add(&src, &file, &path.display().to_string());
     }
     defs
@@ -112,7 +157,7 @@ pub fn storage_id(vid: u16, pid: u16) -> String {
 }
 
 /// ~/.config/opensynapse/devices: one folder per model (see `storage_id`) with
-/// its saved profiles and, for mice without a built-in definition, buttons.json.
+/// its saved profiles and, for mice without a built-in definition, buttons.jsonc.
 pub fn devices_dir() -> Option<PathBuf> {
     env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)

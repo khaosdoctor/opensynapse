@@ -61,7 +61,7 @@ impl DeviceDef {
     }
 }
 
-/// Built-in definitions plus any *.toml in ~/.config/opensynapse/devices (user files win).
+/// Built-in definitions plus ~/.config/opensynapse/devices/<id>/buttons.toml (user files win).
 pub fn definitions() -> Vec<DeviceDef> {
     let mut defs: Vec<DeviceDef> = Vec::new();
     let mut add = |src: &str, file: &str, origin: &str| match toml::from_str::<DeviceDef>(src) {
@@ -77,17 +77,25 @@ pub fn definitions() -> Vec<DeviceDef> {
         add(src, file, "(builtin)");
     }
     let entries = devices_dir().and_then(|d| fs::read_dir(d).ok()).into_iter().flatten().flatten();
-    for path in entries.map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "toml")) {
-        let file = path.file_stem().map_or(String::new(), |s| s.to_string_lossy().into_owned());
-        if let Ok(src) = fs::read_to_string(&path) {
-            add(&src, &file, &path.display().to_string());
-        }
+    for path in entries.map(|e| e.path().join("buttons.toml")) {
+        let Ok(src) = fs::read_to_string(&path) else { continue };
+        // the repo file name comes from the mouse name, "buttons" says nothing
+        let file = toml::from_str::<DeviceDef>(&src).map_or(String::new(), |d| crate::scaffold::slug(&d.name));
+        add(&src, &file, &path.display().to_string());
     }
     defs
 }
 
-/// ~/.config/opensynapse/devices: user device definitions (*.toml) and one
-/// folder of saved profiles per device.
+/// Folder name for one physical mouse: its serial, or vid-pid without one.
+pub fn storage_id(serial: &str, vid: u16, pid: u16) -> String {
+    if serial.is_empty() {
+        return format!("{vid:04x}-{pid:04x}");
+    }
+    serial.to_string()
+}
+
+/// ~/.config/opensynapse/devices: one folder per mouse (see `storage_id`) with
+/// its saved profiles and, for mice without a built-in definition, buttons.toml.
 pub fn devices_dir() -> Option<PathBuf> {
     env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
@@ -156,10 +164,7 @@ impl Mouse {
 
     /// Folder name for this unit's saved profiles: the serial, or vid-pid without one.
     pub fn storage_id(&self) -> String {
-        if self.serial.is_empty() {
-            return format!("{:04x}-{:04x}", self.def.vid, self.def.pid);
-        }
-        self.serial.clone()
+        storage_id(&self.serial, self.def.vid, self.def.pid)
     }
 
     pub fn firmware(&self) -> io::Result<String> {

@@ -7,6 +7,7 @@ use opensynapse::device::{self, Button, DeviceDef, DpiStages, Mouse};
 use opensynapse::hid;
 use opensynapse::input::{self, Pressed};
 use opensynapse::profile;
+use opensynapse::rgb::{self, Effect, Lighting};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -139,6 +140,11 @@ struct App {
     device_dpi: (u16, u8, Vec<u16>),
     /// IMPORT was clicked and the overwrite warning is showing
     confirm_import: bool,
+    view: View,
+    lighting: Option<Lighting>,
+    zone_ui: Vec<ZoneUi>,
+    /// one card drives every lighting zone
+    sync_zones: bool,
 }
 
 impl App {
@@ -150,6 +156,10 @@ impl App {
             ops: Vec::new(),
             device_dpi: (0, 0, Vec::new()),
             confirm_import: false,
+            view: View::Buttons,
+            lighting: None,
+            zone_ui: Vec::new(),
+            sync_zones: false,
             mice: Vec::new(),
             current: 0,
             unsupported: Vec::new(),
@@ -203,6 +213,7 @@ impl App {
         self.ops.clear(); // queued ops belong to the previous device
         self.reload();
         self.update_path();
+        self.load_lighting();
     }
 
     /// The path field follows the selected device and profile.
@@ -472,6 +483,12 @@ impl App {
             ui.label(RichText::new(text).color(color));
         });
 
+        let center = Frame::new().fill(BG).inner_margin(Margin::same(16));
+        if self.view == View::Lighting {
+            egui::CentralPanel::default().frame(center).show(ui, |ui| self.lighting_ui(ui));
+            return;
+        }
+
         let name = self.mice.get(self.current).and_then(|m| m.def.buttons.get(self.selected)).map(|b| b.name.clone());
         if let Some(name) = name {
             let editor = Frame::new().fill(PANEL).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, DIM));
@@ -479,9 +496,201 @@ impl App {
                 self.editor_ui(ui, &name);
             });
         }
-
-        let center = Frame::new().fill(BG).inner_margin(Margin::same(16));
         egui::CentralPanel::default().frame(center).show(ui, |ui| self.buttons(ui));
+    }
+}
+
+impl App {
+    fn lighting_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(light) = &self.lighting else {
+            ui.label(RichText::new("NO LIGHTING").color(PINK).size(28.0));
+            ui.label(RichText::new("lighting goes through the OpenRazer driver, install openrazer-driver-dkms").color(DIM));
+            return;
+        };
+        let zones = light.zones.clone();
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("> LIGHTING").color(PINK).strong());
+            ui.add_space(12.0);
+            if chip(ui, "SYNC ALL ZONES", self.sync_zones).clicked() {
+                self.sync_zones = !self.sync_zones;
+            }
+            ui.label(RichText::new("changes apply right away, they don't go to PENDING").color(DIM).small());
+        });
+        ui.add_space(10.0);
+
+        // with sync on, the first zone's card drives every zone
+        let shown = if self.sync_zones { 1 } else { self.zone_ui.len() };
+        let mut apply: Option<(usize, bool)> = None; // (card, brightness only)
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+            for i in 0..shown {
+                let z = &mut self.zone_ui[i];
+                let title = if self.sync_zones { "ALL ZONES".to_string() } else { z.name.to_uppercase() };
+                Frame::new().fill(PANEL).stroke(Stroke::new(1.0, DIM)).inner_margin(Margin::same(14)).show(ui, |ui| {
+                    ui.set_width(ui.available_width().min(760.0));
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(title).color(CYAN).strong().underline());
+                        ui.add_space(16.0);
+                        ui.label(RichText::new("BRIGHTNESS").color(DIM).small());
+                        let slider = ui.add(egui::Slider::new(&mut z.brightness, 0..=255).trailing_fill(true));
+                        if slider.drag_stopped() || (slider.changed() && !slider.dragged()) {
+                            apply = Some((i, true));
+                        }
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if neon_button(ui, "APPLY", CYAN).clicked() {
+                                apply = Some((i, false));
+                            }
+                        });
+                    });
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 20.0;
+                        for (fx, label) in FX {
+                            if tab(ui, label, z.fx == fx).clicked() {
+                                z.fx = fx;
+                            }
+                        }
+                    });
+                    ui.separator();
+                    ui.horizontal(|ui| z.options(ui));
+                });
+            }
+        });
+
+        let Some((card, brightness_only)) = apply else { return };
+        let targets: Vec<usize> = if self.sync_zones { (0..zones.len()).collect() } else { vec![card] };
+        let source = self.zone_ui[card].clone();
+        let mut result = Ok(());
+        for &t in &targets {
+            let z = &mut self.zone_ui[t];
+            if self.sync_zones {
+                let name = z.name.clone();
+                *z = ZoneUi { name, ..source.clone() };
+            }
+            result = result.and_then(|_| light.set_brightness(&z.name, z.brightness));
+            if !brightness_only {
+                result = result.and_then(|_| light.set_effect(&z.name, &z.effect()));
+            }
+        }
+        let what = if brightness_only { format!("BRIGHTNESS {}", source.brightness) } else { format!("{:?}", source.effect()) };
+        let names: Vec<String> = targets.iter().map(|&t| self.zone_ui[t].name.to_uppercase()).collect();
+        self.status = result.map(|_| format!("LIGHTING {} > {what}", names.join(","))).map_err(|e| e.to_string());
+    }
+
+    /// Reads zones from the OpenRazer driver and pre-fills each card from
+    /// OpenRazer's saved state (the effect files are write-only).
+    fn load_lighting(&mut self) {
+        let Some(m) = self.mice.get(self.current) else { return };
+        self.lighting = rgb::find(m.def.vid, m.def.pid);
+        let Some(light) = &self.lighting else {
+            self.zone_ui.clear();
+            return;
+        };
+        self.zone_ui = light
+            .zones
+            .iter()
+            .map(|z| {
+                let saved = rgb::saved_effect(&m.serial, z).unwrap_or(Effect::Spectrum);
+                ZoneUi::from_effect(z, saved, light.brightness(z).unwrap_or(255))
+            })
+            .collect();
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum View {
+    Buttons,
+    Lighting,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Fx {
+    Static,
+    Breath,
+    Spectrum,
+    Wave,
+    Reactive,
+    Off,
+}
+
+const FX: [(Fx, &str); 6] = [
+    (Fx::Static, "STATIC"),
+    (Fx::Breath, "BREATH"),
+    (Fx::Spectrum, "SPECTRUM"),
+    (Fx::Wave, "WAVE"),
+    (Fx::Reactive, "REACTIVE"),
+    (Fx::Off, "OFF"),
+];
+
+/// Editable state of one lighting zone card.
+#[derive(Clone)]
+struct ZoneUi {
+    name: String,
+    fx: Fx,
+    color: [u8; 3],
+    random: bool,
+    reverse: bool,
+    speed: u8,
+    brightness: u8,
+}
+
+impl ZoneUi {
+    fn from_effect(name: &str, e: Effect, brightness: u8) -> Self {
+        let mut z = ZoneUi { name: name.into(), fx: Fx::Static, color: [0, 240, 255], random: false, reverse: false, speed: 2, brightness };
+        match e {
+            Effect::Off => z.fx = Fx::Off,
+            Effect::Static(c) => (z.fx, z.color) = (Fx::Static, c),
+            Effect::Breath(c) => (z.fx, z.color) = (Fx::Breath, c),
+            Effect::BreathRandom => (z.fx, z.random) = (Fx::Breath, true),
+            Effect::Spectrum => z.fx = Fx::Spectrum,
+            Effect::Wave(r) => (z.fx, z.reverse) = (Fx::Wave, r),
+            Effect::Reactive { speed, color } => (z.fx, z.speed, z.color) = (Fx::Reactive, speed, color),
+        }
+        z
+    }
+
+    fn effect(&self) -> Effect {
+        match self.fx {
+            Fx::Off => Effect::Off,
+            Fx::Static => Effect::Static(self.color),
+            Fx::Breath if self.random => Effect::BreathRandom,
+            Fx::Breath => Effect::Breath(self.color),
+            Fx::Spectrum => Effect::Spectrum,
+            Fx::Wave => Effect::Wave(self.reverse),
+            Fx::Reactive => Effect::Reactive { speed: self.speed, color: self.color },
+        }
+    }
+
+    /// The controls each effect needs (color, direction, speed).
+    fn options(&mut self, ui: &mut egui::Ui) {
+        let needs_color = matches!(self.fx, Fx::Static | Fx::Reactive) || (self.fx == Fx::Breath && !self.random);
+        if self.fx == Fx::Breath && chip(ui, "RANDOM COLORS", self.random).clicked() {
+            self.random = !self.random;
+        }
+        if needs_color {
+            ui.label(RichText::new("COLOR").color(DIM).small());
+            ui.color_edit_button_srgb(&mut self.color);
+            let [r, g, b] = self.color;
+            ui.label(RichText::new(format!("#{r:02x}{g:02x}{b:02x}")).color(Color32::from_rgb(r, g, b)));
+        }
+        if self.fx == Fx::Wave {
+            if chip(ui, "◄ LEFT", !self.reverse).clicked() {
+                self.reverse = false;
+            }
+            if chip(ui, "RIGHT ►", self.reverse).clicked() {
+                self.reverse = true;
+            }
+        }
+        if self.fx == Fx::Reactive {
+            ui.label(RichText::new("FADE").color(DIM).small());
+            for (s, label) in [(1, "FAST"), (2, "MEDIUM"), (3, "SLOW")] {
+                if chip(ui, label, self.speed == s).clicked() {
+                    self.speed = s;
+                }
+            }
+        }
+        if matches!(self.fx, Fx::Spectrum | Fx::Off) {
+            ui.label(RichText::new("no options").color(DIM).small());
+        }
     }
 }
 
@@ -511,6 +720,14 @@ impl App {
             });
             if let Some(i) = pick.filter(|&i| i != self.current) {
                 self.switch_to(i);
+            }
+            ui.add_space(16.0);
+            ui.spacing_mut().item_spacing.x = 16.0;
+            if tab(ui, "BUTTONS", self.view == View::Buttons).clicked() {
+                self.view = View::Buttons;
+            }
+            if tab(ui, "LIGHTING", self.view == View::Lighting).clicked() {
+                self.view = View::Lighting;
             }
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

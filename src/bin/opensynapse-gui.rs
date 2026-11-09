@@ -514,7 +514,8 @@ impl App {
             if chip(ui, "SYNC ALL ZONES", self.sync_zones).clicked() {
                 self.sync_zones = !self.sync_zones;
             }
-            ui.label(RichText::new("changes apply right away, they don't go to PENDING").color(DIM).small());
+            let via = if light.uses_daemon() { "via openrazer daemon" } else { "via openrazer driver, the daemon isn't running" };
+            ui.label(RichText::new(format!("changes apply right away, they don't go to PENDING > {via}")).color(DIM).small());
         });
         ui.add_space(10.0);
 
@@ -580,7 +581,7 @@ impl App {
     /// OpenRazer's saved state (the effect files are write-only).
     fn load_lighting(&mut self) {
         let Some(m) = self.mice.get(self.current) else { return };
-        self.lighting = rgb::find(m.def.vid, m.def.pid);
+        self.lighting = rgb::find(m.def.vid, m.def.pid, &m.serial);
         let Some(light) = &self.lighting else {
             self.zone_ui.clear();
             return;
@@ -589,7 +590,7 @@ impl App {
             .zones
             .iter()
             .map(|z| {
-                let saved = rgb::saved_effect(&m.serial, z).unwrap_or(Effect::Spectrum);
+                let saved = light.current_effect(z).unwrap_or(Effect::Spectrum);
                 ZoneUi::from_effect(z, saved, light.brightness(z).unwrap_or(255))
             })
             .collect();

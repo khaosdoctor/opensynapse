@@ -139,11 +139,13 @@ fn run(o: Opts) -> Result<(), String> {
             }
         }
         ["rgb", rest @ ..] => {
-            let light = rgb::find(def.vid, def.pid).ok_or("no lighting found (is the OpenRazer driver loaded?)")?;
+            let light =
+                rgb::find(def.vid, def.pid, &mouse.serial).ok_or("no lighting found (is the OpenRazer driver loaded?)")?;
             let Some((zone, rest)) = rest.split_first() else {
+                println!("via {}", if light.uses_daemon() { "openrazer daemon" } else { "openrazer driver (sysfs)" });
                 for z in &light.zones {
-                    let saved = rgb::saved_effect(&mouse.serial, z).map_or("?".into(), |e| format!("{e:?}"));
-                    println!("{z:<10} brightness {:>3}  last effect {saved}", light.brightness(z).map_err(e)?);
+                    let effect = light.current_effect(z).map_or("?".into(), |e| format!("{e:?}"));
+                    println!("{z:<10} brightness {:>3}  effect {effect}", light.brightness(z).map_err(e)?);
                 }
                 return Ok(());
             };

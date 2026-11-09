@@ -10,66 +10,33 @@ use std::{env, fs, io, path::PathBuf};
 const BUILTIN: &[(&str, &str)] =
     &[("razer-naga-left-handed-2020", include_str!("../devices/razer-naga-left-handed-2020.jsonc"))];
 
-/// Device files are JSONC: blanks out `//` and `/* */` comments outside
-/// strings (keeping newlines, so serde's line numbers still match).
+/// Device files are JSONC: cuts `//` comments outside strings, line by line
+/// so serde's line numbers still match. Block comments aren't supported.
 pub fn strip_comments(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_str = false;
-    while let Some(c) = chars.next() {
-        if in_str {
-            out.push(c);
-            if c == '\\' {
-                out.extend(chars.next());
-            } else if c == '"' {
-                in_str = false;
+    let strip = |line: &'_ str| -> String {
+        let mut in_str = false;
+        let mut prev = ' ';
+        for (i, c) in line.char_indices() {
+            if c == '"' && prev != '\\' {
+                in_str = !in_str;
             }
-            continue;
+            if !in_str && line[i..].starts_with("//") {
+                return line[..i].to_string();
+            }
+            prev = c;
         }
-        match (c, chars.peek()) {
-            ('"', _) => {
-                in_str = true;
-                out.push(c);
-            }
-            ('/', Some('/')) => {
-                while chars.peek().is_some_and(|&n| n != '\n') {
-                    chars.next();
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                let mut prev = ' ';
-                for n in chars.by_ref() {
-                    if n == '\n' {
-                        out.push('\n');
-                    }
-                    if prev == '*' && n == '/' {
-                        break;
-                    }
-                    prev = n;
-                }
-            }
-            _ => out.push(c),
-        }
-    }
-    out
+        line.to_string()
+    };
+    src.lines().map(strip).collect::<Vec<_>>().join("\n")
 }
 
-/// Ids in the device files are hex strings ("0x40") so they match the
-/// protocol docs and probe output; plain numbers work too.
+/// Ids in the device files are hex strings ("0x40"), like the protocol docs.
 pub fn hex<'de, D: Deserializer<'de>, T: TryFrom<u64>>(d: D) -> Result<T, D::Error> {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Raw {
-        Num(u64),
-        Str(String),
-    }
-    let n = match Raw::deserialize(d)? {
-        Raw::Num(n) => n,
-        Raw::Str(s) => u64::from_str_radix(s.trim_start_matches("0x"), 16)
-            .map_err(|_| serde::de::Error::custom(format!("bad hex '{s}'")))?,
-    };
-    T::try_from(n).map_err(|_| serde::de::Error::custom(format!("{n:#x} is too big")))
+    let s = String::deserialize(d)?;
+    u64::from_str_radix(s.trim_start_matches("0x"), 16)
+        .ok()
+        .and_then(|n| T::try_from(n).ok())
+        .ok_or_else(|| serde::de::Error::custom(format!("bad hex id '{s}'")))
 }
 
 const VARSTORE: u8 = 0x01;

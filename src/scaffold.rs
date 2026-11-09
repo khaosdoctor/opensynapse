@@ -114,9 +114,9 @@ mod tests {
 
     #[test]
     fn jsonc_comments() {
-        let src = "// head\n{ \"a\": \"x // y /* z */\", /* note\n */ \"b\": 1 } // end";
+        let src = "// head\n{ \"a\": \"x // \\\"y\", // note\n \"b\": 1 } // end";
         let v: serde_json::Value = serde_json::from_str(&crate::device::strip_comments(src)).unwrap();
-        assert_eq!((v["a"].as_str(), v["b"].as_u64()), (Some("x // y /* z */"), Some(1)));
+        assert_eq!((v["a"].as_str(), v["b"].as_u64()), (Some("x // \"y"), Some(1)));
     }
 
     #[test]

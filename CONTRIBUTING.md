@@ -6,7 +6,7 @@ Bug fixes and features are welcome too, open an issue first if it's something bi
 
 ## Adding a mouse
 
-A mouse is a single JSONC file (JSON with `//` and `/* */` comments), like [the Naga one](devices/razer-naga-left-handed-2020.jsonc). Ids are hex strings (`"0x40"`) so they match what the mouse and the protocol files say.
+A mouse is a single JSONC file (JSON with `//` comments), like [the Naga one](devices/razer-naga-left-handed-2020.jsonc). Ids are hex strings (`"0x40"`) so they match what the mouse and the protocol files say.
 
 1. **Start the file.** With the mouse plugged in, run:
 

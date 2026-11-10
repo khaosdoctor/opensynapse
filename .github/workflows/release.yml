@@ -186,6 +186,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
+          # apt-ftparchive writes the Release file with every checksum apt wants
+          sudo apt-get install -y -qq apt-utils >/dev/null
           remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           if git ls-remote --exit-code --heads "$remote" apt-repo >/dev/null; then
             git clone -q --single-branch --branch apt-repo "$remote" apt

@@ -10,6 +10,10 @@ on:
       tag:
         description: "tag to publish, like v0.1.1"
         required: true
+      publish_only:
+        description: "skip the build and publish the release files that are already there"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -23,6 +27,7 @@ jobs:
   # run on older distros; they only link glibc and libgcc, the GUI loads
   # wayland, X11 and GL at runtime.
   build:
+    if: ${{ !inputs.publish_only }}
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
@@ -119,6 +124,8 @@ jobs:
 
   aur:
     needs: build
+    # also runs when build was skipped with publish_only
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
     runs-on: ubuntu-latest
     strategy:
       # one package failing (say, nothing changed on a re-run) shouldn't cancel the others
@@ -163,3 +170,88 @@ jobs:
           ssh_private_key: ${{ secrets.AUR_KEY }}
           commit_message: "Update to ${{ env.TAG }}"
           ssh_keyscan_types: rsa,ecdsa,ed25519
+
+  # Adds the release's .debs to the apt-repo branch, which pages.yml serves under /apt.
+  # Signed when the GPG_PRIVATE_KEY secret exists, unsigned ([trusted=yes]) until then.
+  apt:
+    needs: build
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: update the apt repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$remote" apt-repo >/dev/null; then
+            git clone -q --single-branch --branch apt-repo "$remote" apt
+          else
+            git init -q -b apt-repo apt
+            git -C apt remote add origin "$remote"
+          fi
+          cd apt
+          mkdir -p pool/main
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*.deb' -D pool/main --clobber
+          for arch in amd64 arm64; do
+            dir="dists/stable/main/binary-$arch"
+            mkdir -p "$dir"
+            dpkg-scanpackages --arch "$arch" pool > "$dir/Packages"
+            gzip -kf "$dir/Packages"
+          done
+          apt-ftparchive \
+            -o APT::FTPArchive::Release::Origin=opensynapse \
+            -o APT::FTPArchive::Release::Label=opensynapse \
+            -o APT::FTPArchive::Release::Suite=stable \
+            -o APT::FTPArchive::Release::Codename=stable \
+            -o "APT::FTPArchive::Release::Architectures=amd64 arm64" \
+            -o APT::FTPArchive::Release::Components=main \
+            release dists/stable > Release.tmp
+          mv Release.tmp dists/stable/Release
+          if [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            gpg --batch --yes --armor --detach-sign -o dists/stable/Release.gpg dists/stable/Release
+            gpg --batch --yes --clearsign -o dists/stable/InRelease dists/stable/Release
+            gpg --batch --yes --armor --export > public.key
+          fi
+          git add -A
+          if git diff --cached --quiet; then exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
+            commit -qm "apt: $TAG"
+          git push -q origin apt-repo
+          # pushes made with the workflow token don't start other workflows, a dispatch does
+          gh workflow run pages.yml -R "$GITHUB_REPOSITORY"
+
+  # Points the formula in khaosdoctor/homebrew-tap at this release's tarballs.
+  # Skipped until the HOMEBREW_TAP_TOKEN secret exists.
+  homebrew:
+    needs: build
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: update the formula
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "no HOMEBREW_TAP_TOKEN secret, skipping"
+            exit 0
+          fi
+          v="${TAG#v}"
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "opensynapse-$v-*.tar.gz"
+          x86=$(sha256sum "opensynapse-$v-x86_64.tar.gz" | cut -d' ' -f1)
+          arm=$(sha256sum "opensynapse-$v-aarch64.tar.gz" | cut -d' ' -f1)
+          sed -e "s/@VERSION@/$v/g" -e "s/@SHA_X86_64@/$x86/" -e "s/@SHA_AARCH64@/$arm/" \
+            contrib/homebrew/opensynapse.rb > opensynapse.rb
+          file=repos/khaosdoctor/homebrew-tap/contents/Formula/opensynapse.rb
+          sha=$(GH_TOKEN="$TAP_TOKEN" gh api "$file" -q .sha 2>/dev/null || true)
+          GH_TOKEN="$TAP_TOKEN" gh api -X PUT "$file" -f message="opensynapse $v" \
+            -f content="$(base64 -w0 opensynapse.rb)" ${sha:+-f sha="$sha"}

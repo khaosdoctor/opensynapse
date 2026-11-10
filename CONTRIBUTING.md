@@ -1,6 +1,6 @@
 # Contributing
 
-The thing I need the most is mice. I only have one Razer mouse, so every other model depends on someone who owns it sending a device file. If you have a Razer mouse that isn't in [`devices/`](devices/), please add it, it's mostly writing a JSONC file and testing it on your own mouse.
+I only have one Razer mouse, so every other model depends on someone who owns it sending a device file. If you have a Razer mouse that isn't in [`devices/`](devices/), please add it, it's mostly writing a JSONC file and testing it on your own mouse.
 
 Bug fixes and features are welcome too, open an issue first if it's something big so we can talk about it.
 
@@ -30,13 +30,17 @@ A mouse is a single JSONC file (JSON with `//` comments), like [the Naga one](de
 
 4. **Optionally, add `"at": [x, y]` to the buttons** so they show up on the drawn mouse in the GUI, the header of [the Naga file](devices/razer-naga-left-handed-2020.jsonc) explains the coordinates. If you skip it you get a grid, which is fine.
 
-5. **Write the protocol file.** `opensynapse protocol`, run from the repo root, writes `devices/protocols/<slug>.md` (the `"name"` field in lowercase with dashes, so `Razer Naga Pro (Wired)` is `razer-naga-pro-wired`). You only fill in the TODOs. [PROTOCOL.md](PROTOCOL.md) explains what goes in it and has [a prompt so an agent fills it in for you](PROTOCOL.md#using-an-agent). The [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example. If you couldn't make your mouse work, copy the template from PROTOCOL.md, fill in what you found and paste it into a new issue, it's still super useful.
+5. **Write the protocol file.** `opensynapse protocol`, run from the repo root, writes `devices/protocols/<slug>.md` (the `"name"` field in lowercase with dashes, so `Razer Naga Pro (Wired)` is `razer-naga-pro-wired`). You only need to fill in the TODOs. The [PROTOCOL.md](PROTOCOL.md) explains what goes in it and has [a prompt so an agent fills it in for you](PROTOCOL.md#using-an-agent), if you can, add one because it would greatly help to understand the protocols for each mouse, but it's an optional nice to have. The [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example.
+
+> If you couldn't make your mouse work, copy the template from PROTOCOL.md, fill in what you found and paste it into a new issue, it's still super useful.
 
 Then send it. The quickest way is `opensynapse protocol send`, which opens an issue here with your protocol and device files. If you prefer a PR, copy `buttons.jsonc` into `devices/` as `<slug>.jsonc`, replace init's two header lines and the `// TODO` notes with a first line like the Naga file's (`// Verified on hardware, firmware vX.Y. See protocols/<slug>.md.`), add the device to the `BUILTIN` list in [`src/device.rs`](src/device.rs) and open it with both files. Built-in files are compiled into the app, so run `cargo install --path . --features gui` again, then move the file in `~/.config` away (it wins over the built-in one) and check `opensynapse list` still finds your mouse.
 
 ## Using an agent
 
-I did the whole reverse engineering for the Naga with Claude Code, and it works really well for this kind of work because it can run the probe, read the answers and try things on the spot. If you want to do the same for your mouse, open your agent of choice in this repo with the mouse plugged in and paste this:
+I did the whole reverse engineering for the Naga with Claude Code because, well... I haven't learned to read syscodes yet. 
+
+It works really well for this kind of work because it can run the probe, read the answers and try things faster than you would. If you want to do the same for your mouse, open your agent of choice in this repo with the mouse plugged in and paste this:
 
 ```text
 I want to add support for my Razer mouse to opensynapse, the repo you're in.
@@ -75,4 +79,4 @@ Steps:
    Don't send it, I'll review it and send it myself.
 ```
 
-Keep an eye on what it does, it's your mouse.
+Thanks for contributing!

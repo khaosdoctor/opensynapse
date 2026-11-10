@@ -2,6 +2,7 @@
 
 use crate::action::Action;
 use crate::hid::{self, Hid};
+use crate::rgb::Effect;
 use serde::{Deserialize, Deserializer};
 use std::{env, fs, io, path::PathBuf};
 
@@ -42,6 +43,7 @@ fn hex<'de, D: Deserializer<'de>, T: TryFrom<u64>>(d: D) -> Result<T, D::Error> 
 const VARSTORE: u8 = 0x01;
 const CLASS_DPI: u8 = 0x04;
 const CLASS_KEYMAP: u8 = 0x02;
+const CLASS_LIGHT: u8 = 0x0f;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeviceDef {
@@ -225,6 +227,16 @@ impl Mouse {
         }
         self.hid.command(CLASS_DPI, 0x06, 0x26, &args)?;
         Ok(())
+    }
+
+    /// Effect and brightness of one LED zone, read from the mouse (verified on
+    /// the Naga: static green read back as `01 .. 01 00 ff 00`). The reply uses
+    /// the layout OpenRazer writes in razerchromacommon.c:
+    /// [store, led, effect, direction/type, speed, colour count, r, g, b].
+    pub fn led(&self, led: u8) -> io::Result<(Effect, u8)> {
+        let r = self.hid.command(CLASS_LIGHT, 0x82, 0x0c, &[VARSTORE, led])?;
+        let b = self.hid.command(CLASS_LIGHT, 0x84, 0x03, &[VARSTORE, led])?;
+        Ok((Effect::from_reply(&r[8..]), b[10]))
     }
 
     fn check_dpi(&self, values: &[u16]) -> io::Result<()> {

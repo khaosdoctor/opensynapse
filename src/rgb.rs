@@ -6,14 +6,14 @@
 //! remembers the change and doesn't put its own saved colors back on the next
 //! replug. Without it we write the driver's sysfs files directly.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::{fs, io};
 use zbus::Message;
 use zbus::blocking::Connection;
 use zbus::zvariant::DynamicType;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Effect {
     Off,
     Static([u8; 3]),
@@ -27,6 +27,22 @@ pub enum Effect {
 }
 
 impl Effect {
+    /// Decodes the arguments of an extended matrix effect reply (class 0x0f, 0x82).
+    pub fn from_reply(a: &[u8]) -> Effect {
+        let at = |i: usize| a.get(i).copied().unwrap_or(0);
+        let color = [at(6), at(7), at(8)];
+        match at(2) {
+            0x00 => Effect::Off,
+            0x02 if at(5) == 0 => Effect::BreathRandom,
+            0x02 => Effect::Breath(color),
+            0x03 => Effect::Spectrum,
+            0x04 => Effect::Wave(at(3) == 2),
+            0x05 => Effect::Reactive { speed: at(4), color },
+            // 01 static, and effects the GUI has no card for (starlight, wheel) show as static
+            _ => Effect::Static(color),
+        }
+    }
+
     fn file_and_data(&self) -> (&'static str, Vec<u8>) {
         match self {
             Effect::Off => ("none", b"1".to_vec()),
@@ -39,6 +55,48 @@ impl Effect {
             Effect::Reactive { speed, color } => ("reactive", vec![(*speed).clamp(1, 3), color[0], color[1], color[2]]),
         }
     }
+}
+
+/// One zone's look, as saved in the lighting original file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ZoneState {
+    pub zone: String,
+    pub effect: Effect,
+    pub brightness: u8,
+}
+
+fn lighting_file(vid: u16, pid: u16, serial: &str, name: &str) -> Option<PathBuf> {
+    let prefix = if serial.is_empty() { String::new() } else { format!("{serial}-") };
+    crate::device::model_dir(vid, pid).map(|d| d.join(format!("{prefix}{name}")))
+}
+
+/// <serial>-lighting.original.json in the device folder: the lighting the
+/// first time opensynapse saw the mouse, or what SET DEFAULT saved.
+pub fn original_path(vid: u16, pid: u16, serial: &str) -> Option<PathBuf> {
+    lighting_file(vid, pid, serial, "lighting.original.json")
+}
+
+/// The LED id the mouse uses for an OpenRazer zone name (OpenRazer's razercommon.h).
+pub fn led_id(zone: &str) -> Option<u8> {
+    match zone {
+        "scroll" => Some(0x01),
+        "logo" => Some(0x04),
+        "backlight" => Some(0x05),
+        "right" => Some(0x10),
+        "left" => Some(0x11),
+        _ => None,
+    }
+}
+
+pub fn save_zones(path: &std::path::Path, zones: &[ZoneState]) -> io::Result<()> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)?;
+    }
+    fs::write(path, serde_json::to_string_pretty(zones).map_err(io::Error::other)?)
+}
+
+pub fn load_zones(path: &std::path::Path) -> io::Result<Vec<ZoneState>> {
+    serde_json::from_str(&fs::read_to_string(path)?).map_err(io::Error::other)
 }
 
 pub struct Lighting {
@@ -211,5 +269,8 @@ mod tests {
         assert_eq!(Effect::BreathRandom.file_and_data(), ("breath", vec![1]));
         assert_eq!(Effect::Reactive { speed: 9, color: [1, 2, 3] }.file_and_data(), ("reactive", vec![3, 1, 2, 3]));
         assert_eq!(Effect::Wave(true).file_and_data(), ("wave", b"2".to_vec()));
+        // read from a Naga set to static green
+        assert_eq!(Effect::from_reply(&[0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0xff, 0x00]), Effect::Static([0, 255, 0]));
+        assert_eq!(Effect::from_reply(&[0x00, 0x04, 0x02, 0x00, 0x00, 0x00]), Effect::BreathRandom);
     }
 }

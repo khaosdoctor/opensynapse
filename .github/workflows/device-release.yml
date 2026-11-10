@@ -1,0 +1,43 @@
+name: device-release
+
+# A merged PR labeled new-device gets a patch release right away, so the new
+# mouse reaches the AUR, apt and Homebrew without waiting for the next release.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: device-release
+
+jobs:
+  release:
+    if: github.event.pull_request.merged && contains(github.event.pull_request.labels.*.name, 'new-device')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: bump the patch version, tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          old=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          new="${old%.*}.$(( ${old##*.} + 1 ))"
+          sed -i "s/^version = \"$old\"/version = \"$new\"/" Cargo.toml
+          sed -i "s/^pkgver=.*/pkgver=$new/" contrib/aur/*/PKGBUILD
+          cargo update --workspace
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
+            commit -qam "chore: release v$new"
+          git tag "v$new"
+          git push origin main "v$new"
+          # tags pushed with the workflow token don't start other workflows, a dispatch does
+          gh workflow run release.yml --ref main -f tag="v$new"
+          echo "released v$new for: $TITLE"

@@ -5,7 +5,7 @@
 > Remap buttons, set DPI and lighting on Razer mice from Linux.
 
 > [!WARNING]
-> **This is a work in progress.** I tested it on my mouse only, so edge cases might not be covered. It should work with any mice. See [First use](#first-use)
+> **This is a work in progress.** I tested it on my mouse only, so edge cases might not be covered. It should work with any mice. See [First use](#first-use). It was also built with heavy AI help, see [AI usage](#ai-usage).
 
 My lawyers say I have to write this so:
 
@@ -161,4 +161,16 @@ opensynapse list   # your mouse should be here now
 
 ## AI usage
 
-I used AI a lot on this, especially for the reverse engineering part, and I checked everything against the real mouse, but there is probably something I missed. If you find it, open an [issue](https://github.com/khaosdoctor/opensynapse/issues).
+This was built with heavy AI help, and I'm not a Rust or firmware developer.
+
+I'm a backend developer and I work with high-level languages. I had this problem for years and couldn't solve it on my own, so I used AI for the things I couldn't do by myself, and to help me write the rest. I tested everything on my own mouse, but I don't understand every line yet, and I'm learning how it works as I go.
+
+If you're wondering whether it's safe to use:
+
+- **It only changes settings, never firmware.**
+- **Everything can be undone.** The original state of the mouse is saved, and you can import it back anytime.
+- **It runs as your user, not root.**
+- **The protocol is documented** in [`PROTOCOL.md`](PROTOCOL.md) and [`devices/protocols/`](devices/protocols/).
+- **It's tested on real hardware.** I use it on my own mouse every day.
+
+There are probably mistakes I didn't catch. If you find one, open an [issue](https://github.com/khaosdoctor/opensynapse/issues). If you know Rust or HID and want to review the code, that's even better. If AI-built software is a dealbreaker for you, that's fair, no hard feelings.

@@ -13,9 +13,9 @@ My lawyers say I have to write this so:
 
 ## What is it
 
-Razer doesn't ship Synapse for Linux. keyd and friends can remap what the mouse sends, but the remap lives on the computer, not on the mouse, and some things you just can't reach that way. I also happen to have a Naga and a Linux, so that was pretty annoying.
+Razer doesn't ship Synapse for Linux, to change the keybinds we can use keyd and the likes of it can remap what the mouse sends to the computer, but the remap sometimes miss buttons, some buttons are weird stuff (like keys that don't really exist) and the final remaps stay on the computer, not on the mouse. I also happen to have a Razer mice, and a Linux computer, so that was _pretty_ annoying... For... Years...
 
-This is the reverse engineered version of synapse with how the mouse stores its keymap (the details are in [`devices/protocols/`](devices/protocols/razer-naga-left-handed-2020.md)). It talks to the mouse directly, so the mapping is saved on the mouse itself and goes with it to any computer.
+This is the reverse engineered version of the Synapse protocol handling. It maps out how the mouse stores its keymap (the details are in [`devices/protocols/`](devices/protocols/razer-naga-left-handed-2020.md)). It talks to the mouse directly, so the mapping is saved on the mouse itself and goes with it to any computer, this is a single Rust binary either so you can probably build for whatever OS you have.
 
 Right now you can:
 
@@ -66,7 +66,7 @@ brew install khaosdoctor/tap/opensynapse
 
 Every [release](https://github.com/khaosdoctor/opensynapse/releases) also has a `.deb`, an AppImage (GUI only) and a tar.gz with both binaries, for x86_64 and arm64. The `.deb` installs the udev rule; with the other two, install it as shown at the end of this section.
 
-To build it yourself, you need [Rust](https://rustup.rs) and a Linux box. Then:
+To build it yourself, you need [Rust](https://rustup.rs) and a Linux machine. Then:
 
 ```sh
 git clone https://github.com/khaosdoctor/opensynapse && cd opensynapse

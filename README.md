@@ -5,7 +5,7 @@
 > Remap buttons, set DPI and lighting on Razer mice from Linux.
 
 > [!WARNING]
-> **This is a work in progress.** I tested it on my mouse only
+> **This is a work in progress.** I tested it on my mouse only, so edge cases might not be covered. It shouldnwork with any mice. See [First use](#first-use)
 
 My lawyers say I have to write this so:
 
@@ -42,10 +42,6 @@ Right now you can:
 ![The buttons tab: the Naga drawn with what each button does, the DPI stages and the remap editor](docs/screenshots/buttons.png)
 
 ![The lighting tab: effect and brightness for each zone](docs/screenshots/lighting.png)
-
-## Current status
-
-Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is tested and supported, because that's the one I have. The protocol is shared by a bunch of Razer mice, so adding another one should mostly be writing a JSONC file (see [Adding your mouse](#adding-your-mouse)).
 
 ## Install
 

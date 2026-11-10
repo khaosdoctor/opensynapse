@@ -150,9 +150,9 @@ Every package installs shell completions for bash, zsh and fish, which also comp
 
 ## Adding your mouse
 
-OpenSynapse works by reading a JSON file from `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` (JSON with comments) that says what your mouse is: its USB ids and the list of buttons. A few of these come built into the app, and if yours isn't one of them you can just write your own and it works right away, you don't need to wait for me or upload anything.
+OpenSynapse works by reading a JSON file from `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` that says what your mouse is: its USB ids and the list of buttons. A few of these come built into the app, and if yours isn't one of them you can just write your own and it works right away, you don't need to wait for me or upload anything.
 
-You don't even have to write it by hand. Run `opensynapse init` with the mouse plugged in, it asks the mouse what it has (read-only, it doesn't change anything) and writes most of the file for you. Fix the `// TODO` lines, mostly naming the buttons, and that's it, the GUI and the CLI pick it up on their own.
+You don't even have to write it by hand. Run `opensynapse init` with the mouse plugged in, it asks the mouse what it has without changing anything on it, and writes most of the file for you. Fix the `// TODO` lines, mostly naming the buttons, and that's it, the GUI and the CLI pick it up on their own.
 
 ```sh
 opensynapse init

@@ -5,7 +5,7 @@
 > Remap buttons, set DPI and lighting on Razer mice from Linux.
 
 > [!WARNING]
-> **This is a work in progress.** I tested it on my mouse only, so edge cases might not be covered. It shouldnwork with any mice. See [First use](#first-use)
+> **This is a work in progress.** I tested it on my mouse only, so edge cases might not be covered. It should work with any mice. See [First use](#first-use)
 
 My lawyers say I have to write this so:
 

@@ -19,7 +19,7 @@ This is the reverse engineered version of the Synapse protocol handling. It maps
 
 Right now you can:
 
-- Remap any button to a key (with modifiers), a mouse button, a media key, DPI up/down, Hypershift or disable it.
+- Remap any button to a key (with modifiers), a mouse button, a media key, DPI up/down or a DPI stage, switching profiles, Hypershift or disable it.
 - Normal and the Hypershift layers.
 - Keys and mouse buttons can also be on turbo, so they repeat while you hold them
 - Change DPI and the DPI stages

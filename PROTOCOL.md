@@ -4,6 +4,15 @@ Every mouse in opensynapse has two files: the device file in [`devices/`](device
 
 If you're adding a mouse, write one. The [Naga Left-Handed 2020 file](devices/protocols/razer-naga-left-handed-2020.md) is a complete example.
 
+## Contents
+
+- [What's the same on every Razer mouse](#whats-the-same-on-every-razer-mouse)
+- [Finding things out](#finding-things-out)
+- [Generating the file](#generating-the-file)
+- [Template](#template)
+- [Sources](#sources)
+- [Using an agent](#using-an-agent)
+
 ## What's the same on every Razer mouse
 
 You don't have to repeat this part in your file, only what's different on your mouse.

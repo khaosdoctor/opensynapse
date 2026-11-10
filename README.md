@@ -11,6 +11,18 @@ My lawyers say I have to write this so:
 
 > Not affiliated with, endorsed by, or supported by Razer Inc. Everything here is distributed as-is and with no warranty.
 
+## Contents
+
+- [What is it](#what-is-it)
+- [Current status](#current-status)
+- [Install](#install)
+- [First use](#first-use)
+  - [In the GUI](#in-the-gui)
+  - [With the CLI](#with-the-cli)
+- [Usage](#usage)
+- [Adding your mouse](#adding-your-mouse)
+- [AI usage](#ai-usage)
+
 ## What is it
 
 Razer doesn't ship Synapse for Linux, to change the keybinds we can use keyd and the likes of it so we can remap what the mouse sends to the computer, but the remap sometimes miss buttons, some buttons are weird stuff (like keys that don't really exist) and the final remaps stay on the computer, not on the mouse. I also happen to have a Razer mice, and a Linux computer, so that was _pretty_ annoying... For... Years...

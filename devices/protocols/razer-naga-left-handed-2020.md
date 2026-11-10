@@ -4,6 +4,15 @@ Device: USB `1532:008d`, firmware v1.0. Synapse 4 calls it device 141, edition 0
 
 All findings come from talking to the real device on Linux through `/dev/hidraw` on interface 0. Synapse was never run, and its shipped UI, installer and driver package don't contain the packet encoder.
 
+## Contents
+
+- [Transport](#transport)
+- [Keymap commands (class `0x02`)](#keymap-commands-class-0x02)
+- [Button ids](#button-ids)
+- [Action encoding](#action-encoding)
+- [Lighting (class `0x0f`)](#lighting-class-0x0f)
+- [Unknowns](#unknowns)
+
 ## Transport
 
 The common frame from [PROTOCOL.md](../../PROTOCOL.md#whats-the-same-on-every-razer-mouse), on interface 0 with transaction id `0x1f`.

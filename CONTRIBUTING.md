@@ -4,6 +4,11 @@ I only have one Razer mouse, so every other model depends on someone who owns it
 
 Bug fixes and features are welcome too, open an issue first if it's something big so we can talk about it.
 
+## Contents
+
+- [Adding a mouse](#adding-a-mouse)
+- [Using an agent](#using-an-agent)
+
 ## Adding a mouse
 
 A mouse is a single JSONC file (JSON with `//` comments), like [the Naga one](devices/razer-naga-left-handed-2020.jsonc). `vid`, `pid`, `transaction_id` and button ids are hex strings (`"0x40"`) so they match what the mouse and the protocol files say.

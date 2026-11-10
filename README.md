@@ -82,6 +82,42 @@ sudo install -m644 udev/70-opensynapse.rules /etc/udev/rules.d/
 sudo udevadm control --reload && sudo udevadm trigger
 ```
 
+## First use
+
+Plug the mouse in. If you just installed the udev rule, unplug it and plug it back once so it gets the new permissions. Then check that opensynapse sees it:
+
+```sh
+opensynapse list
+```
+
+If it says permission denied, the udev rule isn't installed yet or the mouse wasn't replugged. If your mouse isn't in the list, it isn't supported yet, see [Adding your mouse](#adding-your-mouse).
+
+### In the GUI
+
+Open `opensynapse-gui`, or OpenSynapse from your app launcher. The first time it sees your mouse it saves every profile and the lighting as the original, so ***RESET*** always has something to go back to. Then:
+
+1. Pick ***P1*** under PROFILE, on the left of the mouse drawing. On the Naga, P0 is the live profile and is lost when you unplug the mouse, P1 is the one it keeps
+2. Click a button on the drawing and pick what it should do in the editor below. Every change goes to ***PENDING*** in the sidebar
+3. Hit ***WRITE TO DEVICE*** and try the button
+
+The lighting tab needs the OpenRazer daemon running, the badge at the top says ***OPENRAZER ONLINE*** when it is.
+
+### With the CLI
+
+Make a backup first, then change one button and check it:
+
+```sh
+opensynapse export before.json --profile 1
+opensynapse set thumb1 key:f13 --profile 1
+opensynapse get thumb1 --profile 1
+```
+
+If you don't like it, this puts everything back:
+
+```sh
+opensynapse import before.json --profile 1
+```
+
 ## Usage
 
 The GUI is the easy way, just run `opensynapse-gui`. For headless use there's the CLI:

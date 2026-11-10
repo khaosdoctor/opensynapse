@@ -19,16 +19,16 @@ This is the reverse engineered version of synapse with how the mouse stores its 
 
 Right now you can:
 
-- Remap any button to a key (with modifiers), a mouse button, a mouse button on turbo, DPI up/down or nothing at all, on both the normal and the Hypershift layer
+- Remap any button to a key (with modifiers), a mouse button, a media key, DPI up/down, Hypershift or nothing at all, on both the normal and the Hypershift layer. Keys and mouse buttons can also be on turbo, so they repeat while you hold them
 - Change DPI and the DPI stages
-- Export and import profiles as JSON. The first time the GUI opens a mouse it backs up every profile on it to `~/.config/opensynapse/devices/<vid-pid>/<serial>-<profile>.json`
+- Export and import profiles as JSON
+- Go back to how the mouse was. The first time the GUI opens a mouse it saves every profile and the lighting to `~/.config/opensynapse/devices/<vid-pid>/` as `*.original.json`, ***RESET*** puts that back and ***SET DEFAULT*** makes what's on the mouse now the new original
 - See which button you're pressing, live, in the GUI
 - Change the lighting and brightness of zones. This one goes through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports, and if the OpenRazer daemon is running it will use your colors like it does for its own apps
 
-> [!NOTE]
-> Lighting is still untested, so it may not work at all
+In the GUI, every change goes to a queue until you hit ***WRITE TO DEVICE*** (lighting also has ***APPLY NOW***). CLI commands write right away.
 
-In the GUI, changes are queued until you hit ***WRITE TO DEVICE***. CLI commands write right away.
+On the Naga, profile 0 is the live one: it changes right away but is lost when you unplug the mouse. Profile 1 is stored on the mouse and is what it loads when you plug it in, so that's the one to edit if you want a change to stick.
 
 ![The buttons tab: the Naga drawn with what each button does, the DPI stages and the remap editor](docs/screenshots/buttons.png)
 

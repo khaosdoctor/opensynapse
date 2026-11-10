@@ -75,6 +75,15 @@ Device: USB `1532:xxxx`, firmware vX.Y. Device file: [`<slug>.jsonc`](../<slug>.
 
 How you found it: probing on Linux, a USB capture of Synapse, etc.
 
+## Contents
+
+- [Transport](#transport)
+- [Keymap commands](#keymap-commands)
+- [Button ids](#button-ids)
+- [Action encoding](#action-encoding)
+- [DPI and other commands](#dpi-and-other-commands)
+- [Unknowns](#unknowns)
+
 ## Transport
 
 Interface, transaction id, anything that's different from the common frame in PROTOCOL.md.

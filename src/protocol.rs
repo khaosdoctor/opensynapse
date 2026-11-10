@@ -25,6 +25,13 @@ pub fn generate(mouse: &Mouse) -> String {
        Everything marked TODO needs someone who tested the mouse, see [PROTOCOL.md](../../PROTOCOL.md).");
     w("\nHow it was found: TODO (probing on Linux, a USB capture of Synapse, ...)\n");
 
+    w("## Contents\n");
+    w("- [Transport](#transport)");
+    w("- [Button ids](#button-ids)");
+    w("- [DPI](#dpi)");
+    w("- [Action encoding](#action-encoding)");
+    w("- [Unknowns](#unknowns)\n");
+
     w("## Transport\n");
     w(&format!(
         "Interface {}, transaction id `0x{:02x}`. TODO: anything else that's different from the common frame in PROTOCOL.md.\n",

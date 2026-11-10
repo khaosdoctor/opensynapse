@@ -1,0 +1,17 @@
+Package: opensynapse
+Version: 0.2.0
+Architecture: amd64
+Maintainer: Lucas Santos <hello@lsantos.dev>
+Depends: libc6 (>= 2.35), libgcc-s1
+Recommends: libxkbcommon0, libwayland-client0, libegl1, xdg-desktop-portal
+Suggests: openrazer-driver-dkms
+Filename: pool/main/opensynapse_0.2.0_amd64.deb
+Size: 8525414
+MD5sum: c97ac4151bde671bbd3e3faa94660c9a
+SHA1: cdf87ec5d59f18ba44995f773fc35f21b9a4ee4f
+SHA256: b82f846d263d7d0fd68239915e67502f355bd1656939f85a5d634b8c2f28abe2
+Section: utils
+Priority: optional
+Homepage: https://github.com/khaosdoctor/opensynapse
+Description: Remap buttons, set DPI and lighting on Razer mice from Linux
+

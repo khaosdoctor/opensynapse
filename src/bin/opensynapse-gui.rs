@@ -196,6 +196,7 @@ struct App {
     dir: Option<PathBuf>,
     /// (vid, pid) of a mouse that was unplugged; we keep polling until it comes back
     disconnected: Option<(u16, u16)>,
+    last_daemon_check: Instant,
 }
 
 impl App {
@@ -215,6 +216,7 @@ impl App {
             sync_zones: false,
             dir: None,
             disconnected: None,
+            last_daemon_check: Instant::now(),
             mice: Vec::new(),
             current: 0,
             unsupported: Vec::new(),
@@ -322,6 +324,34 @@ impl App {
         self.flash = button.map(|b| (b, Instant::now()));
         (self.dpi, self.active) = (dpi, s.active);
         self.device_dpi = (dpi, s.active, s.stages);
+    }
+
+    /// Notices the OpenRazer daemon starting, stopping or losing the mouse, and
+    /// reloads the lighting tab when it does. Queued lighting changes are kept.
+    fn poll_daemon(&mut self) {
+        const EVERY: Duration = Duration::from_secs(3);
+        self.ctx.request_repaint_after(EVERY);
+        if self.last_daemon_check.elapsed() < EVERY {
+            return;
+        }
+        self.last_daemon_check = Instant::now();
+        let (Some(m), Some(light)) = (self.mice.get(self.current), &self.lighting) else { return };
+        let online = rgb::daemon_sees(&m.serial);
+        if online == light.uses_daemon() {
+            return;
+        }
+        self.load_lighting();
+        for op in &self.ops {
+            let Op::Light { zone, effect, brightness } = op else { continue };
+            if let Some(z) = self.zone_ui.iter_mut().find(|z| z.name == *zone) {
+                *z = ZoneUi::from_effect(zone, *effect, *brightness);
+            }
+        }
+        let state = match online {
+            true => "ONLINE",
+            false => "OFFLINE",
+        };
+        self.status = Ok(format!("OPENRAZER {state}"));
     }
 
     /// Tries to open the mouse again, keeping what was queued before the unplug.
@@ -677,6 +707,7 @@ fn heading(ui: &mut egui::Ui, text: &str) {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll_dpi();
+        self.poll_daemon();
         self.import_dialog();
         self.confirm_dialog();
         if self.disconnected.is_some() {
@@ -730,46 +761,46 @@ impl eframe::App for App {
 
 impl App {
     fn lighting_ui(&mut self, ui: &mut egui::Ui) {
+        let area = ui.max_rect();
         let Some(light) = &self.lighting else {
             ui.label(RichText::new("NO LIGHTING").color(PINK).size(28.0));
             ui.label(RichText::new("lighting goes through the OpenRazer driver, install openrazer-driver-dkms").color(DIM));
             return;
         };
-        // centered on the row so the title lines up with the taller buttons; still wraps when narrow
-        ui.with_layout(Layout::left_to_right(Align::Center).with_main_wrap(true), |ui| {
+        let online = light.uses_daemon();
+        let (badge, color, tip) = match online {
+            true => ("OPENRAZER ONLINE", GREEN, "Lighting goes through the OpenRazer daemon, which keeps it after a replug."),
+            false => (
+                "OPENRAZER OFFLINE",
+                RED,
+                "The OpenRazer daemon isn't running or doesn't see this mouse, so lighting is off. Start it with \
+                 `systemctl --user restart openrazer-daemon` and press RESCAN.",
+            ),
+        };
+        // ui.horizontal centers items on the row, so the title lines up with the taller buttons
+        ui.horizontal(|ui| {
             ui.label(RichText::new("> LIGHTING").color(PINK).strong());
-            let (badge, color, tip) = match light.uses_daemon() {
-                true => ("OPENRAZER DAEMON", GREEN, "Lighting goes through the OpenRazer daemon, which keeps it after a replug."),
-                false => (
-                    "OPENRAZER DRIVER ONLY",
-                    YELLOW,
-                    "The OpenRazer daemon isn't running or doesn't see this mouse, so lighting goes straight to the \
-                     driver. It works, but the daemon may put its own colors back on the next replug.",
-                ),
-            };
-            Frame::new().stroke(Stroke::new(1.0, color)).inner_margin(Margin::symmetric(6, 2)).show(ui, |ui| {
-                ui.label(RichText::new(badge).color(color).small());
-            })
-            .response
-            .on_hover_text(tip);
             ui.add_space(12.0);
-            if toggle_button(ui, "SYNC ALL ZONES", self.sync_zones).clicked() {
-                self.sync_zones = !self.sync_zones;
-            }
-            if neon_button(ui, "RESET", PINK).on_hover_text("put back the original lighting").clicked() {
-                self.confirm = Some(Confirm::ResetLighting);
-            }
-            if outline_button(ui, "SET DEFAULT", YELLOW)
-                .on_hover_text("make the lighting on the mouse now the original RESET goes back to")
-                .clicked()
-            {
-                self.confirm = Some(Confirm::DefaultLighting);
-            }
-            if outline_button(ui, "FACTORY RESET", PINK).on_hover_text("static Razer green on every zone").clicked() {
-                self.confirm = Some(Confirm::FactoryLighting);
-            }
+            // status badge on the far right of the row
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                Frame::new().stroke(Stroke::new(1.0, color)).inner_margin(Margin::symmetric(6, 2)).show(ui, |ui| {
+                    ui.label(RichText::new(badge).color(color).small());
+                })
+                .response
+                .on_hover_text(tip);
+                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                    if !online {
+                        ui.disable();
+                    }
+                    self.lighting_actions(ui);
+                });
+            });
         });
         ui.add_space(10.0);
+        // without the daemon the cards stay visible but greyed out
+        if !online {
+            ui.disable();
+        }
 
         // with sync on, the first zone's card drives every zone
         let shown = if self.sync_zones { 1 } else { self.zone_ui.len() };
@@ -809,6 +840,9 @@ impl App {
                 all = true;
             }
         });
+        if !online {
+            offline_overlay(ui, area);
+        }
 
         self.queue_light_edits();
         let Some(card) = apply.or(all.then_some(0)) else { return };
@@ -1499,6 +1533,24 @@ impl App {
         rgb::original_path(m.def.vid, m.def.pid, &m.serial)
     }
 
+    fn lighting_actions(&mut self, ui: &mut egui::Ui) {
+        if toggle_button(ui, "SYNC ALL ZONES", self.sync_zones).clicked() {
+            self.sync_zones = !self.sync_zones;
+        }
+        if neon_button(ui, "RESET", PINK).on_hover_text("put back the original lighting").clicked() {
+            self.confirm = Some(Confirm::ResetLighting);
+        }
+        if outline_button(ui, "SET DEFAULT", YELLOW)
+            .on_hover_text("make the lighting on the mouse now the original RESET goes back to")
+            .clicked()
+        {
+            self.confirm = Some(Confirm::DefaultLighting);
+        }
+        if outline_button(ui, "FACTORY RESET", PINK).on_hover_text("static Razer green on every zone").clicked() {
+            self.confirm = Some(Confirm::FactoryLighting);
+        }
+    }
+
     /// Lighting on the mouse as it was last read or written.
     fn lighting_now(&self) -> Vec<rgb::ZoneState> {
         let state = |z: &ZoneUi| rgb::ZoneState { zone: z.name.clone(), effect: z.effect(), brightness: z.brightness };
@@ -1648,6 +1700,23 @@ impl App {
             }
         });
     }
+}
+
+/// Darkens the lighting tab and says why it's off. Drawn on its own layer
+/// because the tab's own painter is faded while it's disabled.
+fn offline_overlay(ui: &egui::Ui, area: egui::Rect) {
+    // Middle sits above the panels and below modals, so dialogs still show on top
+    let p = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Middle, egui::Id::unique("openrazer-offline")));
+    p.rect_filled(area, CornerRadius::ZERO, BG.gamma_multiply(0.75));
+    let c = area.center();
+    p.text(c - egui::vec2(0.0, 18.0), Align2::CENTER_CENTER, "OPENRAZER DAEMON OFFLINE", FontId::monospace(26.0), RED);
+    p.text(
+        c + egui::vec2(0.0, 14.0),
+        Align2::CENTER_CENTER,
+        "lighting needs the daemon: systemctl --user restart openrazer-daemon, then RESCAN",
+        FontId::monospace(13.0),
+        Color32::WHITE,
+    );
 }
 
 fn turbo_toggle(ui: &mut egui::Ui, e: &mut Editor) {

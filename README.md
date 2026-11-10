@@ -14,7 +14,6 @@ My lawyers say I have to write this so:
 ## Contents
 
 - [What is it](#what-is-it)
-- [Current status](#current-status)
 - [Install](#install)
 - [First use](#first-use)
   - [In the GUI](#in-the-gui)

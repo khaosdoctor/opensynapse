@@ -102,6 +102,8 @@ const PROFILE: &[(&str, u8)] = &[("next", 0x01), ("prev", 0x02), ("next-wrap", 0
 /// HID consumer page usages (0x0C).
 const MEDIA: &[(&str, u16)] = &[
     ("playpause", 0xcd),
+    ("play", 0xb0),
+    ("pause", 0xb1),
     ("next", 0xb5),
     ("prev", 0xb6),
     ("stop", 0xb7),

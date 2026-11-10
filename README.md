@@ -150,9 +150,16 @@ Every package installs shell completions for bash, zsh and fish, which also comp
 
 ## Adding your mouse
 
-**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single JSONC file (JSON with comments) with its USB ids and the list of buttons. 
+OpenSynapse works by reading a JSON file from `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` (JSON with comments) that says what your mouse is: its USB ids and the list of buttons. A few of these come built into the app, and if yours isn't one of them you can just write your own and it works right away, you don't need to wait for me or upload anything.
 
-I made `opensynapse init` to write most of it for you to `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` and making the process simpler.
+You don't even have to write it by hand. Run `opensynapse init` with the mouse plugged in, it asks the mouse what it has (read-only, it doesn't change anything) and writes most of the file for you. Fix the `// TODO` lines, mostly naming the buttons, and that's it, the GUI and the CLI pick it up on their own.
+
+```sh
+opensynapse init
+opensynapse list   # your mouse should be here now
+```
+
+**I need your help here though.** I only have one Razer mouse, so sending your file back would help a lot, because then the next person with the same mouse doesn't have to do any of this. `opensynapse protocol send` opens a GitHub issue with it for you, or you can open a PR.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the step by step, and a prompt you can paste into Claude Code (or whatever agent you use) so it does it for you.
 

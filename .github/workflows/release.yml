@@ -1,0 +1,164 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  # republish an existing tag, using the PKGBUILDs and workflow from main
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "tag to publish, like v0.1.1"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  # Builds a tar.gz, .deb and AppImage per architecture and attaches them to
+  # the GitHub release. Ubuntu 22.04 has an old glibc, so the binaries also
+  # run on older distros; they only link glibc and libgcc, the GUI loads
+  # wayland, X11 and GL at runtime.
+  build:
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: x86_64
+            deb: amd64
+            appimagetool: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+          - runner: ubuntu-22.04-arm
+            arch: aarch64
+            deb: arm64
+            appimagetool: f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+
+      # A tag that doesn't match Cargo.toml would publish a package whose
+      # binary reports a different version, so stop before releasing anything.
+      - name: check tag matches Cargo.toml
+        run: |
+          crate=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "${TAG#v}" != "$crate" ]; then
+            echo "tag $TAG does not match Cargo.toml version $crate"
+            exit 1
+          fi
+
+      - name: build
+        run: |
+          command -v cargo || curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo build --locked --release --features gui
+
+      - name: tar.gz
+        run: |
+          d="opensynapse-${TAG#v}"
+          mkdir -p "$d/devices"
+          cp target/release/opensynapse target/release/opensynapse-gui README.md PROTOCOL.md LICENSE "$d/"
+          cp -r udev assets "$d/"
+          cp -r devices/protocols "$d/devices/"
+          tar czf "$d-${{ matrix.arch }}.tar.gz" "$d"
+
+      - name: deb
+        run: |
+          r=deb
+          install -Dm755 -t "$r/usr/bin" target/release/opensynapse target/release/opensynapse-gui
+          install -Dm644 udev/70-opensynapse.rules "$r/usr/lib/udev/rules.d/70-opensynapse.rules"
+          install -Dm644 assets/opensynapse.desktop "$r/usr/share/applications/opensynapse.desktop"
+          install -Dm644 assets/icon.svg "$r/usr/share/icons/hicolor/scalable/apps/opensynapse.svg"
+          install -Dm644 assets/icon.png "$r/usr/share/icons/hicolor/256x256/apps/opensynapse.png"
+          install -Dm644 -t "$r/usr/share/doc/opensynapse" README.md PROTOCOL.md LICENSE
+          install -Dm644 -t "$r/usr/share/doc/opensynapse/protocols" devices/protocols/*.md
+          mkdir -p "$r/DEBIAN"
+          printf '%s\n' \
+            "Package: opensynapse" \
+            "Version: ${TAG#v}" \
+            "Architecture: ${{ matrix.deb }}" \
+            "Maintainer: Lucas Santos <hello@lsantos.dev>" \
+            "Depends: libc6 (>= 2.35), libgcc-s1" \
+            "Recommends: libxkbcommon0, libwayland-client0, libegl1, xdg-desktop-portal" \
+            "Section: utils" \
+            "Priority: optional" \
+            "Homepage: https://github.com/khaosdoctor/opensynapse" \
+            "Description: Remap buttons, set DPI and lighting on Razer mice from Linux" \
+            > "$r/DEBIAN/control"
+          dpkg-deb --root-owner-group --build "$r" "opensynapse_${TAG#v}_${{ matrix.deb }}.deb"
+
+      # The AppImage runs the GUI. The udev rule can't come with it, so users
+      # install that by hand like a cargo install.
+      - name: AppImage
+        run: |
+          a=AppDir
+          install -Dm755 -t "$a/usr/bin" target/release/opensynapse target/release/opensynapse-gui
+          cp assets/opensynapse.desktop assets/icon.svg "$a/"
+          mv "$a/icon.svg" "$a/opensynapse.svg"
+          ln -s usr/bin/opensynapse-gui "$a/AppRun"
+          curl -sSfLo appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-${{ matrix.arch }}.AppImage
+          echo "${{ matrix.appimagetool }}  appimagetool" | sha256sum -c
+          chmod +x appimagetool
+          ARCH=${{ matrix.arch }} APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool "$a" "opensynapse-${TAG#v}-${{ matrix.arch }}.AppImage"
+
+      - name: attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # both architectures race to create the release, the loser just uploads
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --generate-notes || true
+          gh release upload "$TAG" --clobber opensynapse-*.tar.gz opensynapse_*.deb opensynapse-*.AppImage
+
+  aur:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      # one package failing (say, nothing changed on a re-run) shouldn't cancel the others
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: opensynapse
+            sums: true
+          - pkg: opensynapse-bin
+            sums: true
+          # builds from git, so there is nothing to checksum
+          - pkg: opensynapse-git
+            sums: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - run: sed -i "s/^pkgver=.*/pkgver=${TAG#v}/" contrib/aur/${{ matrix.pkg }}/PKGBUILD
+
+      # Job-level `if:` can't read the secrets context, so check for AUR_KEY
+      # here and skip the deploy step until the secret exists.
+      - id: check-secret
+        env:
+          AUR_KEY: ${{ secrets.AUR_KEY }}
+        run: |
+          if [ -n "$AUR_KEY" ]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Regenerates sha256sums (updpkgsums) and .SRCINFO in its own container.
+      - if: steps.check-secret.outputs.has_key == 'true'
+        uses: KSXGitHub/github-actions-deploy-aur@084b0d9b15415bf9cdb65d44dad1efe37a354050 # v4.2.0
+        with:
+          pkgname: ${{ matrix.pkg }}
+          pkgbuild: ./contrib/aur/${{ matrix.pkg }}/PKGBUILD
+          updpkgsums: ${{ matrix.sums }}
+          commit_username: Lucas Santos
+          commit_email: hello@lsantos.dev
+          ssh_private_key: ${{ secrets.AUR_KEY }}
+          commit_message: "Update to ${{ env.TAG }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519

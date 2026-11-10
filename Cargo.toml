@@ -1,6 +1,6 @@
 [package]
 name = "opensynapse"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 description = "Remap buttons, set DPI and lighting on Razer mice from Linux"
 license = "GPL-2.0-or-later"

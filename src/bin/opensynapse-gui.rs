@@ -50,8 +50,8 @@ const SPECIAL_KEYS: &[(&str, usize, &[&str])] = &[
         "NUMPAD",
         4,
         &[
-            "numlock", "kpslash", "kpasterisk", "kpminus", "kp7", "kp8", "kp9", "kpplus", "kp4", "kp5", "kp6", "kpenter",
-            "kp1", "kp2", "kp3", "kpdot", "kp0",
+            "numlock", "numslash", "numasterisk", "numminus", "num7", "num8", "num9", "numplus", "num4", "num5", "num6",
+            "numenter", "num1", "num2", "num3", "numdot", "num0",
         ],
     ),
     // a modifier on its own, like holding Shift (untested on hardware)

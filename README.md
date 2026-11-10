@@ -5,7 +5,7 @@
 > Remap buttons, set DPI and lighting on Razer mice from Linux.
 
 > [!WARNING]
-> **This is a work in progress.** It works on my mouse and that's about it for now. Expect things to change, break and get renamed.
+> **This is a work in progress.** I tested it on my mouse only
 
 My lawyers say I have to write this so:
 
@@ -105,10 +105,12 @@ opensynapse protocol send                # share it as a GitHub issue
 
 ## Adding your mouse
 
-**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single JSONC file (JSON with comments) with its USB ids and the list of buttons. `opensynapse init` writes most of it for you to `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` by asking your mouse, without changing anything on it, and the finished ones go in [`devices/`](devices/).
+**I need your help here.** I only have one Razer mouse, so if you have another one, please add it. Every mouse is a single JSONC file (JSON with comments) with its USB ids and the list of buttons. 
 
-[CONTRIBUTING.md](CONTRIBUTING.md) has the step by step, and a prompt you can paste into Claude Code (or whatever agent you use) to do the whole thing with it, which is how I did the Naga.
+I made `opensynapse init` to write most of it for you to `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` and making the process simpler.
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the step by step, and a prompt you can paste into Claude Code (or whatever agent you use) so it does it for you.
 
 ## AI usage
 
-I used AI a lot on this, including for the reverse engineering part, and I checked everything against the real mouse, but there is probably something I missed. If you find it, open an [issue](https://github.com/khaosdoctor/opensynapse/issues).
+I used AI a lot on this, especially for the reverse engineering part, and I checked everything against the real mouse, but there is probably something I missed. If you find it, open an [issue](https://github.com/khaosdoctor/opensynapse/issues).

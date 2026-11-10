@@ -24,6 +24,9 @@ class Opensynapse < Formula
     (share/"applications").install "assets/opensynapse.desktop"
     (share/"icons/hicolor/scalable/apps").install "assets/icon.svg" => "opensynapse.svg"
     doc.install "README.md", "PROTOCOL.md"
+    bash_completion.install "completions/opensynapse.bash" => "opensynapse"
+    zsh_completion.install "completions/_opensynapse"
+    fish_completion.install "completions/opensynapse.fish"
   end
 
   def caveats

@@ -1,0 +1,90 @@
+#compdef opensynapse
+# zsh completion for opensynapse
+# Button names and lighting zones come from the connected mouse (read-only).
+
+_opensynapse_buttons() {
+    local -a buttons
+    buttons=(${=$(opensynapse list 2>/dev/null | sed -n 's/^ *buttons: //p')})
+    _describe -t buttons button buttons
+}
+
+_opensynapse_zones() {
+    local -a zones
+    zones=(all ${(f)"$(opensynapse rgb 2>/dev/null | awk '!/^via/ { print $1 }')"})
+    _describe -t zones zone zones
+}
+
+_opensynapse_actions() {
+    local -a full
+    full=(
+        disabled hypershift
+        mouse:left mouse:right mouse:middle mouse:back mouse:forward mouse:wheelup mouse:wheeldown
+        media:playpause media:play media:pause media:next media:prev media:stop media:mute
+        media:volumeup media:volumedown
+        dpi:up dpi:down dpi:up-wrap dpi:down-wrap
+        profile:next profile:prev profile:next-wrap profile:prev-wrap
+    )
+    # prefixes that need more typed after them, so no space
+    compadd -S '' -- key: turbo: keyturbo: raw:
+    compadd -- $full
+}
+
+_opensynapse() {
+    local -a commands
+    commands=(
+        'init:start a device file for a mouse that has none (read-only)'
+        'list:connected mice and their buttons'
+        'dump:every button'"'"'s action'
+        'get:one button'"'"'s action'
+        'set:remap a button'
+        'dpi:show or set DPI'
+        'stages:show or set DPI stages'
+        'watch:print buttons as you press them'
+        'rgb:lighting zones (needs OpenRazer)'
+        'export:save a profile to JSON'
+        'import:write a saved profile to the mouse'
+        'protocol:generate a protocol file for this mouse'
+        'help:show the help'
+    )
+
+    local state
+    _arguments -C \
+        '--profile[profile slot]:profile:(0 1 2 3 4 5)' \
+        '--layer[button layer]:layer:(normal hypershift)' \
+        '--device[mouse PID, like 008d]:pid:' \
+        '1:command:->command' \
+        '*::argument:->args'
+
+    case $state in
+        command) _describe -t commands command commands ;;
+        args)
+            if [[ $PREFIX == -* ]]; then
+                compadd -- --profile --layer --device --active --force --dry-run --yes
+                return
+            fi
+            case $words[1] in
+                get) (( CURRENT == 2 )) && _opensynapse_buttons ;;
+                set)
+                    case $CURRENT in
+                        2) _opensynapse_buttons ;;
+                        3) _opensynapse_actions ;;
+                    esac
+                    ;;
+                rgb)
+                    case $CURRENT in
+                        2) _opensynapse_zones ;;
+                        3) compadd -- off static breath spectrum wave reactive brightness ;;
+                    esac
+                    ;;
+                export | import) _files -g '*.json' ;;
+                init) _files -g '*.jsonc' ;;
+                protocol)
+                    (( CURRENT == 2 )) && compadd -- send
+                    _files -g '*.md'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_opensynapse "$@"

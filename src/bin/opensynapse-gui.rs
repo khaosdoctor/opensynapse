@@ -1267,11 +1267,19 @@ impl App {
     /// Draws a mouse body and the positioned buttons on it. Returns a clicked button.
     fn mouse_view(&self, ui: &mut egui::Ui, buttons: &[Button], placed: &[usize], lit: &[bool], max_height: f32) -> Option<usize> {
         // 16:10 canvas so `at` percentages mean the same thing at any window size
+        // center what's drawn (body plus side plates), not the canvas: a thumb grid on one side
+        // would otherwise push the whole drawing off to that side. lo..hi is that span in percent
+        // of the canvas (a marker is 52 wide plus 12 of plate padding on a 736-wide canvas).
+        let half_marker = (26.0 + 12.0) / 736.0 * 100.0;
+        let xs = placed.iter().filter_map(|&i| buttons[i].at.map(|[x, _]| x));
+        let (lo, hi) = xs.fold((30.0f32, 70.0f32), |(lo, hi), x| (lo.min(x - half_marker), hi.max(x + half_marker)));
         let fit_height = max_height.max(200.0) / USED_HEIGHT;
-        let w = ui.available_width().min(fit_height * 1.6).min(MAX_VIEW_WIDTH);
+        // the canvas may be wider than the panel, only the drawn span has to fit
+        let w = (ui.available_width() * 100.0 / (hi - lo)).min(fit_height * 1.6).min(MAX_VIEW_WIDTH);
         let k = w / (460.0 * 1.6); // everything below scales with the canvas
         let (full, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), w / 1.6 * USED_HEIGHT), egui::Sense::hover());
-        let rect = egui::Rect::from_min_size(egui::pos2(full.center().x - w / 2.0, full.top()), egui::vec2(w, w / 1.6));
+        let left = full.center().x - (lo + hi) / 2.0 / 100.0 * w;
+        let rect = egui::Rect::from_min_size(egui::pos2(left, full.top()), egui::vec2(w, w / 1.6));
         let at = |x: f32, y: f32| rect.min + egui::vec2(rect.width() * x / 100.0, rect.height() * y / 100.0);
         let p = ui.painter_at(rect);
         // yellow outline while editing the Hypershift (or any non-default) layer

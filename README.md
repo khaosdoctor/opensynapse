@@ -48,6 +48,20 @@ yay -S opensynapse-bin  # same release, prebuilt
 yay -S opensynapse-git  # builds the latest main
 ```
 
+On Debian and Ubuntu, add the apt repository. The package also installs the udev rule:
+
+```sh
+curl -fsSL https://oss.lsantos.dev/opensynapse/apt/public.key | sudo gpg --dearmor -o /usr/share/keyrings/opensynapse.gpg
+echo "deb [signed-by=/usr/share/keyrings/opensynapse.gpg arch=$(dpkg --print-architecture)] https://oss.lsantos.dev/opensynapse/apt stable main" | sudo tee /etc/apt/sources.list.d/opensynapse.list
+sudo apt update && sudo apt install opensynapse
+```
+
+With Homebrew on Linux (then install the udev rule as `brew` tells you):
+
+```sh
+brew install khaosdoctor/tap/opensynapse
+```
+
 Every [release](https://github.com/khaosdoctor/opensynapse/releases) also has a `.deb`, an AppImage (GUI only) and a tar.gz with both binaries, for x86_64 and arm64. The `.deb` installs the udev rule; with the other two, install it as shown at the end of this section.
 
 To build it yourself, you need [Rust](https://rustup.rs) and a Linux box. Then:

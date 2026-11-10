@@ -8,8 +8,10 @@ use std::{env, fs, io, path::PathBuf};
 
 /// Built into the binary as (file name without .jsonc, contents).
 /// New devices: add a JSONC file and a line here.
-const BUILTIN: &[(&str, &str)] =
-    &[("razer-naga-left-handed-2020", include_str!("../devices/razer-naga-left-handed-2020.jsonc"))];
+// one line per device, tools/device_from_issue.py adds new ones before the closing `];`
+const BUILTIN: &[(&str, &str)] = &[
+    ("razer-naga-left-handed-2020", include_str!("../devices/razer-naga-left-handed-2020.jsonc")),
+];
 
 /// Device files are JSONC: cuts `//` comments outside strings, line by line
 /// so serde's line numbers still match. Block comments aren't supported.
@@ -244,5 +246,20 @@ impl Mouse {
             return Err(io::Error::other(format!("DPI must be 100..={}", self.def.dpi_max)));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Catches a broken device file before it's compiled into a release,
+    /// including the ones tools/device_from_issue.py adds from issues.
+    #[test]
+    fn builtin_device_files_parse() {
+        for (file, src) in BUILTIN {
+            let def: DeviceDef = serde_json::from_str(&strip_comments(src)).unwrap_or_else(|e| panic!("{file}.jsonc: {e}"));
+            assert!(!def.buttons.is_empty(), "{file}.jsonc has no buttons");
+        }
     }
 }

@@ -1,0 +1,47 @@
+name: add-device
+
+# Label an issue sent with `opensynapse protocol send` with `add-device` and this
+# opens a PR that adds the mouse. Only people with triage access can add labels,
+# so nobody else can start it, and the PR still needs a review to merge.
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  pr:
+    if: github.event.label.name == 'add-device'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # the issue body is untrusted, it only goes through the script as data
+      - id: files
+        run: python3 -I tools/device_from_issue.py "$GITHUB_EVENT_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: check the device file parses
+        run: cargo test --locked
+
+      - name: open the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLUG: ${{ steps.files.outputs.slug }}
+          NAME: ${{ steps.files.outputs.name }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          branch="device/$SLUG"
+          git switch -c "$branch"
+          git add "devices/$SLUG.jsonc" "devices/protocols/$SLUG.md" src/device.rs
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
+            commit -qm "feat(devices): add $NAME"
+          git push -f origin "$branch"
+          url=$(gh pr create --head "$branch" --title "feat(devices): add $NAME" \
+            --body "Adds $NAME from #$ISSUE. Closes #$ISSUE" 2>/dev/null \
+            || gh pr view "$branch" --json url -q .url)
+          gh issue comment "$ISSUE" --body "Thanks! Opened $url to add it, it goes in the next release once it's merged."

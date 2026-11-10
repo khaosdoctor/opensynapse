@@ -19,12 +19,14 @@ This is the reverse engineered version of synapse with how the mouse stores its 
 
 Right now you can:
 
-- Remap any button to a key (with modifiers), a mouse button, a media key, DPI up/down, Hypershift or nothing at all, on both the normal and the Hypershift layer. Keys and mouse buttons can also be on turbo, so they repeat while you hold them
+- Remap any button to a key (with modifiers), a mouse button, a media key, DPI up/down, Hypershift or disable it.
+- Normal and the Hypershift layers.
+- Keys and mouse buttons can also be on turbo, so they repeat while you hold them
 - Change DPI and the DPI stages
 - Export and import profiles as JSON
 - Go back to how the mouse was. The first time the GUI opens a mouse it saves every profile and the lighting to `~/.config/opensynapse/devices/<vid-pid>/` as `*.original.json`, ***RESET*** puts that back and ***SET DEFAULT*** makes what's on the mouse now the new original
-- See which button you're pressing, live, in the GUI
-- Change the lighting and brightness of zones. This one goes through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports. The GUI needs the OpenRazer daemon running and shows ***OPENRAZER ONLINE*** or ***OFFLINE*** on the lighting tab; `opensynapse rgb` also works with only the driver. The colors you see come from the mouse itself, so they match what it shows
+- See which button you're pressing, live if you have the GUI, which becomes some sort of tester
+- Change the lighting and brightness of zones, but this goes through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports.
 
 In the GUI, every change goes to a queue until you hit ***WRITE TO DEVICE*** (lighting also has ***APPLY NOW***). CLI commands write right away.
 

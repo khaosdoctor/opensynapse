@@ -48,7 +48,9 @@ yay -S opensynapse-bin  # same release, prebuilt
 yay -S opensynapse-git  # builds the latest main
 ```
 
-Anywhere else, you need [Rust](https://rustup.rs) and a Linux box. Then:
+Every [release](https://github.com/khaosdoctor/opensynapse/releases) also has a `.deb`, an AppImage (GUI only) and a tar.gz with both binaries, for x86_64 and arm64. The `.deb` installs the udev rule; with the other two, install it as shown at the end of this section.
+
+To build it yourself, you need [Rust](https://rustup.rs) and a Linux box. Then:
 
 ```sh
 git clone https://github.com/khaosdoctor/opensynapse && cd opensynapse

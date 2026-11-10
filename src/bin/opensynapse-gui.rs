@@ -46,6 +46,46 @@ const SPECIAL_KEYS: &[(&str, usize, &[&str])] = &[
     ("EDIT", 3, &["esc", "tab", "enter", "backspace", "space", "capslock", "insert", "delete", "menu"]),
     ("NAV", 2, &["home", "end", "pageup", "pagedown", "up", "down", "left", "right"]),
     ("SYSTEM", 1, &["sysrq", "scrolllock", "pause"]),
+    (
+        "NUMPAD",
+        4,
+        &[
+            "numlock", "kpslash", "kpasterisk", "kpminus", "kp7", "kp8", "kp9", "kpplus", "kp4", "kp5", "kp6", "kpenter",
+            "kp1", "kp2", "kp3", "kpdot", "kp0",
+        ],
+    ),
+    // a modifier on its own, like holding Shift (untested on hardware)
+    (
+        "MODIFIER",
+        2,
+        &["leftctrl", "rightctrl", "leftshift", "rightshift", "leftalt", "rightalt", "leftmeta", "rightmeta"],
+    ),
+];
+
+/// DPI tab. Stage jumps come from razerqdhid and are untested on the Naga.
+const DPI_ACTIONS: &[(&str, Action)] = &[
+    ("DPI UP", Action::Dpi(1)),
+    ("DPI DOWN", Action::Dpi(2)),
+    ("UP (WRAP)", Action::Dpi(6)),
+    ("DOWN (WRAP)", Action::Dpi(7)),
+    ("STAGE 1", Action::DpiStage(1)),
+    ("STAGE 2", Action::DpiStage(2)),
+    ("STAGE 3", Action::DpiStage(3)),
+    ("STAGE 4", Action::DpiStage(4)),
+    ("STAGE 5", Action::DpiStage(5)),
+];
+
+/// Profile tab. Jumping to a profile comes from razerqdhid and is untested on the Naga.
+const PROFILE_ACTIONS: &[(&str, Action)] = &[
+    ("NEXT", Action::Profile(1)),
+    ("PREVIOUS", Action::Profile(2)),
+    ("NEXT (WRAP)", Action::Profile(4)),
+    ("PREVIOUS (WRAP)", Action::Profile(5)),
+    ("P1", Action::ProfileSet(1)),
+    ("P2", Action::ProfileSet(2)),
+    ("P3", Action::ProfileSet(3)),
+    ("P4", Action::ProfileSet(4)),
+    ("P5", Action::ProfileSet(5)),
 ];
 
 /// Media tab. Mute and volume are keyboard keys (verified on the Naga), the
@@ -68,16 +108,18 @@ enum Kind {
     Mouse,
     Media,
     Dpi,
+    Profile,
     Hypershift,
     Disabled,
     Raw,
 }
 
-const KINDS: [(Kind, &str); 7] = [
+const KINDS: [(Kind, &str); 8] = [
     (Kind::Key, "KEY"),
     (Kind::Mouse, "MOUSE"),
     (Kind::Media, "MEDIA"),
     (Kind::Dpi, "DPI"),
+    (Kind::Profile, "PROFILE"),
     (Kind::Hypershift, "HYPERSHIFT"),
     (Kind::Raw, "RAW"),
     (Kind::Disabled, "OFF"),
@@ -92,7 +134,8 @@ struct Editor {
     turbo: bool,
     rate: u16,
     media: Action,
-    dpi_up: bool,
+    dpi: Action,
+    profile: Action,
     raw: String,
 }
 
@@ -106,7 +149,8 @@ impl Editor {
             turbo: false,
             rate: 20,
             media: MEDIA_KEYS[0].1.clone(),
-            dpi_up: true,
+            dpi: DPI_ACTIONS[0].1.clone(),
+            profile: PROFILE_ACTIONS[0].1.clone(),
             raw: String::new(),
         };
         if MEDIA_KEYS.iter().any(|(_, m)| m == a) {
@@ -121,7 +165,8 @@ impl Editor {
             }
             Action::Mouse(b) => (e.kind, e.mouse) = (Kind::Mouse, *b),
             Action::MouseTurbo { button, .. } => (e.kind, e.mouse) = (Kind::Mouse, *button),
-            Action::Dpi(n) => (e.kind, e.dpi_up) = (Kind::Dpi, *n == 1),
+            Action::Dpi(_) | Action::DpiStage(_) => (e.kind, e.dpi) = (Kind::Dpi, a.clone()),
+            Action::Profile(_) | Action::ProfileSet(_) => (e.kind, e.profile) = (Kind::Profile, a.clone()),
             Action::Hypershift => e.kind = Kind::Hypershift,
             Action::Disabled => e.kind = Kind::Disabled,
             _ => e.raw = a.encode().iter().map(|b| format!("{b:02x}")).collect(),
@@ -149,7 +194,8 @@ impl Editor {
             Kind::Mouse if self.turbo => Action::MouseTurbo { button: self.mouse, interval: self.rate },
             Kind::Mouse => Action::Mouse(self.mouse),
             Kind::Media => self.media.clone(),
-            Kind::Dpi => Action::Dpi(if self.dpi_up { 1 } else { 2 }),
+            Kind::Dpi => self.dpi.clone(),
+            Kind::Profile => self.profile.clone(),
             Kind::Hypershift => Action::Hypershift,
             Kind::Disabled => Action::Disabled,
             Kind::Raw => format!("raw:{}", self.raw.trim()).parse()?,
@@ -593,6 +639,8 @@ fn short(a: &Action) -> String {
             5 => "FWD",
             9 => "W▲",
             10 => "W▼",
+            0x68 => "W◄",
+            0x69 => "W►",
             _ => "M?",
         }
         .into(),
@@ -1612,19 +1660,19 @@ impl App {
         ui.horizontal_wrapped(|ui| match e.kind {
             Kind::Key => {} // laid out as columns below
             Kind::Mouse => {
-                for &(n, v) in &opensynapse::action::MOUSE[..7] {
-                    if chip(ui, &n.to_uppercase(), e.mouse == v).clicked() {
+                for &(n, v) in opensynapse::action::MOUSE {
+                    // wheelleft/right is what the wheel tilt sends (horizontal scroll)
+                    let label = match n {
+                        "wheelleft" => "TILT LEFT".to_string(),
+                        "wheelright" => "TILT RIGHT".to_string(),
+                        _ => n.to_uppercase(),
+                    };
+                    if chip(ui, &label, e.mouse == v).clicked() {
                         e.mouse = v;
                     }
                 }
             }
-            Kind::Media => {
-                for (label, a) in MEDIA_KEYS {
-                    if chip(ui, label, e.media == *a).clicked() {
-                        e.media = a.clone();
-                    }
-                }
-            }
+            Kind::Media => pick(ui, MEDIA_KEYS, &mut e.media),
             Kind::Hypershift => {
                 ui.label(
                     RichText::new(
@@ -1634,14 +1682,8 @@ impl App {
                     .color(DIM),
                 );
             }
-            Kind::Dpi => {
-                if chip(ui, "DPI UP", e.dpi_up).clicked() {
-                    e.dpi_up = true;
-                }
-                if chip(ui, "DPI DOWN", !e.dpi_up).clicked() {
-                    e.dpi_up = false;
-                }
-            }
+            Kind::Dpi => pick(ui, DPI_ACTIONS, &mut e.dpi),
+            Kind::Profile => pick(ui, PROFILE_ACTIONS, &mut e.profile),
             Kind::Disabled => {
                 ui.label(RichText::new("button does nothing").color(DIM));
             }
@@ -1725,6 +1767,15 @@ fn offline_overlay(ui: &egui::Ui, area: egui::Rect) {
         FontId::monospace(13.0),
         Color32::WHITE,
     );
+}
+
+/// One chip per action in the list, the current one highlighted.
+fn pick(ui: &mut egui::Ui, list: &[(&str, Action)], current: &mut Action) {
+    for (label, a) in list {
+        if chip(ui, label, current == a).clicked() {
+            *current = a.clone();
+        }
+    }
 }
 
 fn turbo_toggle(ui: &mut egui::Ui, e: &mut Editor) {

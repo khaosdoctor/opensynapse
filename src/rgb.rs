@@ -127,13 +127,34 @@ fn call<B: Serialize + DynamicType>(conn: &Connection, path: &str, zone: &str, v
     conn.call_method(Some("org.razer"), path, Some(iface.as_str()), format!("{verb}{cap}{name}").as_str(), body).ok()
 }
 
+/// Whether the OpenRazer daemon is running and knows this mouse. Unlike any
+/// call to the daemon itself, this doesn't start it through D-Bus activation.
+pub fn daemon_sees(serial: &str) -> bool {
+    let Ok(conn) = Connection::session() else { return false };
+    let dbus = (Some("org.freedesktop.DBus"), "/org/freedesktop/DBus", Some("org.freedesktop.DBus"));
+    let running = conn
+        .call_method(dbus.0, dbus.1, dbus.2, "NameHasOwner", &("org.razer",))
+        .ok()
+        .and_then(|m| m.body().deserialize::<bool>().ok())
+        .unwrap_or(false);
+    if !running {
+        return false;
+    }
+    conn.call_method(Some("org.razer"), "/org/razer", Some("razer.devices"), "getDevices", &())
+        .ok()
+        .and_then(|m| m.body().deserialize::<Vec<String>>().ok())
+        .is_some_and(|devices| devices.iter().any(|d| d == serial))
+}
+
 fn connect_daemon(serial: &str, zone: &str) -> Option<(Connection, String)> {
-    if serial.is_empty() {
+    // checked first so we never start a stopped daemon through D-Bus activation,
+    // which would make the GUI's online/offline badge flip back on its own
+    if serial.is_empty() || !daemon_sees(serial) {
         return None;
     }
     let conn = Connection::session().ok()?;
     let path = format!("/org/razer/device/{serial}");
-    // a read that also starts the daemon if it's only D-Bus activatable
+    // the daemon can know the mouse but not this zone
     call(&conn, &path, zone, "get", "Brightness", &())?;
     Some((conn, path))
 }

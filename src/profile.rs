@@ -91,17 +91,29 @@ pub fn default_path(mouse: &Mouse, profile: u8) -> Option<PathBuf> {
     crate::device::model_dir(mouse.def.vid, mouse.def.pid).map(|d| d.join(name))
 }
 
-/// Creates the device's profile folder and saves any profile that has no file
-/// yet, so the first run doubles as a backup of what's on the mouse.
+/// <serial>-<profile>.original.json next to the default path: what the
+/// profile looked like the first time opensynapse saw the mouse. RESET puts
+/// it back, SET DEFAULT replaces it.
+pub fn original_path(mouse: &Mouse, profile: u8) -> Option<PathBuf> {
+    default_path(mouse, profile).map(|p| p.with_extension("original.json"))
+}
+
+/// Saves an original snapshot of every profile that doesn't have one yet,
+/// so the first run doubles as a backup of what's on the mouse.
 /// Returns how many files were created.
 pub fn ensure_defaults(mouse: &Mouse) -> io::Result<usize> {
     let mut created = 0;
     for &p in &mouse.def.profiles {
-        let Some(path) = default_path(mouse, p) else { continue };
-        if path.exists() {
+        let (Some(original), Some(old)) = (original_path(mouse, p), default_path(mouse, p)) else { continue };
+        if original.exists() {
             continue;
         }
-        export(mouse, p, &path)?;
+        // before snapshots existed the first-run backup went to the default path, keep that one
+        if old.exists() {
+            fs::copy(&old, &original)?;
+            continue;
+        }
+        export(mouse, p, &original)?;
         created += 1;
     }
     Ok(created)

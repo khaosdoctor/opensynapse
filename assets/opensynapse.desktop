@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=opensynapse
+Name=OpenSynapse
 Comment=Remap buttons, DPI and lighting on Razer mice
 Exec=opensynapse-gui
 Icon=opensynapse

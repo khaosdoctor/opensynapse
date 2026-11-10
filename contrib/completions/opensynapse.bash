@@ -11,7 +11,7 @@ _opensynapse_zones() {
 }
 
 _opensynapse_actions="key: turbo: keyturbo: raw: disabled hypershift
-    mouse:left mouse:right mouse:middle mouse:back mouse:forward mouse:wheelup mouse:wheeldown
+    mouse:left mouse:right mouse:middle mouse:back mouse:forward mouse:wheelup mouse:wheeldown mouse:wheelleft mouse:wheelright
     media:playpause media:play media:pause media:next media:prev media:stop media:mute media:volumeup media:volumedown
     dpi:up dpi:down dpi:up-wrap dpi:down-wrap profile:next profile:prev profile:next-wrap profile:prev-wrap"
 

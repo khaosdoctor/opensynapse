@@ -34,7 +34,7 @@ commands:
 
 actions:
   key:[mods+]name   e.g. key:ctrl+1, key:f13, key:shift+a (mods: ctrl shift alt meta rctrl ...)
-  mouse:name        left right middle back forward wheelup wheeldown
+  mouse:name        left right middle back forward wheelup wheeldown wheelleft wheelright
   turbo:button:ms   repeat a mouse button every ms milliseconds
   keyturbo:[mods+]key:ms  repeat a key every ms milliseconds
   media:name        playpause play pause next prev stop mute volumeup volumedown

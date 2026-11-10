@@ -66,7 +66,7 @@ complete -c opensynapse -l yes -d 'skip the confirmation'
 complete -c opensynapse -n '__opensynapse_at get 0' -a '(__opensynapse_buttons)'
 complete -c opensynapse -n '__opensynapse_at set 0' -a '(__opensynapse_buttons)'
 complete -c opensynapse -n '__opensynapse_at set 1' -a 'key: turbo: keyturbo: raw: disabled hypershift
-    mouse:left mouse:right mouse:middle mouse:back mouse:forward mouse:wheelup mouse:wheeldown
+    mouse:left mouse:right mouse:middle mouse:back mouse:forward mouse:wheelup mouse:wheeldown mouse:wheelleft mouse:wheelright
     media:playpause media:play media:pause media:next media:prev media:stop media:mute media:volumeup media:volumedown
     dpi:up dpi:down dpi:up-wrap dpi:down-wrap profile:next profile:prev profile:next-wrap profile:prev-wrap'
 complete -c opensynapse -n '__opensynapse_at rgb 0' -a '(__opensynapse_zones)'

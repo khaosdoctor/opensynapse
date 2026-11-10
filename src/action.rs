@@ -120,6 +120,24 @@ pub fn key_name(usage: u8) -> Option<String> {
         0x27 => "0",
         0x3a..=0x45 => return Some(format!("f{}", usage - 0x39)),
         0x68..=0x73 => return Some(format!("f{}", usage - 0x68 + 13)),
+        0x59..=0x61 => return Some(format!("kp{}", usage - 0x58)),
+        0x62 => "kp0",
+        0x53 => "numlock",
+        0x54 => "kpslash",
+        0x55 => "kpasterisk",
+        0x56 => "kpminus",
+        0x57 => "kpplus",
+        0x58 => "kpenter",
+        0x63 => "kpdot",
+        // modifiers as plain keys, so a button can just hold Shift (untested on hardware)
+        0xe0 => "leftctrl",
+        0xe1 => "leftshift",
+        0xe2 => "leftalt",
+        0xe3 => "leftmeta",
+        0xe4 => "rightctrl",
+        0xe5 => "rightshift",
+        0xe6 => "rightalt",
+        0xe7 => "rightmeta",
         0x28 => "enter",
         0x29 => "esc",
         0x2a => "backspace",
@@ -326,5 +344,8 @@ mod tests {
         assert_eq!(key_usage("["), Some(0x2f));
         assert_eq!(key_usage("F13"), Some(0x68));
         assert_eq!(key_usage("volumeup"), Some(0x80));
+        assert_eq!(key_usage("kp7"), Some(0x5f));
+        assert_eq!(key_usage("kp0"), Some(0x62));
+        assert_eq!(key_usage("leftshift"), Some(0xe1));
     }
 }

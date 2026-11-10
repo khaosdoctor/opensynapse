@@ -5,15 +5,15 @@ use std::str::FromStr;
 
 /// Every action is `[type, length of the data, data...]`. Types and payloads
 /// marked "razerqdhid" come from geezmolycos/razerqdhid (Basilisk V3) and
-/// haven't been seen working on the Naga yet.
+/// haven't been seen working on the Naga yet; the rest were pressed and checked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     Disabled,
     Mouse(u8),
     Key { mods: u8, usage: u8 },
-    /// Repeats a key every `interval` ms (razerqdhid).
+    /// Repeats a key every `interval` ms.
     KeyTurbo { mods: u8, usage: u8, interval: u16 },
-    /// HID consumer page usage: play/pause, volume... (razerqdhid)
+    /// HID consumer page usage: play/pause, next, previous...
     Media(u16),
     /// DPI step: 1 up, 2 down, 6 up with wrap, 7 down with wrap
     Dpi(u8),
@@ -25,7 +25,7 @@ pub enum Action {
     ProfileSet(u8),
     /// Repeats a mouse button every `interval` ms.
     MouseTurbo { button: u8, interval: u16 },
-    /// Holding this button switches to the Hypershift layer (razerqdhid)
+    /// Holding this button switches to the Hypershift layer
     Hypershift,
     /// Anything not decoded yet, kept byte-exact so it can be written back.
     Raw(Vec<u8>),

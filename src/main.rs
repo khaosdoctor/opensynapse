@@ -36,11 +36,11 @@ actions:
   key:[mods+]name   e.g. key:ctrl+1, key:f13, key:shift+a (mods: ctrl shift alt meta rctrl ...)
   mouse:name        left right middle back forward wheelup wheeldown
   turbo:button:ms   repeat a mouse button every ms milliseconds
+  keyturbo:[mods+]key:ms  repeat a key every ms milliseconds
+  media:name        playpause play pause next prev stop mute volumeup volumedown
+  hypershift        hold for the Hypershift layer
   dpi:up|down|up-wrap|down-wrap|stageN, profile:next|prev|next-wrap|prev-wrap|N,
   disabled, raw:hex
-  untested on hardware yet (encodings from razerqdhid):
-  media:playpause|next|prev|stop|mute|volumeup|volumedown, keyturbo:[mods+]key:ms,
-  hypershift (hold for the Hypershift layer)
 
 profile defaults to 0 (the live slot), layer to normal, device to the first mouse in `list`
 (PID is the hex after the colon, like 008d).";

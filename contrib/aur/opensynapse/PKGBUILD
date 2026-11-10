@@ -1,7 +1,7 @@
 # Maintainer: Lucas Santos <hello@lsantos.dev>
 # pkgver and sha256sums are rewritten by .github/workflows/release.yml on every tag.
 pkgname=opensynapse
-pkgver=0.1.1
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Remap buttons, set DPI and lighting on Razer mice from Linux"
 arch=('x86_64' 'aarch64')

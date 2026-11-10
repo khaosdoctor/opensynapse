@@ -155,7 +155,7 @@ pub fn key_name(usage: u8) -> Option<String> {
         0x37 => "dot",
         0x38 => "slash",
         0x39 => "capslock",
-        0x46 => "sysrq",
+        0x46 => "printscreen",
         0x47 => "scrolllock",
         0x48 => "pause",
         0x49 => "insert",
@@ -190,6 +190,8 @@ const SYMBOLS: &[(&str, u8)] = &[
     (",", 0x36),
     (".", 0x37),
     ("/", 0x38),
+    // older name, profile files saved before the rename still say it
+    ("sysrq", 0x46),
 ];
 
 // linear scan over 256 usages, fine for a handful of lookups
@@ -347,5 +349,7 @@ mod tests {
         assert_eq!(key_usage("kp7"), Some(0x5f));
         assert_eq!(key_usage("kp0"), Some(0x62));
         assert_eq!(key_usage("leftshift"), Some(0xe1));
+        assert_eq!(key_usage("printscreen"), Some(0x46));
+        assert_eq!(key_usage("sysrq"), Some(0x46));
     }
 }

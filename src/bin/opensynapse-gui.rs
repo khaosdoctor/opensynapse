@@ -45,7 +45,7 @@ const SPECIAL_KEYS: &[(&str, usize, &[&str])] = &[
     ),
     ("EDIT", 3, &["esc", "tab", "enter", "backspace", "space", "capslock", "insert", "delete", "menu"]),
     ("NAV", 2, &["home", "end", "pageup", "pagedown", "up", "down", "left", "right"]),
-    ("SYSTEM", 1, &["sysrq", "scrolllock", "pause"]),
+    ("SYSTEM", 1, &["printscreen", "scrolllock", "pause"]),
     (
         "NUMPAD",
         4,

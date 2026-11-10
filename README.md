@@ -36,13 +36,8 @@ Right now you can:
 - Keys and mouse buttons can also be on turbo, so they repeat while you hold them
 - Change DPI and the DPI stages
 - Export and import profiles as JSON
-- Go back to how the mouse was. The first time the GUI opens a mouse it saves every profile and the lighting to `~/.config/opensynapse/devices/<vid-pid>/` as `*.original.json`, ***RESET*** puts that back and ***SET DEFAULT*** makes what's on the mouse now the new original
 - See which button you're pressing, live if you have the GUI, which becomes some sort of tester
-- Change the lighting and brightness of zones, but this goes through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports.
-
-In the GUI, every change goes to a queue until you hit ***WRITE TO DEVICE*** (lighting also has ***APPLY NOW***). CLI commands write right away.
-
-On the Naga, profile 0 is the live one: it changes right away but is lost when you unplug the mouse. Profile 1 is stored on the mouse and is what it loads when you plug it in, so that's the one to edit if you want a change to stick.
+- Change the lighting and brightness of zones through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports.
 
 ![The buttons tab: the Naga drawn with what each button does, the DPI stages and the remap editor](docs/screenshots/buttons.png)
 
@@ -50,7 +45,7 @@ On the Naga, profile 0 is the live one: it changes right away but is lost when y
 
 ## Current status
 
-Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is supported, because that's the one I have. The protocol is shared by a bunch of Razer mice, so adding another one should mostly be writing a JSONC file (see [Adding your mouse](#adding-your-mouse)).
+Only the **Razer Naga Left-Handed Edition 2020** (`1532:008d`) is tested and supported, because that's the one I have. The protocol is shared by a bunch of Razer mice, so adding another one should mostly be writing a JSONC file (see [Adding your mouse](#adding-your-mouse)).
 
 ## Install
 

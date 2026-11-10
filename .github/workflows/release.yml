@@ -86,6 +86,7 @@ jobs:
             "Maintainer: Lucas Santos <hello@lsantos.dev>" \
             "Depends: libc6 (>= 2.35), libgcc-s1" \
             "Recommends: libxkbcommon0, libwayland-client0, libegl1, xdg-desktop-portal" \
+            "Suggests: openrazer-driver-dkms" \
             "Section: utils" \
             "Priority: optional" \
             "Homepage: https://github.com/khaosdoctor/opensynapse" \

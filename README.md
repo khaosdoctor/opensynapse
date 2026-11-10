@@ -101,7 +101,9 @@ opensynapse protocol                     # protocol file for your mouse, see PRO
 opensynapse protocol send                # share it as a GitHub issue
 ```
 
-`opensynapse help` has the rest.
+`opensynapse help` has the rest. CLI commands use profile 0 unless you pass `--profile`, and on the Naga that's the live profile that's lost when you unplug the mouse, so add `--profile 1` for changes you want to keep.
+
+Every package installs shell completions for bash, zsh and fish, which also complete your mouse's button names. If you built it yourself, they're in [`contrib/completions/`](contrib/completions/).
 
 ## Adding your mouse
 

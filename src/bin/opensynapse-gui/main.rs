@@ -116,6 +116,7 @@ const KINDS: &[(&str, Kind)] = &[
     ("OFF", Kind::Disabled),
 ];
 
+#[derive(Clone, PartialEq)]
 struct Editor {
     kind: Kind,
     mods: u8,
@@ -205,6 +206,9 @@ struct App {
     actions: Vec<Option<Action>>,
     selected: usize,
     editor: Editor,
+    /// the editor tab on screen, kept when another button is picked. It starts
+    /// on the first button's type and only changes when you click a tab
+    tab: Option<Kind>,
     dpi: u16,
     stages: Vec<u16>,
     active: u8,
@@ -260,6 +264,7 @@ impl App {
             actions: Vec::new(),
             selected: 0,
             editor: Editor::load(&Action::Disabled),
+            tab: None,
             dpi: 800,
             stages: Vec::new(),
             active: 1,
@@ -1627,10 +1632,19 @@ impl App {
     }
 
     fn editor_fields(&mut self, ui: &mut egui::Ui) {
-        let e = &mut self.editor;
-        tab_row(ui, KINDS, &mut e.kind);
+        // a tab is only a view, the button changes type when you pick or type something in it.
+        // Otherwise picking another button while on MOUSE would queue it as a left click
+        let shown = self.tab.get_or_insert(self.editor.kind);
+        tab_row(ui, KINDS, shown);
+        let shown = *shown;
         ui.separator();
-        ui.horizontal_wrapped(|ui| match e.kind {
+        let e = &mut self.editor;
+        let before = e.clone();
+        // nothing highlights in a tab the button isn't using, its fields hold defaults
+        let on = e.kind == shown;
+        // re-picking a value that equals the default doesn't change any field, so clicks count too
+        let mut picked = false;
+        ui.horizontal_wrapped(|ui| match shown {
             Kind::Key => {} // laid out as columns below
             Kind::Mouse => {
                 for &(n, v) in opensynapse::action::MOUSE {
@@ -1640,34 +1654,50 @@ impl App {
                         "wheelright" => "TILT RIGHT".to_string(),
                         _ => n.to_uppercase(),
                     };
-                    if chip(ui, &label, e.mouse == v).clicked() {
-                        e.mouse = v;
+                    if chip(ui, &label, on && e.mouse == v).clicked() {
+                        (e.mouse, picked) = (v, true);
                     }
                 }
             }
-            Kind::Media => pick(ui, MEDIA_KEYS, &mut e.media, chip),
+            Kind::Media => picked = pick_value(ui, MEDIA_KEYS, &mut e.media, on),
             Kind::Hypershift => {
-                ui.label(
-                    RichText::new(
-                        "Hold this button and the other buttons do what their HYPERSHIFT layer says \
-                         (switch LAYER at the top to edit it). Let go and they go back to normal.",
-                    )
-                    .color(t().muted),
+                picked = chip(ui, "USE AS HYPERSHIFT", on).clicked();
+                note(
+                    ui,
+                    "Hold this button and the other buttons do what their HYPERSHIFT layer says \
+                     (switch LAYER at the top to edit it). Let go and they go back to normal.",
                 );
             }
-            Kind::Dpi => pick(ui, DPI_ACTIONS, &mut e.dpi, chip),
-            Kind::Profile => pick(ui, PROFILE_ACTIONS, &mut e.profile, chip),
-            Kind::Disabled => {
-                ui.label(RichText::new("button does nothing").color(t().muted));
-            }
+            Kind::Dpi => picked = pick_value(ui, DPI_ACTIONS, &mut e.dpi, on),
+            Kind::Profile => picked = pick_value(ui, PROFILE_ACTIONS, &mut e.profile, on),
+            Kind::Disabled => picked = chip(ui, "TURN OFF", on).clicked(),
             Kind::Raw => {
                 ui.add(TextEdit::singleline(&mut e.raw).hint_text("hex bytes").desired_width(200.0));
             }
         });
-        if e.kind != Kind::Key {
-            return;
+        if shown == Kind::Key {
+            key_fields(ui, e, on);
         }
-        // one column per group; a group that doesn't fit goes to the next row
+        if picked || *e != before {
+            e.kind = shown;
+        }
+    }
+}
+
+/// Like `pick`, but nothing shows as selected unless `on`. True when a value was clicked.
+fn pick_value<T: Clone + PartialEq>(ui: &mut egui::Ui, list: &[(&str, T)], current: &mut T, on: bool) -> bool {
+    let mut clicked = false;
+    for (label, v) in list {
+        if chip(ui, label, on && current == v).clicked() {
+            (*current, clicked) = (v.clone(), true);
+        }
+    }
+    clicked
+}
+
+/// KEY tab: modifiers, the key box and the special key groups.
+fn key_fields(ui: &mut egui::Ui, e: &mut Editor, on: bool) {
+        // one column per group, a group that doesn't fit goes to the next row
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 28.0;
             ui.vertical(|ui| {
@@ -1675,7 +1705,7 @@ impl App {
                 note(ui, "COMMON KEYS");
                 egui::Grid::new("mods").spacing([6.0, 6.0]).show(ui, |ui| {
                     for (i, (label, bit)) in opensynapse::action::MODS[..4].iter().enumerate() {
-                        if chip(ui, &label.to_uppercase(), e.mods & bit != 0).clicked() {
+                        if chip(ui, &label.to_uppercase(), on && e.mods & bit != 0).clicked() {
                             e.mods ^= bit;
                         }
                         if i % 2 == 1 {
@@ -1684,7 +1714,9 @@ impl App {
                     }
                 });
                 // an empty box just means no key picked yet
-                let err = e.build().err().filter(|_| !e.key.trim().is_empty());
+                // checked as a key even while the button is still another type
+                let as_key = Editor { kind: Kind::Key, ..e.clone() };
+                let err = as_key.build().err().filter(|_| !e.key.trim().is_empty());
                 let color = match err {
                     Some(_) => t().accent2,
                     None => t().warn,
@@ -1711,7 +1743,7 @@ impl App {
                     note(ui, *group);
                     egui::Grid::new(group).spacing([6.0, 6.0]).show(ui, |ui| {
                         for (i, k) in keys.iter().enumerate() {
-                            if chip(ui, &k.to_uppercase(), e.key == *k).clicked() {
+                            if chip(ui, &k.to_uppercase(), on && e.key == *k).clicked() {
                                 e.key = k.to_string();
                             }
                             if (i + 1) % cols == 0 {
@@ -1722,7 +1754,6 @@ impl App {
                 });
             }
         });
-    }
 }
 
 /// Darkens the lighting tab and says why it's off. Drawn on its own layer

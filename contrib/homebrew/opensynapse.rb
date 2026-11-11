@@ -21,6 +21,7 @@ class Opensynapse < Formula
   def install
     bin.install "opensynapse", "opensynapse-gui"
     pkgshare.install "udev/70-opensynapse.rules"
+    (pkgshare/"devices").install Dir["devices/*.jsonc"]
     (share/"applications").install "assets/opensynapse.desktop"
     (share/"icons/hicolor/scalable/apps").install "assets/icon.svg" => "opensynapse.svg"
     doc.install "README.md", "PROTOCOL.md"

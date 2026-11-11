@@ -72,6 +72,8 @@ jobs:
           mkdir -p "$d/devices"
           cp target/release/opensynapse target/release/opensynapse-gui README.md PROTOCOL.md LICENSE "$d/"
           cp -r udev assets contrib/completions "$d/"
+          # the binaries read device files from devices/ next to them
+          cp devices/*.jsonc "$d/devices/"
           cp -r devices/protocols "$d/devices/"
           tar czf "$d-${{ matrix.arch }}.tar.gz" "$d"
 
@@ -88,6 +90,7 @@ jobs:
           install -Dm644 contrib/completions/_opensynapse "$r/usr/share/zsh/vendor-completions/_opensynapse"
           install -Dm644 contrib/completions/opensynapse.fish "$r/usr/share/fish/vendor_completions.d/opensynapse.fish"
           install -Dm644 -t "$r/usr/share/doc/opensynapse/protocols" devices/protocols/*.md
+          install -Dm644 -t "$r/usr/share/opensynapse/devices" devices/*.jsonc
           mkdir -p "$r/DEBIAN"
           printf '%s\n' \
             "Package: opensynapse" \
@@ -111,6 +114,8 @@ jobs:
         run: |
           a=AppDir
           install -Dm755 -t "$a/usr/bin" target/release/opensynapse target/release/opensynapse-gui
+          # usr/bin/../share/opensynapse/devices, where the binaries look next to themselves
+          install -Dm644 -t "$a/usr/share/opensynapse/devices" devices/*.jsonc
           cp assets/opensynapse.desktop assets/icon.svg "$a/"
           mv "$a/icon.svg" "$a/opensynapse.svg"
           sudo apt-get install -y --no-install-recommends libxkbcommon0 libxkbcommon-x11-0 libxcb-xkb1

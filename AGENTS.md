@@ -61,9 +61,16 @@ If something is used by one module it lives there, once two modules use it, it m
 
 ## How devices and themes load
 
-Device files in `devices/` are compiled in through the `BUILTIN` list in `src/device.rs`. A user's `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` wins over the built-in one for the same mouse, which is how people try a new mouse before a release.
+Device files are read when the app starts, nothing about a mouse is compiled in. `device::definitions()` looks in this order, and the first file for a vid:pid wins:
 
-Themes work the same way. `themes/*.css` are compiled in, and every `~/.config/opensynapse/themes/<name>.css` becomes a button on the settings page, replacing a built-in theme with the same name. Only CSS custom properties are read, see the header of `themes/opensynapse.css`. `~/.config/opensynapse/theme.css` overrides single properties on top of any theme, and `settings.json` keeps the mode, theme and font.
+1. `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc`, so a user's file wins over the shipped one. This is how people try a new mouse before a release.
+2. `opensynapse/devices/*.jsonc` under every `$XDG_DATA_DIRS` entry (`/usr/local/share:/usr/share` when it's unset), where the `.deb` and the AUR packages put them.
+3. `../share/opensynapse/devices/*.jsonc` and `devices/*.jsonc` next to the binary, for the AppImage, Homebrew and the tar.gz.
+4. `devices/` in the checkout the binary was built from (`CARGO_MANIFEST_DIR`), so `cargo run`, the tests and `cargo install --path .` work without installing anything.
+
+A file's slug, the name its protocol file uses, is its file name without `.jsonc`. User files are all called `buttons.jsonc`, so theirs comes from the `name` field. Adding a mouse means adding `devices/<slug>.jsonc` and nothing else.
+
+Themes are different. `themes/*.css` are compiled in, and every `~/.config/opensynapse/themes/<name>.css` becomes a button on the settings page, replacing a built-in theme with the same name. Only CSS custom properties are read, see the header of `themes/opensynapse.css`. `~/.config/opensynapse/theme.css` overrides single properties on top of any theme, and `settings.json` keeps the mode, theme and font.
 
 ## Releases and CI
 
@@ -71,6 +78,8 @@ Themes work the same way. `themes/*.css` are compiled in, and every `~/.config/o
 - `add-device.yml` runs when an issue gets the `add-device` label. It turns the issue sent by `opensynapse protocol send` into a PR that adds the device. Only people with triage access can add that label, so random issues can't start it.
 - `device-release.yml` ships a patch release when a PR labeled `new-device` is merged.
 - `pages.yml` publishes `docs/` to the website.
+
+Every package ships `devices/*.jsonc`. The `.deb`, the AUR packages, the AppImage and Homebrew install them to `share/opensynapse/devices`, and the tar.gz keeps them in `devices/` next to the binaries. Without them an installed app finds no mouse, so a new package has to install them too.
 
 A release means bumping the version in `Cargo.toml`, `Cargo.lock` and the three PKGBUILDs in `contrib/aur/`, committing that as `chore: release vX.Y.Z` and pushing a matching tag.
 

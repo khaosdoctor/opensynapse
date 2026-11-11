@@ -77,6 +77,8 @@ cargo install --path . --features gui
 
 That puts `opensynapse` (the CLI) and `opensynapse-gui` in `~/.cargo/bin`. If you only want the CLI, drop the `--features gui`.
 
+`cargo install` only copies the binaries, so they read the device files from the `devices/` folder of your clone. Keep the clone where it is. If you move or delete it, copy the file for your mouse from `devices/` to `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc`, like `1532-008d` for the Naga.
+
 Your user also needs access to the mouse's raw HID device, otherwise you'll get a permission denied:
 
 ```sh
@@ -168,7 +170,7 @@ Every package installs shell completions for bash, zsh and fish, which also comp
 
 ## Adding your mouse
 
-OpenSynapse works by reading a JSON file from `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` with your mouse's USB ids and the list of its buttons. A few of these come built into the app, and if yours isn't one of them you can just write your own and it works right away, you don't need to wait for me or upload anything.
+OpenSynapse works by reading a JSON file from `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` with your mouse's USB ids and the list of its buttons. Every package also installs one for each mouse in [`devices/`](devices), and yours in `~/.config` wins over those. If your mouse isn't there, you can just write your own and it works right away, you don't need to wait for me or upload anything.
 
 You don't even have to write it by hand. Run `opensynapse init` with the mouse plugged in, it asks the mouse what it has without changing anything on it, and writes most of the file for you. Fix the `// TODO` lines, mostly naming the buttons, and that's it, the GUI and the CLI pick it up on their own.
 

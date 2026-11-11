@@ -1,4 +1,4 @@
-//! Device definitions (built-in devices/*.jsonc plus ~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc) and the commands we know how to send.
+//! Device definitions (installed devices/*.jsonc plus ~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc) and the commands we know how to send.
 
 use crate::action::Action;
 use crate::hid::{self, Hid};
@@ -7,13 +7,6 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::path::{Path, PathBuf};
 use std::{env, fs, io};
-
-/// (file name without .jsonc, contents), one line per device.
-/// tools/device_from_issue.py adds new ones before the closing `];`.
-const BUILTIN: &[(&str, &str)] = &[
-    ("razer-naga-left-handed-2020", include_str!("../devices/razer-naga-left-handed-2020.jsonc")),
-    ("razer-naga-x", include_str!("../devices/razer-naga-x.jsonc")),
-];
 
 /// Device files are JSONC, so this cuts `//` comments outside strings, line by line
 /// so serde's line numbers still match. Block comments aren't supported.
@@ -91,28 +84,80 @@ impl DeviceDef {
     }
 }
 
-/// Built-in definitions plus ~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc (user files win).
+/// Parses the text of one device file.
+pub fn parse(src: &str) -> Result<DeviceDef, serde_json::Error> {
+    let mut def: DeviceDef = serde_json::from_str(&strip_comments(src))?;
+    def.source = src.to_string();
+    Ok(def)
+}
+
+/// ~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc first, then the installed
+/// devices/*.jsonc. The first file for a vid:pid wins, so user files override installed ones.
 pub fn definitions() -> Vec<DeviceDef> {
-    let mut defs: Vec<DeviceDef> = Vec::new();
-    let mut add = |src: &str, file: &str, origin: &str| match serde_json::from_str::<DeviceDef>(&strip_comments(src)) {
-        Ok(mut d) => {
-            // user files are all "buttons.jsonc", so their repo name comes from the mouse name
-            d.file = if file.is_empty() { crate::scaffold::slug(&d.name) } else { file.to_string() };
-            d.source = src.to_string();
-            defs.retain(|x| (x.vid, x.pid) != (d.vid, d.pid));
-            defs.push(d);
-        }
-        Err(e) => eprintln!("skipping device definition {origin}: {e}"),
-    };
-    for (file, src) in BUILTIN {
-        add(src, file, "(builtin)");
+    let mut files: Vec<(PathBuf, Option<String>)> = Vec::new();
+    // user files are all "buttons.jsonc", so their repo name comes from the mouse name
+    for dir in sorted_entries(devices_dir()) {
+        files.push((dir.join("buttons.jsonc"), None));
     }
-    let entries = devices_dir().and_then(|d| fs::read_dir(d).ok()).into_iter().flatten().flatten();
-    for path in entries.map(|e| e.path().join("buttons.jsonc")) {
+    for dir in device_dirs() {
+        for path in sorted_entries(Some(dir)) {
+            if path.extension().is_none_or(|e| e != "jsonc") {
+                continue;
+            }
+            let stem = path.file_stem().and_then(|s| s.to_str()).map(str::to_string);
+            files.push((path, stem));
+        }
+    }
+
+    let mut defs: Vec<DeviceDef> = Vec::new();
+    for (path, file) in files {
         let Ok(src) = fs::read_to_string(&path) else { continue };
-        add(&src, "", &path.display().to_string());
+        let mut d = match parse(&src) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("skipping device definition {}: {e}", path.display());
+                continue;
+            }
+        };
+        if defs.iter().any(|x| (x.vid, x.pid) == (d.vid, d.pid)) {
+            continue;
+        }
+        d.file = file.unwrap_or_else(|| crate::scaffold::slug(&d.name));
+        defs.push(d);
     }
     defs
+}
+
+/// Where installed device files can be, in search order: $XDG_DATA_DIRS for distro
+/// packages, next to the binary for the AppImage, Homebrew and the tar.gz, and the
+/// checkout this was built from so `cargo run` and `cargo install --path .` work.
+fn device_dirs() -> Vec<PathBuf> {
+    let data = env::var("XDG_DATA_DIRS").ok().filter(|d| !d.trim().is_empty());
+    let data = data.unwrap_or_else(|| "/usr/local/share:/usr/share".to_string());
+    let mut candidates: Vec<PathBuf> =
+        data.split(':').filter(|d| !d.is_empty()).map(|d| Path::new(d).join("opensynapse/devices")).collect();
+    if let Some(exe_dir) = env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
+        candidates.push(exe_dir.join("../share/opensynapse/devices"));
+        candidates.push(exe_dir.join("devices"));
+    }
+    candidates.push(PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/devices")));
+
+    // /usr/bin/../share is also /usr/share, and reading it twice would print every bad file twice
+    let mut dirs = Vec::new();
+    for dir in candidates.iter().filter_map(|d| fs::canonicalize(d).ok()) {
+        if !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+    dirs
+}
+
+/// The entries of a folder sorted by name, so the same file wins on every run.
+fn sorted_entries(dir: Option<PathBuf>) -> Vec<PathBuf> {
+    let entries = dir.and_then(|d| fs::read_dir(d).ok()).into_iter().flatten().flatten();
+    let mut paths: Vec<PathBuf> = entries.map(|e| e.path()).collect();
+    paths.sort();
+    paths
 }
 
 /// ~/.config/opensynapse/devices/<vid-pid> (like 1532-008d) for one mouse model.
@@ -127,7 +172,7 @@ pub fn model_file(vid: u16, pid: u16, serial: &str, name: &str) -> Option<PathBu
 }
 
 /// One folder per model with its saved profiles and an optional buttons.jsonc,
-/// which wins over a built-in definition.
+/// which wins over an installed device file.
 fn devices_dir() -> Option<PathBuf> {
     config_dir().map(|c| c.join("opensynapse/devices"))
 }
@@ -274,15 +319,20 @@ impl Mouse {
 mod tests {
     use super::*;
 
-    /// Catches a broken device file before it's compiled into a release,
-    /// including the ones tools/device_from_issue.py adds from issues.
+    /// Catches a broken device file before it ships in a release,
+    /// including the ones device-from-issue adds from issues.
     #[test]
-    fn builtin_device_files_parse() {
-        for (file, src) in BUILTIN {
-            let def: DeviceDef = serde_json::from_str(&strip_comments(src)).unwrap_or_else(|e| panic!("{file}.jsonc: {e}"));
-            assert!(!def.buttons.is_empty(), "{file}.jsonc has no buttons");
+    fn repo_device_files_parse() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("devices");
+        for path in sorted_entries(Some(dir)) {
+            if path.extension().is_none_or(|e| e != "jsonc") {
+                continue;
+            }
+            let src = fs::read_to_string(&path).unwrap();
+            let def = parse(&src).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            assert!(!def.buttons.is_empty(), "{} has no buttons", path.display());
         }
-        let naga = definitions().into_iter().find(|d| d.pid == 0x008d).expect("builtin naga");
+        let naga = definitions().into_iter().find(|d| d.pid == 0x008d).expect("naga from devices/");
         assert_eq!((naga.vid, naga.transaction_id, naga.buttons.len()), (0x1532, 0x1f, 22));
         assert_eq!(naga.button("thumb1").map(|b| b.id), Some(0x40));
     }

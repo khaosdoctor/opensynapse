@@ -1,0 +1,51 @@
+/* Dracula (dark) and Alucard, its official light version.
+ * Colors: https://draculatheme.com/spec
+ * Alucard only defines one background, the panel and card shades are ours. */
+:root {
+  --radius: 4;
+  --font: monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #282a36;
+    --panel: #21222c;
+    --card: #343746;
+    --deep: #191a21;
+    --button: #343746;
+    --border: #44475a;
+    --text: #f8f8f2;
+    --strong: #ffffff;
+    --on-accent: #282a36;
+    --accent: #8be9fd;
+    --accent-2: #ff79c6;
+    --warn: #f1fa8c;
+    --muted: #6272a4;
+    --error: #ff5555;
+    --ok: #50fa7b;
+    --off: #44475a;
+    --hover: #f8f8f21a;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #fffbeb;
+    --panel: #f5f1dc;
+    --card: #ece8d3;
+    --deep: #e8e4d0;
+    --button: #ece8d3;
+    --border: #cfcfde;
+    --text: #1f1f1f;
+    --strong: #000000;
+    --on-accent: #fffbeb;
+    --accent: #036a96;
+    --accent-2: #a3144d;
+    --warn: #846e15;
+    --muted: #6c664b;
+    --error: #cb3a2a;
+    --ok: #14710a;
+    --off: #cfcfde;
+    --hover: #1f1f1f14;
+  }
+}

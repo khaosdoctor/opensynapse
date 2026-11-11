@@ -664,22 +664,32 @@ fn short(a: &Action) -> String {
 /// Frameless tab: cyan and underlined when active.
 fn tab(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Response {
     let label = if selected { RichText::new(text).color(t().accent).strong().underline() } else { RichText::new(text).color(t().muted) };
-    ui.add(egui::Button::new(label).frame(false))
+    hover(ui.add(egui::Button::new(label).frame(false)))
+}
+
+/// Lays the theme's --hover color over a button under the mouse and shows a
+/// hand cursor. egui skips its own hover look when a button has its own fill,
+/// and all of ours do.
+fn hover(r: egui::Response) -> egui::Response {
+    if r.hovered() && r.enabled() {
+        r.ctx.layer_painter(r.layer_id).rect_filled(r.rect, theme::radius(), t().hover);
+        r.ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    r
 }
 
 /// Top-level view switch, drawn as a tab with a border so it doesn't read as a setting.
 fn view_tab(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Response {
     let (fg, edge, fill) = match selected {
         true => (t().accent, t().accent, t().card),
-        false => (t().muted, t().muted, t().bg),
+        false => (t().muted, t().border, t().bg),
     };
-    ui.add(
-        egui::Button::new(RichText::new(text).color(fg).strong())
-            .fill(fill)
-            .stroke(Stroke::new(1.0, edge))
-            .corner_radius(CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 })
-            .min_size(egui::vec2(0.0, 28.0)),
-    )
+    let button = egui::Button::new(RichText::new(text).color(fg).strong())
+        .fill(fill)
+        .stroke(Stroke::new(1.0, edge))
+        .corner_radius(CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 })
+        .min_size(egui::vec2(0.0, 28.0));
+    hover(ui.add(button))
 }
 
 /// Height shared by every button that can sit in a row with a neon_button.
@@ -696,46 +706,41 @@ fn toggle_button(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Respons
 }
 
 fn chip_sized(ui: &mut egui::Ui, text: &str, selected: bool, height: f32) -> egui::Response {
-    let (fg, edge, fill) = if selected { (t().bg, t().accent2, t().accent2) } else { (t().strong, t().muted, t().bg) };
-    ui.add(
-        egui::Button::new(RichText::new(text).color(fg))
-            .fill(fill)
-            .stroke(Stroke::new(1.0, edge))
-            .corner_radius(CornerRadius::ZERO)
-            .min_size(egui::vec2(0.0, height)),
-    )
+    let (fg, edge, fill) = if selected { (t().on_accent, t().accent2, t().accent2) } else { (t().strong, t().border, t().button) };
+    let button = egui::Button::new(RichText::new(text).color(fg))
+        .fill(fill)
+        .stroke(Stroke::new(1.0, edge))
+        .corner_radius(theme::radius())
+        .min_size(egui::vec2(0.0, height));
+    hover(ui.add(button))
 }
 
 /// Secondary action: colored text and border on the background.
 fn outline_button(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Response {
-    ui.add(
-        egui::Button::new(RichText::new(text).color(color))
-            .fill(t().bg)
-            .stroke(Stroke::new(1.0, color))
-            .corner_radius(CornerRadius::ZERO)
-            .min_size(egui::vec2(0.0, BUTTON_HEIGHT)),
-    )
+    let button = egui::Button::new(RichText::new(text).color(color))
+        .fill(t().button)
+        .stroke(Stroke::new(1.0, color))
+        .corner_radius(theme::radius())
+        .min_size(egui::vec2(0.0, BUTTON_HEIGHT));
+    hover(ui.add(button))
 }
 
 fn neon_button(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Response {
-    ui.add(
-        egui::Button::new(RichText::new(text).color(t().bg).strong())
-            .fill(color)
-            .corner_radius(CornerRadius::ZERO)
-            .min_size(egui::vec2(0.0, BUTTON_HEIGHT)),
-    )
+    let button = egui::Button::new(RichText::new(text).color(t().on_accent).strong())
+        .fill(color)
+        .corner_radius(theme::radius())
+        .min_size(egui::vec2(0.0, BUTTON_HEIGHT));
+    hover(ui.add(button))
 }
 
 /// Small red X that removes a row.
 fn delete_button(ui: &mut egui::Ui) -> egui::Response {
-    ui.add(
-        egui::Button::new(RichText::new("X").color(t().error).strong())
-            .small()
-            .fill(t().bg)
-            .stroke(Stroke::new(1.0, t().error))
-            .corner_radius(CornerRadius::ZERO),
-    )
-    .on_hover_text("remove")
+    let button = egui::Button::new(RichText::new("X").color(t().error).strong())
+        .small()
+        .fill(t().bg)
+        .stroke(Stroke::new(1.0, t().error))
+        .corner_radius(theme::radius());
+    hover(ui.add(button)).on_hover_text("remove")
 }
 
 fn heading(ui: &mut egui::Ui, text: &str) {
@@ -759,7 +764,7 @@ impl eframe::App for App {
             });
         }
         // the sidebar goes first so it runs the full height, the tabs only span the rest
-        let side = Frame::new().fill(t().panel).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().muted));
+        let side = Frame::new().fill(t().panel).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().border));
         egui::Panel::left("dpi").exact_size(SIDEBAR_WIDTH).resizable(false).frame(side).show(ui, |ui| {
             self.device_box(ui);
             self.dpi_panel(ui);
@@ -782,16 +787,20 @@ impl eframe::App for App {
             egui::CentralPanel::default().frame(center).show(ui, |ui| self.lighting_ui(ui));
             return;
         }
+        if self.view == View::Settings {
+            egui::CentralPanel::default().frame(center).show(ui, |ui| self.settings_ui(ui));
+            return;
+        }
 
         let name = self.mice.get(self.current).and_then(|m| m.def.buttons.get(self.selected)).map(|b| b.name.clone());
         if let Some(name) = name {
-            let editor = Frame::new().fill(t().panel).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().muted));
+            let editor = Frame::new().fill(t().pane).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().border));
             egui::Panel::bottom("editor").exact_size(EDITOR_HEIGHT).resizable(false).frame(editor).show(ui, |ui| {
                 self.editor_ui(ui, &name);
             });
         }
         if !self.mice.is_empty() {
-            let side = Frame::new().fill(t().bg).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().muted));
+            let side = Frame::new().fill(t().bg).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().border));
             egui::Panel::left("profile").exact_size(190.0).resizable(false).frame(side).show(ui, |ui| self.profile_box(ui));
         }
         egui::CentralPanel::default().frame(center).show(ui, |ui| self.buttons(ui));
@@ -849,7 +858,7 @@ impl App {
             ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
             for (i, z) in self.zone_ui.iter_mut().take(shown).enumerate() {
                 let title = if self.sync_zones { "ALL ZONES".to_string() } else { z.name.to_uppercase() };
-                Frame::new().fill(t().panel).stroke(Stroke::new(1.0, t().muted)).inner_margin(Margin::same(14)).show(ui, |ui| {
+                Frame::new().fill(t().panel).stroke(Stroke::new(1.0, t().border)).inner_margin(Margin::same(14)).show(ui, |ui| {
                     ui.set_width(ui.available_width().min(760.0));
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(title).color(t().accent).strong().underline());
@@ -940,6 +949,7 @@ enum Confirm {
 enum View {
     Buttons,
     Lighting,
+    Settings,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -1042,8 +1052,16 @@ impl App {
             ui.label(RichText::new("SYNAPSE").color(t().accent2).size(22.0).strong());
         });
         let version = RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).color(t().warn).small();
-        Frame::new().stroke(Stroke::new(1.0, t().warn)).inner_margin(Margin::symmetric(5, 1)).show(ui, |ui| {
-            ui.label(version);
+        ui.horizontal(|ui| {
+            Frame::new().stroke(Stroke::new(1.0, t().warn)).inner_margin(Margin::symmetric(5, 1)).show(ui, |ui| {
+                ui.label(version);
+            });
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let on = self.view == View::Settings;
+                if toggle_button(ui, "SETTINGS", on).clicked() {
+                    self.view = if on { View::Buttons } else { View::Settings };
+                }
+            });
         });
         ui.add_space(14.0);
 
@@ -1068,8 +1086,8 @@ impl App {
         if let Some(i) = pick.filter(|&i| i != self.current) {
             self.switch_to(i);
         }
-        let rescan = egui::Button::new(RichText::new("RESCAN").color(t().bg).strong()).fill(t().accent).corner_radius(CornerRadius::ZERO);
-        if ui.add_sized([width, 28.0], rescan).clicked() {
+        let rescan = egui::Button::new(RichText::new("RESCAN").color(t().on_accent).strong()).fill(t().accent).corner_radius(theme::radius());
+        if hover(ui.add_sized([width, 28.0], rescan)).clicked() {
             self.connect();
         }
         ui.add_space(18.0);
@@ -1114,16 +1132,33 @@ impl App {
             })
             .response
             .on_hover_text("P0 is live and lost when you unplug the mouse. P1 is stored on it and loads after a replug.");
-        let reset = egui::Button::new(RichText::new("RESET").color(t().bg).strong()).fill(t().accent2).corner_radius(CornerRadius::ZERO);
-        if ui.add_sized([width, 26.0], reset).on_hover_text("put back this profile's original").clicked() {
+        let reset = egui::Button::new(RichText::new("RESET").color(t().on_accent).strong()).fill(t().accent2).corner_radius(theme::radius());
+        if hover(ui.add_sized([width, 26.0], reset)).on_hover_text("put back this profile's original").clicked() {
             self.confirm = Some(Confirm::ResetButtons);
         }
         let set = egui::Button::new(RichText::new("SET DEFAULT").color(t().warn))
-            .fill(t().bg)
+            .fill(t().button)
             .stroke(Stroke::new(1.0, t().warn))
-            .corner_radius(CornerRadius::ZERO);
-        if ui.add_sized([width, 26.0], set).on_hover_text("make what's on the mouse now the original RESET goes back to").clicked() {
+            .corner_radius(theme::radius());
+        if hover(ui.add_sized([width, 26.0], set)).on_hover_text("make what's on the mouse now the original RESET goes back to").clicked() {
             self.confirm = Some(Confirm::SetDefault);
+        }
+        for (text, color, tip, import) in [
+            ("EXPORT", t().accent, "save this profile to a file", false),
+            ("IMPORT", t().accent2, "queue a profile file's buttons over this profile", true),
+        ] {
+            let button = egui::Button::new(RichText::new(text).color(color))
+                .fill(t().button)
+                .stroke(Stroke::new(1.0, color))
+                .corner_radius(theme::radius());
+            if !hover(ui.add_sized([width, 26.0], button)).on_hover_text(tip).clicked() {
+                continue;
+            }
+            if import {
+                self.pick_import();
+            } else {
+                self.export();
+            }
         }
         ui.add_space(18.0);
 
@@ -1153,19 +1188,23 @@ impl App {
 
         heading(ui, "STAGES");
         let mut remove = None;
-        for (i, dpi) in self.stages.iter_mut().enumerate() {
-            let n = i as u8 + 1;
-            ui.horizontal(|ui| {
-                let mark = if self.active == n { RichText::new("▶").color(t().accent) } else { RichText::new("·").color(t().muted) };
-                if ui.selectable_label(self.active == n, mark).clicked() {
+        // a grid with fixed-size cells, so the active marker doesn't push its row out of line
+        egui::Grid::new("stages").num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
+            for (i, dpi) in self.stages.iter_mut().enumerate() {
+                let n = i as u8 + 1;
+                let active = self.active == n;
+                let mark = if active { RichText::new("▶").color(t().on_accent) } else { RichText::new("·").color(t().muted) };
+                if ui.add_sized([26.0, 22.0], egui::Button::selectable(active, mark)).on_hover_text("make this the active stage").clicked() {
                     self.active = n;
                 }
-                ui.add(DragValue::new(dpi).range(100..=max).speed(50));
+                ui.label(RichText::new(n.to_string()).color(t().muted));
+                ui.add_sized([80.0, 22.0], DragValue::new(dpi).range(100..=max).speed(50).suffix(" DPI"));
                 if delete_button(ui).clicked() {
                     remove = Some(i);
                 }
-            });
-        }
+                ui.end_row();
+            }
+        });
         if let Some(i) = remove.filter(|_| self.stages.len() > 1) {
             self.stages.remove(i);
             self.active = self.active.min(self.stages.len() as u8);
@@ -1264,7 +1303,7 @@ impl App {
         let view_height = ui.available_height();
         egui::ScrollArea::vertical().max_height(view_height).show(ui, |ui| {
             if !placed.is_empty() {
-                clicked = self.mouse_view(ui, buttons, &placed, &lit, view_height);
+                clicked = self.mouse_view(ui, buttons, &placed, &lit, view_height, loose.is_empty());
             }
             egui::Grid::new("buttons").spacing([8.0, 8.0]).show(ui, |ui| {
                 for (col, &i) in loose.iter().enumerate() {
@@ -1304,7 +1343,8 @@ impl App {
     }
 
     /// Draws a mouse body and the positioned buttons on it. Returns a clicked button.
-    fn mouse_view(&self, ui: &mut egui::Ui, buttons: &[Button], placed: &[usize], lit: &[bool], max_height: f32) -> Option<usize> {
+    /// `alone` is true when no button grid goes under the drawing.
+    fn mouse_view(&self, ui: &mut egui::Ui, buttons: &[Button], placed: &[usize], lit: &[bool], max_height: f32, alone: bool) -> Option<usize> {
         // 16:10 canvas so `at` percentages mean the same thing at any window size
         // center what's drawn (body plus side plates), not the canvas: a thumb grid on one side
         // would otherwise push the whole drawing off to that side. lo..hi is that span in percent
@@ -1316,9 +1356,14 @@ impl App {
         // the canvas may be wider than the panel, only the drawn span has to fit
         let w = (ui.available_width() * 100.0 / (hi - lo)).min(fit_height * 1.6).min(MAX_VIEW_WIDTH);
         let k = w / (460.0 * 1.6); // everything below scales with the canvas
-        let (full, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), w / 1.6 * USED_HEIGHT), egui::Sense::hover());
+        let drawn = w / 1.6 * USED_HEIGHT;
+        // with nothing below the mouse it takes the whole view and sits in the middle of it,
+        // a few pixels short so the scroll area doesn't show a scrollbar for nothing
+        let height = if alone { (max_height - 4.0).max(drawn) } else { drawn };
+        let (full, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::hover());
         let left = full.center().x - (lo + hi) / 2.0 / 100.0 * w;
-        let rect = egui::Rect::from_min_size(egui::pos2(left, full.top()), egui::vec2(w, w / 1.6));
+        let top = full.center().y - drawn / 2.0;
+        let rect = egui::Rect::from_min_size(egui::pos2(left, top), egui::vec2(w, w / 1.6));
         let at = |x: f32, y: f32| rect.min + egui::vec2(rect.width() * x / 100.0, rect.height() * y / 100.0);
         let p = ui.painter_at(rect);
         // yellow outline while editing the Hypershift (or any non-default) layer
@@ -1373,8 +1418,8 @@ impl App {
                 _ if off => (t().bg, t().off, t().muted),
                 _ => (t().bg, t().muted, t().strong),
             };
-            p.rect_filled(r, CornerRadius::ZERO, fill);
-            p.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, edge), StrokeKind::Inside);
+            p.rect_filled(r, theme::radius(), fill);
+            p.rect_stroke(r, theme::radius(), Stroke::new(1.0, edge), StrokeKind::Inside);
             let mark = if pending { "*" } else { "" };
             let label = shown.as_ref().map_or("??".into(), |a| format!("{}{mark}", short(a)));
             p.text(r.center(), Align2::CENTER_CENTER, label, FontId::monospace(11.0 * k), text);
@@ -1395,8 +1440,6 @@ impl App {
     fn editor_ui(&mut self, ui: &mut egui::Ui, name: &str) {
         ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
         ui.spacing_mut().button_padding = egui::vec2(10.0, 4.0);
-        self.file_row(ui);
-        ui.separator();
         ui.horizontal(|ui| {
             ui.label(RichText::new("> REMAP:").color(t().accent2).strong());
             ui.label(RichText::new(name.to_uppercase()).color(t().accent).strong().underline());
@@ -1409,26 +1452,19 @@ impl App {
         self.queue_edits();
     }
 
-    /// Profile file: the folder files are saved in, export and import.
-    fn file_row(&mut self, ui: &mut egui::Ui) {
+    fn settings_ui(&mut self, ui: &mut egui::Ui) {
+        ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+        ui.spacing_mut().button_padding = egui::vec2(10.0, 4.0);
+        heading(ui, "PROFILE FILES LOCATION");
         ui.horizontal(|ui| {
-            ui.label(RichText::new("> PROFILE FILE:").color(t().accent2).strong());
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if neon_button(ui, "IMPORT", t().accent2).clicked() {
-                    self.pick_import();
-                }
-                if neon_button(ui, "EXPORT", t().accent).clicked() {
-                    self.export();
-                }
-                if neon_button(ui, "CHANGE FOLDER", t().warn).on_hover_text("where profile files are saved").clicked() {
-                    self.pick_folder();
-                }
-                // the path gets whatever width the buttons leave
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    ui.add(egui::Label::new(RichText::new(&self.path).color(t().muted)).truncate()).on_hover_text(&self.path);
-                });
-            });
+            if neon_button(ui, "CHANGE FOLDER", t().warn).on_hover_text("where EXPORT saves profile files").clicked() {
+                self.pick_folder();
+            }
+            let dir = PathBuf::from(&self.path).parent().map(|d| d.display().to_string()).unwrap_or_default();
+            ui.add(egui::Label::new(RichText::new(&dir).color(t().muted)).truncate()).on_hover_text(&dir);
         });
+        ui.add_space(16.0);
+        theme::settings_ui(ui);
     }
 
     /// Native dialogs go through the XDG desktop portal and block the UI while open.
@@ -1748,7 +1784,7 @@ impl App {
 fn offline_overlay(ui: &egui::Ui, area: egui::Rect) {
     // Middle sits above the panels and below modals, so dialogs still show on top
     let p = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Middle, egui::Id::unique("openrazer-offline")));
-    p.rect_filled(area, CornerRadius::ZERO, t().bg.gamma_multiply(0.75));
+    p.rect_filled(area, theme::radius(), t().bg.gamma_multiply(0.75));
     let c = area.center();
     p.text(c - egui::vec2(0.0, 18.0), Align2::CENTER_CENTER, "OPENRAZER DAEMON OFFLINE", FontId::monospace(26.0), t().error);
     p.text(
@@ -1781,7 +1817,113 @@ fn turbo_toggle(ui: &mut egui::Ui, e: &mut Editor) {
     }
 }
 
+fn lock_path() -> PathBuf {
+    let dir = std::env::var_os("XDG_RUNTIME_DIR").map_or_else(std::env::temp_dir, PathBuf::from);
+    dir.join("opensynapse-gui.lock")
+}
+
+enum Lock {
+    /// ours now, None when we couldn't even create the file and just start anyway
+    Free(Option<std::fs::File>),
+    /// another GUI has it, with its PID if the file says
+    Busy(Option<i32>),
+}
+
+/// Only one GUI at a time, otherwise two of them fight over the same mouse.
+/// We take an flock on the lock file and write our PID in it. The lock goes
+/// away with the open file, so the kernel drops it when we exit, even after a crash.
+fn take_lock() -> Lock {
+    use std::io::Write;
+    use std::os::fd::AsRawFd;
+    let path = lock_path();
+    // no truncate here, the PID in it belongs to whoever holds the lock
+    let opened = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(&path);
+    let Ok(mut file) = opened else { return Lock::Free(None) };
+    // SAFETY: flock only reads the fd, which `file` keeps open
+    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+        let pid = std::fs::read_to_string(&path).ok().and_then(|s| s.trim().parse().ok());
+        return Lock::Busy(pid);
+    }
+    let _ = file.set_len(0).and_then(|_| write!(file, "{}", std::process::id()));
+    Lock::Free(Some(file))
+}
+
+/// True while `pid` is a running opensynapse-gui. Checking the name means a
+/// stale PID that now belongs to something else never gets killed.
+fn is_gui(pid: i32) -> bool {
+    std::fs::read_to_string(format!("/proc/{pid}/comm")).is_ok_and(|c| c.trim() == "opensynapse-gui")
+}
+
+/// Stops the other GUI, asking nicely first and killing it after 2s, then
+/// deletes the lock and takes a new one.
+fn take_over(pid: Option<i32>) -> Option<std::fs::File> {
+    if let Some(pid) = pid.filter(|&p| is_gui(p)) {
+        // SAFETY: kill only sends a signal, and is_gui checked the PID is the other GUI
+        unsafe { libc::kill(pid, libc::SIGTERM) };
+        for _ in 0..20 {
+            if !is_gui(pid) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        if is_gui(pid) {
+            // SAFETY: same as above
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+        }
+    }
+    // a new file gets a new lock even if the old process somehow still holds the old one
+    let _ = std::fs::remove_file(lock_path());
+    match take_lock() {
+        Lock::Free(file) => file,
+        Lock::Busy(_) => None,
+    }
+}
+
+struct Launcher {
+    app: Option<App>,
+    /// Some while the alert shows, with the other GUI's PID if we know it
+    busy: Option<Option<i32>>,
+    _lock: Option<std::fs::File>,
+    ctx: egui::Context,
+}
+
+impl eframe::App for Launcher {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        if let Some(app) = &mut self.app {
+            app.ui(ui, frame);
+            return;
+        }
+        let pid = self.busy.flatten();
+        egui::CentralPanel::default().show(ui, |_| {});
+        egui::Modal::new(egui::Id::unique("already-running")).show(&self.ctx, |ui| {
+            ui.set_max_width(460.0);
+            ui.label(RichText::new("! OPENSYNAPSE IS ALREADY RUNNING").color(t().accent2).strong());
+            ui.add_space(6.0);
+            let which = pid.map_or("Another window".to_string(), |p| format!("Another window, PID {p},"));
+            ui.label(format!(
+                "{which} is open already, maybe minimized or on another workspace. You can go back to it, or close it and \
+                 open here. Anything pending in the other window is lost."
+            ));
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                if outline_button(ui, "QUIT", t().muted).clicked() {
+                    self.ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+                if neon_button(ui, "CLOSE IT AND OPEN HERE", t().accent2).clicked() {
+                    self._lock = take_over(pid);
+                    self.busy = None;
+                    self.app = Some(App::new(self.ctx.clone()));
+                }
+            });
+        });
+    }
+}
+
 fn main() -> eframe::Result {
+    let (lock, busy) = match take_lock() {
+        Lock::Free(file) => (file, None),
+        Lock::Busy(pid) => (None, Some(pid)),
+    };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1000.0, 760.0])
@@ -1791,10 +1933,12 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "opensynapse",
         options,
-        Box::new(|cc| {
-            theme::apply(&cc.egui_ctx);
-            theme::follow_desktop(cc.egui_ctx.clone());
-            Ok(Box::new(App::new(cc.egui_ctx.clone())))
+        Box::new(move |cc| {
+            theme::start(&cc.egui_ctx);
+            let ctx = cc.egui_ctx.clone();
+            // while the alert shows we don't touch the mouse, the other GUI still has it
+            let app = busy.is_none().then(|| App::new(ctx.clone()));
+            Ok(Box::new(Launcher { app, busy, _lock: lock, ctx }))
         }),
     )
 }

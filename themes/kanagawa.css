@@ -1,0 +1,50 @@
+/* Kanagawa: Lotus (light) and Wave (dark).
+ * Colors: https://github.com/rebelot/kanagawa.nvim */
+:root {
+  --radius: 2;
+  --font: monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1f1f28;
+    --panel: #1a1a22;
+    --card: #2a2a37;
+    --deep: #16161d;
+    --button: #2a2a37;
+    --border: #54546d;
+    --text: #dcd7ba;
+    --strong: #f2ecbc;
+    --on-accent: #1f1f28;
+    --accent: #7fb4ca;
+    --accent-2: #d27e99;
+    --warn: #e6c384;
+    --muted: #727169;
+    --error: #e46876;
+    --ok: #98bb6c;
+    --off: #363646;
+    --hover: #dcd7ba1a;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f2ecbc;
+    --panel: #e5ddb0;
+    --card: #e7dba0;
+    --deep: #dcd5ac;
+    --button: #e7dba0;
+    --border: #c7be8f;
+    --text: #545464;
+    --strong: #43436c;
+    --on-accent: #f2ecbc;
+    --accent: #4e8ca2;
+    --accent-2: #b35b79;
+    --warn: #77713f;
+    --muted: #8a8980;
+    --error: #c84053;
+    --ok: #6f894e;
+    --off: #d5cea3;
+    --hover: #54546414;
+  }
+}

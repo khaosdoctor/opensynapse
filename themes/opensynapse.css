@@ -1,0 +1,71 @@
+/* OpenSynapse, the default look. Neon on near-black, plus a light version.
+ *
+ * To make your own theme, copy this file to ~/.config/opensynapse/themes/<name>.css
+ * and it shows up as <NAME> on the settings page. You can leave any property
+ * out and it comes from this theme. Whatever is in :root counts for both
+ * modes, and a prefers-color-scheme block only for that mode.
+ *
+ *   --radius     corner radius of buttons and panels, in pixels
+ *   --font       monospace, or font families looked up with fc-match
+ *   --bg         page background
+ *   --panel      side panels and windows
+ *   --card       cards and lists
+ *   --pane       the button editor at the bottom, halfway between --bg and --panel if you leave it out
+ *   --deep       text fields and other sunken areas
+ *   --button     buttons that aren't selected
+ *   --border     outline of panels and buttons, #0000 for none
+ *   --text       normal text
+ *   --strong     highlighted text
+ *   --on-accent  text on filled buttons
+ *   --accent, --accent-2, --warn, --muted, --error, --ok
+ *   --off        edge of a button set to OFF
+ *   --hover      laid over a button under the mouse, use some transparency like #ffffff1a
+ */
+:root {
+  --radius: 0;
+  --font: monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #07070d;
+    --panel: #0e0e1a;
+    --card: #141424;
+    --deep: #030308;
+    --button: #07070d;
+    --border: #5a5a7a;
+    --text: #d0d0e8;
+    --strong: #ffffff;
+    --on-accent: #07070d;
+    --accent: #00f0ff;
+    --accent-2: #ff2a6d;
+    --warn: #fcee0a;
+    --muted: #5a5a7a;
+    --error: #ff3030;
+    --ok: #39ff14;
+    --off: #2a2a3a;
+    --hover: #ffffff1a;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f4fa;
+    --panel: #e8e8f2;
+    --card: #ffffff;
+    --deep: #dcdce8;
+    --button: #f4f4fa;
+    --border: #7a7a96;
+    --text: #20202e;
+    --strong: #0a0a14;
+    --on-accent: #f4f4fa;
+    --accent: #007a8a;
+    --accent-2: #d4004f;
+    --warn: #8a6a00;
+    --muted: #7a7a96;
+    --error: #c81e1e;
+    --ok: #1a8a00;
+    --off: #c8c8d8;
+    --hover: #00000014;
+  }
+}

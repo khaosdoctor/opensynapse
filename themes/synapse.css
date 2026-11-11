@@ -1,0 +1,51 @@
+/* Synapse, close to Razer's own app. Black with Razer green on everything.
+ * Razer has no light version, so the light one here is ours, with a darker
+ * green that you can still read on white. */
+:root {
+  --radius: 2;
+  --font: Roboto;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --panel: #111111;
+    --card: #1b1b1b;
+    --deep: #000000;
+    --button: #1b1b1b;
+    --border: #2e2e2e;
+    --text: #d8d8d8;
+    --strong: #ffffff;
+    --on-accent: #000000;
+    --accent: #44d62c;
+    --accent-2: #44d62c;
+    --warn: #44d62c;
+    --muted: #7a7a7a;
+    --error: #ff4545;
+    --ok: #44d62c;
+    --off: #2e2e2e;
+    --hover: #44d62c26;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f2f2f2;
+    --panel: #e4e4e4;
+    --card: #ffffff;
+    --deep: #ffffff;
+    --button: #ffffff;
+    --border: #c8c8c8;
+    --text: #1b1b1b;
+    --strong: #000000;
+    --on-accent: #ffffff;
+    --accent: #1f8a12;
+    --accent-2: #1f8a12;
+    --warn: #1f8a12;
+    --muted: #6e6e6e;
+    --error: #d42a2a;
+    --ok: #1f8a12;
+    --off: #d0d0d0;
+    --hover: #1f8a121f;
+  }
+}

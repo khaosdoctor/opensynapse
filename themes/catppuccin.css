@@ -1,0 +1,50 @@
+/* Catppuccin: Latte (light) and Mocha (dark).
+ * Colors: https://catppuccin.com/palette */
+:root {
+  --radius: 4;
+  --font: monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e2e;
+    --panel: #181825;
+    --card: #313244;
+    --deep: #11111b;
+    --button: #313244;
+    --border: #45475a;
+    --text: #cdd6f4;
+    --strong: #f5e0dc;
+    --on-accent: #1e1e2e;
+    --accent: #89dceb;
+    --accent-2: #cba6f7;
+    --warn: #f9e2af;
+    --muted: #7f849c;
+    --error: #f38ba8;
+    --ok: #a6e3a1;
+    --off: #45475a;
+    --hover: #cdd6f41a;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #eff1f5;
+    --panel: #e6e9ef;
+    --card: #ccd0da;
+    --deep: #dce0e8;
+    --button: #ccd0da;
+    --border: #bcc0cc;
+    --text: #4c4f69;
+    --strong: #1e1e2e;
+    --on-accent: #eff1f5;
+    --accent: #04a5e5;
+    --accent-2: #8839ef;
+    --warn: #df8e1d;
+    --muted: #6c6f85;
+    --error: #d20f39;
+    --ok: #40a02b;
+    --off: #bcc0cc;
+    --hover: #4c4f6914;
+  }
+}

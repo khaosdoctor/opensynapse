@@ -104,10 +104,16 @@ Open `opensynapse-gui`, or OpenSynapse from your app launcher. The first time it
 
 The lighting tab needs the OpenRazer daemon running, the badge at the top says ***OPENRAZER ONLINE*** when it is.
 
-The GUI is dark or light following your desktop's color scheme, and switches when you change it. To change the colors, put CSS custom properties in `~/.config/opensynapse/theme.css`. Only `--name: #hex;` declarations are read, and a `prefers-color-scheme` block applies to that scheme only:
+***SETTINGS***, next to the version at the top of the sidebar, opens the settings page. ***EXPORT*** and ***IMPORT*** stay on the ***BUTTONS*** tab under ***SET DEFAULT***, and ***CHANGE FOLDER*** in settings picks where exported profiles go.
+
+***SYSTEM*** follows your desktop's light or dark setting and switches when you change it, or you can pick ***LIGHT*** or ***DARK*** yourself. Every theme has both versions and the mode picks which one you see. OpenSynapse is the default, and Adwaita and Breeze come along so it looks at home on GNOME or KDE. Synapse looks like Razer's own app, and Catppuccin, Kanagawa and Dracula are also there. The font list has every font on your computer, and ***THEME DEFAULT*** uses whatever the theme asks for. We save all of that in `~/.config/opensynapse/settings.json`.
+
+Themes are CSS files, and you can find the built-in ones in [`themes/`](themes). To make your own, copy one of them to `~/.config/opensynapse/themes/<name>.css` and it shows up as a button on the settings page after you hit ***RELOAD***. If you name it like a built-in theme, yours replaces it. Only custom properties are read, and anything outside a `prefers-color-scheme` block counts for both modes:
 
 ```css
 :root {
+  --radius: 6;
+  --font: "Noto Sans";
   --accent: #00f0ff;
 }
 @media (prefers-color-scheme: light) {
@@ -115,9 +121,11 @@ The GUI is dark or light following your desktop's color scheme, and switches whe
 }
 ```
 
-The properties are `--bg`, `--panel`, `--card`, `--deep` (text fields), `--text`, `--strong` (highlighted text), `--accent`, `--accent-2`, `--warn`, `--muted`, `--error`, `--ok` and `--off` (buttons set to OFF). The file is read at startup and on each color scheme change.
+[`themes/opensynapse.css`](themes/opensynapse.css) lists every property, colors, corner radius and font included. To change a few things on top of whatever theme is on, put them in `~/.config/opensynapse/theme.css` instead.
 
-If your desktop doesn't report a light or dark preference, which is common on tiling window managers like Sway or Hyprland, the GUI stays dark. Pick the mode yourself with `color-scheme: light;` (or `dark`) in `:root`.
+If your desktop doesn't report a light or dark preference, which happens a lot on tiling window managers like Sway or Hyprland, ***SYSTEM*** stays dark. You can pick ***LIGHT*** on the settings page, or put `color-scheme: light;` in `theme.css` and ***SYSTEM*** uses that instead of asking the desktop.
+
+Only one GUI runs at a time, since two of them would fight over the same mouse. If you open it again while it's running, the second one just quits.
 
 ### With the CLI
 

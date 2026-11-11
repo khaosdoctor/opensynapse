@@ -1,0 +1,45 @@
+/* Breeze, the KDE Plasma / Qt look (Breeze Light and Breeze Dark).
+ * Colors from Plasma's BreezeLight.colors and BreezeDark.colors. */
+:root {
+  --radius: 3;
+  --font: "Noto Sans";
+  --on-accent: #ffffff;
+  --accent-2: #3daee9;
+  --warn: #f67400;
+  --error: #da4453;
+  --ok: #27ae60;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202326;
+    --panel: #272c31;
+    --card: #292c30;
+    --deep: #141618;
+    --button: #292c30;
+    --border: #4e5257;
+    --text: #fcfcfc;
+    --strong: #ffffff;
+    --accent: #3daee9;
+    --muted: #a1a9b1;
+    --off: #4d4d4d;
+    --hover: #3daee933;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #eff0f1;
+    --panel: #dee0e2;
+    --card: #fcfcfc;
+    --deep: #ffffff;
+    --button: #fcfcfc;
+    --border: #bcbebf;
+    --text: #232629;
+    --strong: #000000;
+    --accent: #2980b9;
+    --muted: #707d8a;
+    --off: #bdc3c7;
+    --hover: #3daee933;
+  }
+}

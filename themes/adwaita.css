@@ -1,0 +1,47 @@
+/* Adwaita, the GNOME / GTK look.
+ * Colors: https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/named-colors.html */
+:root {
+  --radius: 6;
+  --font: "Adwaita Sans", Cantarell;
+  --border: #0000;
+  --on-accent: #ffffff;
+  --accent-2: #3584e4;
+  /* GTK has no yellow buttons, things that need attention use the accent blue */
+  --warn: #3584e4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #222226;
+    --panel: #2e2e32;
+    --card: #36363a;
+    --deep: #1d1d20;
+    --button: #3a3a3e;
+    --text: #ffffff;
+    --strong: #ffffff;
+    --accent: #78aeed;
+    --muted: #9a9a9e;
+    --error: #ff7b63;
+    --ok: #8ff0a4;
+    --off: #48484c;
+    --hover: #ffffff12;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #fafafb;
+    --panel: #ebebed;
+    --card: #ffffff;
+    --deep: #ffffff;
+    --button: #e1e1e3;
+    --text: #323236;
+    --strong: #000000;
+    --accent: #1c71d8;
+    --muted: #77767b;
+    --error: #c01c28;
+    --ok: #1b8553;
+    --off: #d4d4d6;
+    --hover: #00000612;
+  }
+}

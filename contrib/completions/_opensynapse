@@ -33,6 +33,7 @@ _opensynapse() {
     local -a commands
     commands=(
         'init:start a device file for a mouse that has none (read-only)'
+        'probe:print the read commands a hidraw node answers (read-only)'
         'list:connected mice and their buttons'
         'dump:every button'"'"'s action'
         'get:one button'"'"'s action'
@@ -78,6 +79,7 @@ _opensynapse() {
                     ;;
                 export | import) _files -g '*.json' ;;
                 init) _files -g '*.jsonc' ;;
+                probe) (( CURRENT == 2 )) && compadd -- /dev/hidraw*(N) ;;
                 protocol)
                     (( CURRENT == 2 )) && compadd -- send
                     _files -g '*.md'

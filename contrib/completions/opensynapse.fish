@@ -42,6 +42,7 @@ end
 complete -c opensynapse -f
 
 complete -c opensynapse -n __opensynapse_no_command -a init -d 'start a device file for a mouse that has none'
+complete -c opensynapse -n __opensynapse_no_command -a probe -d 'print the read commands a hidraw node answers'
 complete -c opensynapse -n __opensynapse_no_command -a list -d 'connected mice and their buttons'
 complete -c opensynapse -n __opensynapse_no_command -a dump -d "every button's action"
 complete -c opensynapse -n __opensynapse_no_command -a get -d "one button's action"
@@ -73,3 +74,4 @@ complete -c opensynapse -n '__opensynapse_at rgb 0' -a '(__opensynapse_zones)'
 complete -c opensynapse -n '__opensynapse_at rgb 1' -a 'off static breath spectrum wave reactive brightness'
 complete -c opensynapse -n '__opensynapse_at export 0; or __opensynapse_at import 0; or __opensynapse_at init 0' -F
 complete -c opensynapse -n '__opensynapse_at protocol 0' -a send -F
+complete -c opensynapse -n '__opensynapse_at probe 0' -a '(__fish_complete_path /dev/hidraw)'

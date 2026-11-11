@@ -23,7 +23,7 @@ A mouse is a single JSONC file (JSON with `//` comments), like [the Naga one](de
 
 2. **Name the buttons.** `opensynapse dump` shows what each button does today (a key, a mouse button, DPI up...), which is usually enough to know which one it is. `opensynapse watch` prints a button's name when you press it. Only buttons that send a key, a left/right/middle/back/forward click or a wheel scroll show up (not tilt, DPI, profile, media, hypershift or disabled), and buttons with the same action show up together, so use `dump` for those. Rename them in the file, and fix the `name`, the `dpi_max` (the top DPI on your mouse's Razer product page) and any other `TODO`.
 
-   If `init` can't talk to your mouse, copy the Naga file to `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc`, set `name`, `pid`, `interface`, `transaction_id`, `profiles`, `layers` and `dpi_max` to your mouse's, delete the "Verified on hardware" line at the top, and replace the buttons with the ids you find with `tools/probe.py` (read-only), see [PROTOCOL.md](PROTOCOL.md#finding-things-out).
+   If `init` can't talk to your mouse, copy the Naga file to `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc`, set `name`, `pid`, `interface`, `transaction_id`, `profiles`, `layers` and `dpi_max` to your mouse's, delete the "Verified on hardware" line at the top, and replace the buttons with the ids you find with `opensynapse probe` (read-only), see [PROTOCOL.md](PROTOCOL.md#finding-things-out).
 
 3. **Test it.** Run `opensynapse list` and `opensynapse dump`. If they print `skipping device definition`, the error gives the line of a JSON typo (usually a missing comma or quote), fix it there and don't rerun init. If those look right, remap one side or thumb button (not left or right click), check it does what you set, and set it back:
 
@@ -56,21 +56,21 @@ device file.
 
 Rules:
 - Only send GET commands (command id with bit 0x80 set) while exploring.
-  Use tools/probe.py for this, don't write your own HID code.
+  Use `opensynapse probe` for this, don't write your own HID code.
 - Before ANY write to the mouse, tell me exactly which command, button and
   bytes you're about to send, and wait for me to say yes.
 - When testing a write, change one button only, read it back to confirm,
   ask me to press it, and then set it back to what it was before.
 - Don't touch profiles other than 0 unless I ask.
 - `opensynapse set`, `dpi <X>`, `stages` with DPI values or `--active`, `rgb`, `import` and the
-  GUI write to the mouse too. `list`, `dump`, `get`, `export`, `watch`, `init` and
+  GUI write to the mouse too. `list`, `dump`, `get`, `export`, `watch`, `init`, `probe` and
   `protocol` (without `send`) only read; `protocol send` posts a public issue, never run it.
 - Never pass --force. If `init` or `protocol` says the file already exists, edit that file instead.
 
 Steps:
 1. Run `opensynapse init` to start the device file in
    ~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc. If it can't talk to my mouse, find the
-   /dev/hidraw node and transaction id by hand with tools/probe.py.
+   /dev/hidraw node and transaction id by hand with `opensynapse probe`.
 2. Run `opensynapse dump` and work out which id is which physical button
    from what each one does. Ask me to press buttons while
    `timeout 20 opensynapse watch` runs if you need to.

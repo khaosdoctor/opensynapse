@@ -17,7 +17,7 @@ The repo isn't formatted with rustfmt, so don't run `cargo fmt`, it rewrites eve
 
 Everything here ends up as bytes on a real device, and a wrong write can leave a button doing something odd until someone fixes it by hand. So:
 
-- Reads are always fine. `list`, `dump`, `get`, `export`, `watch`, `init` and `protocol` only read.
+- Reads are always fine. `list`, `dump`, `get`, `export`, `watch`, `init`, `probe` and `protocol` only read. `probe` refuses any command without the read bit.
 - Before any write (`set`, `dpi`, `stages`, `rgb`, `import`, or the GUI's WRITE TO DEVICE), say exactly what you're about to send and wait for a human to say yes. Change one thing, read it back, then put it back.
 - Never run `opensynapse protocol send`, it posts a public issue.
 - The exploration rules for new mice are in the agent prompt at the end of [CONTRIBUTING.md](CONTRIBUTING.md#using-an-agent).
@@ -35,14 +35,13 @@ Everything here ends up as bytes on a real device, and a wrong write can leave a
 | `src/rgb.rs` | lighting through the OpenRazer driver and daemon, we don't reverse engineer lighting |
 | `src/scaffold.rs` | `init`, which starts a device file for an unknown mouse using reads only |
 | `src/generators/protocol.rs` | writes `devices/protocols/<slug>.md` for `opensynapse protocol` |
-| `src/main.rs` | the CLI |
+| `src/main.rs` | the CLI, including `probe` for raw read-only probing of a hidraw node |
 | `src/bin/opensynapse-gui/` | the GUI, see below |
 | `src/bin/device-from-issue.rs` | turns an issue from `protocol send` into `devices/<slug>.jsonc` and its protocol file for `add-device.yml`. The packages only ship `opensynapse` and `opensynapse-gui` |
 | `devices/*.jsonc` | one file per supported mouse, `devices/protocols/*.md` documents what was found |
 | `themes/*.css` | built-in GUI themes, `opensynapse.css` lists every property |
 | `udev/` | the rule that lets your user open the mouse without root |
 | `contrib/` | AUR PKGBUILDs, the Homebrew formula and shell completions |
-| `tools/` | `probe.py` for raw read-only probing |
 
 The GUI is split by job, and every file stays under 500 lines:
 

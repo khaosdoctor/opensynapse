@@ -1,4 +1,4 @@
-use opensynapse::action::Action;
+use opensynapse::action::{self, Action};
 use opensynapse::device;
 use opensynapse::rgb::{self, Effect};
 use opensynapse::generators::protocol;
@@ -15,6 +15,9 @@ usage: opensynapse <command> [--profile N] [--layer NAME] [--device PID]
 
 commands:
   init [pid] [file.jsonc]      start a device file for a mouse that doesn't have one (read-only)
+  probe /dev/hidrawN [class ...] [--args HEX] [--tid HEX]
+                               send every read command of each class (default 0x00-0x0f)
+                               and print the ones that answer (read-only, tid defaults to 0x1f)
   list                         connected mice and their buttons
   dump                         every button's action
   get <button>                 one button's action
@@ -85,6 +88,9 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
     }
     if args.first() == Some(&"init") {
         return init(&args[1..], o.force);
+    }
+    if args.first() == Some(&"probe") {
+        return probe(&args[1..]);
     }
     let mice = device::detect()?;
     let mouse = match o.device {
@@ -257,6 +263,73 @@ fn init(args: &[&str], force: bool) -> Result<(), Box<dyn Error>> {
         protocol::REPO
     );
     Ok(())
+}
+
+/// Sends every read command (id 0x80 to 0xff) of each class to a hidraw node and
+/// prints the ones that answer, for mice without a device file yet.
+fn probe(args: &[&str]) -> Result<(), Box<dyn Error>> {
+    let Some((path, rest)) = args.split_first() else {
+        return Err("usage: opensynapse probe /dev/hidrawN [class ...] [--args HEX] [--tid HEX]".into());
+    };
+    let mut classes: Vec<u8> = Vec::new();
+    let mut cmd_args: Vec<u8> = Vec::new();
+    // the transaction id most newer Razer mice take
+    let mut tid = 0x1f;
+    let mut it = rest.iter();
+    while let Some(a) = it.next() {
+        match *a {
+            "--args" => {
+                let hex = it.next().ok_or("--args needs hex bytes, like 004000")?;
+                cmd_args = action::hex_bytes(hex).ok_or(format!("bad --args '{hex}', use hex bytes like 004000"))?;
+            }
+            "--tid" => {
+                let hex = it.next().ok_or("--tid needs a transaction id, like 0x3f")?;
+                tid = u8::from_str_radix(hex.trim_start_matches("0x"), 16).map_err(|_| format!("bad --tid '{hex}', use hex like 0x3f"))?;
+            }
+            c => classes.push(parse_byte(c).ok_or(format!("bad class '{c}', use hex like 0x02"))?),
+        }
+    }
+    // a report has 80 argument bytes, from byte 8 up to the checksum
+    if cmd_args.len() > 80 {
+        return Err("--args takes at most 80 bytes".into());
+    }
+    if classes.is_empty() {
+        classes = (0x00..0x10).collect();
+    }
+
+    let hid = hid::Hid::open(Path::new(path), tid).map_err(|e| format!("{path}: {e}"))?;
+    let get = |class: u8, id: u8, args: &[u8]| {
+        // only GET commands, the ones with bit 0x80 set, so probing can't change the mouse
+        if id & 0x80 == 0 {
+            return Err(io::Error::other(format!("{class:02x}/{id:02x} isn't a read command")));
+        }
+        hid.command(class, id, 0x50, args)
+    };
+    match get(0x00, 0x81, &[]) {
+        Ok(r) => println!("firmware: status=ok v{}.{}", r[8], r[9]),
+        Err(e) => println!("firmware: {e}"),
+    }
+    for class in classes {
+        for id in 0x80..=0xff {
+            let Ok(r) = get(class, id, &cmd_args) else { continue };
+            let size = r[5];
+            let data = &r[8..(8 + size as usize).min(r.len())];
+            let end = data.iter().rposition(|b| *b != 0).map_or(0, |i| i + 1);
+            // the factory serial would end up in protocol files posted publicly
+            let data = if (class, id) == (0x00, 0x82) { &[][..] } else { &data[..end] };
+            let hex: String = data.iter().map(|b| format!("{b:02x}")).collect();
+            println!("class 0x{class:02x} id 0x{id:02x} size={size:3} data={hex}");
+        }
+    }
+    Ok(())
+}
+
+/// A byte as hex with 0x (0x02) or decimal (2), like Python's int(x, 0).
+fn parse_byte(s: &str) -> Option<u8> {
+    match s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+        Some(hex) => u8::from_str_radix(hex, 16).ok(),
+        None => s.parse().ok(),
+    }
 }
 
 /// Like `device::write`, but refuses to overwrite a file unless forced.

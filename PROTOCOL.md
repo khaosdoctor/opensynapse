@@ -29,7 +29,7 @@ The mouse talks through a 90-byte HID feature report, usually on USB interface 0
 | 8..87 | arguments |
 | 88 | XOR of bytes 2 to 87 |
 
-You send the report with `HIDIOCSFEATURE` and keep reading it back with `HIDIOCGFEATURE` until the status stops being busy. `tools/probe.py` already does all of this.
+You send the report with `HIDIOCSFEATURE` and keep reading it back with `HIDIOCGFEATURE` until the status stops being busy. `opensynapse probe` already does all of this.
 
 ## Finding things out
 
@@ -37,9 +37,9 @@ Always start with reads. A read has the `0x80` bit set on the command id, and it
 
 `ls -l /sys/class/hidraw/ | grep -i 1532:<pid>` shows which node is which: use the one whose path has `:1.0` (interface 0), or the interface `opensynapse init` printed.
 
-1. **Find the class.** `python3 tools/probe.py /dev/hidrawN` tries every read command in classes `0x00` to `0x0f` and prints the ones that answer. On the Naga the keymap is class `0x02`, DPI is `0x04` and serial/firmware are `0x00`, which seems to be common on newer Razer mice. probe.py sends transaction id `0x1f`. If the `firmware:` line doesn't say `status=ok`, change `tid = 0x1F` in `tools/probe.py` to the `transaction_id` in your device file (`opensynapse init` prints it), or try `0x3F` and `0xFF` if you don't have one.
+1. **Find the class.** `opensynapse probe /dev/hidrawN` tries every read command in classes `0x00` to `0x0f` and prints the ones that answer. It refuses to send anything that isn't a read, and it leaves the serial number out of its output. On the Naga the keymap is class `0x02`, DPI is `0x04` and serial/firmware are `0x00`, which seems to be common on newer Razer mice. The probe sends transaction id `0x1f`. If the `firmware:` line doesn't say `status=ok`, pass the `transaction_id` in your device file with `--tid` (`opensynapse init` prints it), or try `--tid 0x3f` and `--tid 0xff` if you don't have one.
 2. **Look at what comes back with empty arguments.** Some reads answer right away (the Naga's `0x02/0x84` lists every button id), others need arguments.
-3. **Retry with arguments.** Some reads only show up once you pass arguments, usually a profile, a button and a layer: `python3 tools/probe.py /dev/hidrawN 0x02 --args 004000` sends profile 0 (the live one, what `opensynapse dump` shows), button `0x40` (use a button id from the `0x84` list instead of `40`), layer 0 to every read in class `0x02`, and the `id 0x8c` line is that button's action.
+3. **Retry with arguments.** Some reads only show up once you pass arguments, usually a profile, a button and a layer: `opensynapse probe /dev/hidrawN 0x02 --args 004000` sends profile 0 (the live one, what `opensynapse dump` shows), button `0x40` (use a button id from the `0x84` list instead of `40`), layer 0 to every read in class `0x02`, and the `id 0x8c` line is that button's action.
 4. **Decode the answer against what you know.** If a thumb button sends `1` today and the reply ends in `1e`, that's the HID usage for `1`, so you found the key byte.
 
 Only then try a write, with `opensynapse set` once you have a device file, and only on one button: `set` reads it back and errors if it didn't stick, then press the button and set it back to what it was.
@@ -130,11 +130,11 @@ Write the protocol file for my Razer mouse in opensynapse, the repo you're in.
 Read PROTOCOL.md for what goes in it and the template, and
 devices/protocols/razer-naga-left-handed-2020.md as an example.
 My device file is ~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc
-(from `opensynapse init`), or the mouse is built in under devices/. If
+(from `opensynapse init`), or the mouse already has a file in devices/. If
 neither exists, say so and stop.
 
 Rules:
-- Only send GET commands (command id with bit 0x80 set), use tools/probe.py.
+- Only send GET commands (command id with bit 0x80 set), use `opensynapse probe`.
   Don't write anything to the mouse.
 - Only write down what you actually saw. Mark each finding as verified
   (seen working on the mouse) or inferred (read back fine, or matches the
@@ -144,8 +144,8 @@ Rules:
 Steps:
 1. Find the /dev/hidraw node for the interface in my device file
    (`ls -l /sys/class/hidraw/`).
-2. Run tools/probe.py over classes 0x00 to 0x0f and note which reads answer.
-3. Read the button list (0x02/0x84), then run tools/probe.py on class 0x02
+2. Run `opensynapse probe` over classes 0x00 to 0x0f and note which reads answer.
+3. Read the button list (0x02/0x84), then run `opensynapse probe` on class 0x02
    with --args <profile><button><layer> and read the id 0x8c line for what
    each button does. Compare with my device file.
 4. Ask me to press buttons while `timeout 20 opensynapse watch` runs if you

@@ -1,0 +1,26 @@
+name: label-device
+
+# Contributors can't add labels, so a PR titled "New Device: ..." gets new-device
+# here and device-release.yml ships a patch release once it's merged.
+# pull_request_target runs with the repo's token, so this never checks out or
+# runs anything from the PR, it only reads the title GitHub already gives us.
+on:
+  pull_request_target:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  label:
+    if: startsWith(github.event.pull_request.title, 'New Device:')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: add the new-device label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$PR" --add-label new-device

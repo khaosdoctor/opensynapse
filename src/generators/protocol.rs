@@ -70,7 +70,7 @@ pub fn generate(mouse: &Mouse) -> String {
 /// Issue body for `protocol send`, the protocol file plus the device file.
 pub fn issue(protocol: &str, mouse: &Mouse) -> (String, String) {
     let def = &mouse.def;
-    let title = format!("Device support: {} ({:04x}:{:04x})", def.name, def.vid, def.pid);
+    let title = format!("New Device: {} ({:04x}:{:04x})", def.name, def.vid, def.pid);
     let body = format!(
         "{protocol}\n\n## Device file (`devices/{}.jsonc`)\n\n```jsonc\n{}\n```\n\n_Sent with `opensynapse protocol send`._\n",
         def.file,

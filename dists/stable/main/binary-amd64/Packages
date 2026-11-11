@@ -1,15 +1,15 @@
 Package: opensynapse
-Version: 0.2.5
+Version: 0.2.6
 Architecture: amd64
 Maintainer: Lucas Santos <hello@lsantos.dev>
 Depends: libc6 (>= 2.35), libgcc-s1
 Recommends: libxkbcommon0, libwayland-client0, libegl1, xdg-desktop-portal
 Suggests: openrazer-driver-dkms
-Filename: pool/main/opensynapse_0.2.5_amd64.deb
-Size: 8665124
-MD5sum: 30443ad6841928a5fa6d90457e6ae8a1
-SHA1: f01708f485fa7342fcafe3f9acac949ea388b6af
-SHA256: 84d367bf7715b24735165b3c030294171b051e18a6eaed819ab4c55f04658043
+Filename: pool/main/opensynapse_0.2.6_amd64.deb
+Size: 8881578
+MD5sum: 8454072cd861419cc09c5e73256388d7
+SHA1: 62a1d9f61d8741aad8fb52e492bd741703e2cdcb
+SHA256: c67254e56c6ea6305438ffb7d22cdadf55544cc1a5a291fecb2750d3294cea09
 Section: utils
 Priority: optional
 Homepage: https://github.com/khaosdoctor/opensynapse

@@ -102,7 +102,7 @@ fn call<B: Serialize + DynamicType>(conn: &Connection, path: &str, zone: &str, v
     conn.call_method(Some("org.razer"), path, Some(iface.as_str()), format!("{verb}{cap}{name}").as_str(), body).ok()
 }
 
-fn reply<T: DeserializeOwned + Type>(msg: Option<Message>) -> Option<T> {
+pub(crate) fn reply<T: DeserializeOwned + Type>(msg: Option<Message>) -> Option<T> {
     msg?.body().deserialize().ok()
 }
 
@@ -118,14 +118,18 @@ pub fn daemon_sees(serial: &str) -> bool {
     devices.is_some_and(|devices| devices.iter().any(|d| d == serial))
 }
 
-fn connect_daemon(serial: &str, zone: &str) -> Option<(Connection, String)> {
+/// The session bus and the mouse's object path on the OpenRazer daemon.
+pub(crate) fn daemon_device(serial: &str) -> Option<(Connection, String)> {
     // checked first so we never start a stopped daemon through D-Bus activation,
     // which would make the GUI's online/offline badge flip back on its own
     if serial.is_empty() || !daemon_sees(serial) {
         return None;
     }
-    let conn = Connection::session().ok()?;
-    let path = format!("/org/razer/device/{serial}");
+    Some((Connection::session().ok()?, format!("/org/razer/device/{serial}")))
+}
+
+fn connect_daemon(serial: &str, zone: &str) -> Option<(Connection, String)> {
+    let (conn, path) = daemon_device(serial)?;
     // the daemon can know the mouse but not this zone
     call(&conn, &path, zone, "get", "Brightness", &())?;
     Some((conn, path))

@@ -2,7 +2,7 @@ use opensynapse::action::{self, Action};
 use opensynapse::device;
 use opensynapse::rgb::{self, Effect};
 use opensynapse::generators::protocol;
-use opensynapse::{hid, input, profile, scaffold};
+use opensynapse::{hid, input, power, profile, scaffold};
 use std::error::Error;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -30,6 +30,7 @@ commands:
   rgb <zone|all> <effect>      off | static RRGGBB | breath RRGGBB|random | spectrum
                                | wave [reverse] | reactive RRGGBB [speed 1-3]
   rgb <zone|all> brightness N  0-255
+  poll [125|500|1000]          show or set the polling rate in Hz (needs the OpenRazer daemon)
   export <file.json>           save keymap (all layers) + DPI of --profile
   import <file.json>           write a saved profile to --profile
   protocol [file.md]           generate a protocol file skeleton for this mouse (--force overwrites)
@@ -206,6 +207,13 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
                 [] => return Err("rgb <zone|all> <effect|brightness> ...".into()),
             }
             println!("{} > {}", zones.join(","), rest.join(" "));
+        }
+        ["poll", rest @ ..] if rest.len() <= 1 => {
+            let power = power::find(&mouse.serial).ok_or("the polling rate needs the OpenRazer daemon")?;
+            if let Some(hz) = rest.first() {
+                power.set_poll_rate(hz.parse().map_err(|_| "bad polling rate")?)?;
+            }
+            println!("{} Hz", power.poll_rate().ok_or("this mouse has no polling rate on the daemon")?);
         }
         ["protocol", "send", rest @ ..] if rest.len() <= 1 => {
             let path = rest.first().map_or_else(|| protocol_path(def), PathBuf::from);

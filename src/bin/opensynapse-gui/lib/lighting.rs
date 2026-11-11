@@ -25,6 +25,9 @@ const FX: &[(&str, Fx)] = &[
     ("OFF", Fx::Off),
 ];
 
+/// The rates in opensynapse::power::POLL_RATES, with their labels.
+const POLL: &[(&str, u16)] = &[("125 HZ", 125), ("500 HZ", 500), ("1000 HZ", 1000)];
+
 #[derive(Clone, PartialEq)]
 pub(crate) struct ZoneUi {
     pub(crate) name: String,
@@ -128,6 +131,7 @@ impl App {
         if !online {
             ui.disable();
         }
+        self.device_row(ui);
 
         // with sync on, the first zone's card drives every zone
         let shown = if self.sync_zones { 1 } else { self.zone_ui.len() };
@@ -176,6 +180,34 @@ impl App {
         self.ops = self.zone_ui.iter().filter(|z| names.contains(&z.name)).map(ZoneUi::op).collect();
         self.apply();
         self.ops.extend(rest);
+    }
+
+    /// Settings the OpenRazer daemon has besides lighting, hidden when it doesn't have them.
+    fn device_row(&mut self, ui: &mut egui::Ui) {
+        if self.device_poll.is_none() {
+            return;
+        }
+        panel(t().panel).show(ui, |ui| {
+            ui.set_width(ui.available_width().min(760.0));
+            ui.horizontal(|ui| {
+                note(ui, "POLLING RATE");
+                pick(ui, POLL, &mut self.poll_rate, true, chip);
+            });
+        });
+        ui.add_space(8.0);
+        self.queue_power_edits();
+    }
+
+    /// Like DPI, a value that differs from the mouse is queued and putting the mouse's value back drops it.
+    fn queue_power_edits(&mut self) {
+        let Some(device) = self.device_poll else { return };
+        if self.poll_rate == device {
+            unqueue(&mut self.ops, &Op::Poll(device));
+            return;
+        }
+        if queue(&mut self.ops, Op::Poll(self.poll_rate)) {
+            self.status = Ok(format!("QUEUED POLLING RATE > {} HZ", self.poll_rate));
+        }
     }
 
     /// Lighting edits are queued per zone, as differences from the mouse.

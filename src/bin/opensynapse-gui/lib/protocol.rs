@@ -4,6 +4,7 @@ use crate::lib::lighting::ZoneUi;
 use crate::state::{App, Op};
 use opensynapse::action::Action;
 use opensynapse::device::{self, DpiStages};
+use opensynapse::power::{self, Power};
 use opensynapse::rgb::{self, Effect};
 use opensynapse::{hid, input, profile};
 use std::time::{Duration, Instant};
@@ -44,6 +45,17 @@ impl App {
         self.reload();
         self.update_path();
         self.load_lighting();
+        self.load_power();
+    }
+
+    /// Reads the polling rate from the OpenRazer daemon. A queued change stays in the editor.
+    pub(crate) fn load_power(&mut self) {
+        let Some(m) = self.mice.get(self.current) else { return };
+        self.power = power::find(&m.serial);
+        self.device_poll = self.power.as_ref().and_then(Power::poll_rate);
+        if !self.ops.iter().any(|o| matches!(o, Op::Poll(_))) {
+            self.poll_rate = self.device_poll.unwrap_or(0);
+        }
     }
 
     pub(crate) fn reload(&mut self) {
@@ -106,6 +118,7 @@ impl App {
             return;
         }
         self.load_lighting();
+        self.load_power();
         for op in &self.ops {
             let Op::Light { zone, effect, brightness } = op else { continue };
             if let Some(z) = self.zone_ui.iter_mut().find(|z| z.name == *zone) {
@@ -149,6 +162,10 @@ impl App {
                     Some(light) => light.set_brightness(zone, *brightness).and_then(|_| light.set_effect(zone, effect)),
                     None => Err(std::io::Error::other("no lighting")),
                 },
+                Op::Poll(hz) => match &self.power {
+                    Some(power) => power.set_poll_rate(*hz),
+                    None => Err(std::io::Error::other("no OpenRazer daemon")),
+                },
             };
             if let (Ok(_), Op::Light { zone, .. }) = (&r, op) {
                 let done = self.zone_ui.iter().find(|z| z.name == *zone).cloned();
@@ -160,12 +177,14 @@ impl App {
                 let done = total - self.ops.len();
                 self.status = Err(format!("{done}/{total} APPLIED > {} FAILED: {e}", op.describe(&m.def)));
                 self.reload();
+                self.load_power();
                 return;
             }
             self.ops.remove(0);
         }
         self.status = Ok(format!("{total} OPERATIONS APPLIED"));
         self.reload();
+        self.load_power();
     }
 
     /// Reads zones from the OpenRazer driver and pre-fills each card with what

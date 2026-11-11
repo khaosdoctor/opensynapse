@@ -17,8 +17,8 @@ The repo isn't formatted with rustfmt, so don't run `cargo fmt`, it rewrites eve
 
 Everything here ends up as bytes on a real device, and a wrong write can leave a button doing something odd until someone fixes it by hand. So:
 
-- Reads are always fine. `list`, `dump`, `get`, `export`, `watch`, `init`, `probe` and `protocol` only read. `probe` refuses any command without the read bit.
-- Before any write (`set`, `dpi`, `stages`, `rgb`, `import`, or the GUI's WRITE TO DEVICE), say exactly what you're about to send and wait for a human to say yes. Change one thing, read it back, then put it back.
+- Reads are always fine. `list`, `dump`, `get`, `export`, `watch`, `init`, `probe`, `protocol` and `poll` with no rate only read. `probe` refuses any command without the read bit.
+- Before any write (`set`, `dpi`, `stages`, `rgb`, `poll <rate>`, `import`, or the GUI's WRITE TO DEVICE), say exactly what you're about to send and wait for a human to say yes. Change one thing, read it back, then put it back.
 - Never run `opensynapse protocol send`, it posts a public issue.
 - The exploration rules for new mice are in the agent prompt at the end of [CONTRIBUTING.md](CONTRIBUTING.md#using-an-agent).
 
@@ -33,6 +33,7 @@ Everything here ends up as bytes on a real device, and a wrong write can leave a
 | `src/profile.rs` | profile export/import files |
 | `src/input.rs` | which buttons are held right now, for `watch` and the GUI highlights |
 | `src/rgb.rs` | lighting through the OpenRazer driver and daemon, we don't reverse engineer lighting |
+| `src/power.rs` | polling rate through the OpenRazer daemon |
 | `src/scaffold.rs` | `init`, which starts a device file for an unknown mouse using reads only |
 | `src/generators/protocol.rs` | writes `devices/protocols/<slug>.md` for `opensynapse protocol` |
 | `src/main.rs` | the CLI, including `probe` for raw read-only probing of a hidraw node |

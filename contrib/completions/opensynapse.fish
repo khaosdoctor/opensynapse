@@ -51,6 +51,7 @@ complete -c opensynapse -n __opensynapse_no_command -a dpi -d 'show or set DPI'
 complete -c opensynapse -n __opensynapse_no_command -a stages -d 'show or set DPI stages'
 complete -c opensynapse -n __opensynapse_no_command -a watch -d 'print buttons as you press them'
 complete -c opensynapse -n __opensynapse_no_command -a rgb -d 'lighting zones (needs OpenRazer)'
+complete -c opensynapse -n __opensynapse_no_command -a poll -d 'show or set the polling rate (needs OpenRazer)'
 complete -c opensynapse -n __opensynapse_no_command -a export -d 'save a profile to JSON'
 complete -c opensynapse -n __opensynapse_no_command -a import -d 'write a saved profile to the mouse'
 complete -c opensynapse -n __opensynapse_no_command -a protocol -d 'generate a protocol file for this mouse'
@@ -74,6 +75,7 @@ complete -c opensynapse -n '__opensynapse_at set 1' -a 'key: turbo: keyturbo: ra
     dpi:up dpi:down dpi:up-wrap dpi:down-wrap profile:next profile:prev profile:next-wrap profile:prev-wrap'
 complete -c opensynapse -n '__opensynapse_at rgb 0' -a '(__opensynapse_zones)'
 complete -c opensynapse -n '__opensynapse_at rgb 1' -a 'off static breath spectrum wave reactive brightness'
+complete -c opensynapse -n '__opensynapse_at poll 0' -a '125 500 1000'
 complete -c opensynapse -n '__opensynapse_at export 0; or __opensynapse_at import 0; or __opensynapse_at init 0' -F
 complete -c opensynapse -n '__opensynapse_at protocol 0' -a send -F
 complete -c opensynapse -n '__opensynapse_at probe 0' -a '(__fish_complete_path /dev/hidraw)'

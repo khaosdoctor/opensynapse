@@ -7,6 +7,7 @@ use eframe::egui;
 use opensynapse::action::Action;
 use opensynapse::device::{DeviceDef, Mouse};
 use opensynapse::input::Pressed;
+use opensynapse::power::Power;
 use opensynapse::profile;
 use opensynapse::rgb::{Effect, Lighting};
 use std::path::PathBuf;
@@ -49,6 +50,11 @@ pub(crate) struct App {
     pub(crate) zone_base: Vec<ZoneUi>,
     /// one card drives every lighting zone
     pub(crate) sync_zones: bool,
+    /// polling rate and the rest that goes through the OpenRazer daemon
+    pub(crate) power: Option<Power>,
+    pub(crate) poll_rate: u16,
+    /// the polling rate on the mouse, None when the daemon doesn't give one
+    pub(crate) device_poll: Option<u16>,
     /// folder picked for profile files, None = the default config folder
     pub(crate) dir: Option<PathBuf>,
     /// (vid, pid) of a mouse that was unplugged; we keep polling until it comes back
@@ -70,6 +76,9 @@ impl App {
             zone_ui: Vec::new(),
             zone_base: Vec::new(),
             sync_zones: false,
+            power: None,
+            poll_rate: 0,
+            device_poll: None,
             dir: None,
             disconnected: None,
             last_daemon_check: Instant::now(),
@@ -163,6 +172,9 @@ impl App {
         if !self.ops.iter().any(|o| matches!(o, Op::Light { .. })) {
             self.sync_zones = false;
         }
+        if !self.ops.iter().any(|o| matches!(o, Op::Poll(_))) {
+            self.poll_rate = self.device_poll.unwrap_or(0);
+        }
     }
 
     /// Same for DPI, valid values that differ from the device are queued and
@@ -189,6 +201,8 @@ pub(crate) enum Op {
     Button { profile: u8, layer: u8, index: usize, action: Action },
     Dpi { dpi: u16, active: u8, stages: Vec<u16> },
     Light { zone: String, effect: Effect, brightness: u8 },
+    /// polling rate in Hz
+    Poll(u16),
 }
 
 impl Op {
@@ -199,6 +213,7 @@ impl Op {
             }
             (Op::Dpi { .. }, Op::Dpi { .. }) => true,
             (Op::Light { zone: a, .. }, Op::Light { zone: b, .. }) => a == b,
+            (Op::Poll(_), Op::Poll(_)) => true,
             _ => false,
         }
     }
@@ -214,6 +229,7 @@ impl Op {
                 format!("DPI {dpi} > STAGES {} (#{active})", list.join("/"))
             }
             Op::Light { zone, effect, brightness } => format!("LIGHT {} > {effect:?} @{brightness}", zone.to_uppercase()),
+            Op::Poll(hz) => format!("POLLING RATE > {hz} HZ"),
         }
     }
 }

@@ -42,6 +42,7 @@ _opensynapse() {
         'stages:show or set DPI stages'
         'watch:print buttons as you press them'
         'rgb:lighting zones (needs OpenRazer)'
+        'poll:show or set the polling rate (needs OpenRazer)'
         'export:save a profile to JSON'
         'import:write a saved profile to the mouse'
         'protocol:generate a protocol file for this mouse'
@@ -79,6 +80,7 @@ _opensynapse() {
                         3) compadd -- off static breath spectrum wave reactive brightness ;;
                     esac
                     ;;
+                poll) (( CURRENT == 2 )) && compadd -- 125 500 1000 ;;
                 export | import) _files -g '*.json' ;;
                 init) _files -g '*.jsonc' ;;
                 probe) (( CURRENT == 2 )) && compadd -- /dev/hidraw*(N) ;;

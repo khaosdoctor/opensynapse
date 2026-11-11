@@ -6,10 +6,10 @@ Depends: libc6 (>= 2.35), libgcc-s1
 Recommends: libxkbcommon0, libwayland-client0, libegl1, xdg-desktop-portal
 Suggests: openrazer-driver-dkms
 Filename: pool/main/opensynapse_0.2.5_arm64.deb
-Size: 8248608
-MD5sum: c9aa7ef06a503158c383421dcb730090
-SHA1: 760173c0d3a2f22c81cb9f64488a35a993972f3e
-SHA256: aa6e4f524431bb9fe391d4cac02f716a568ea98a8ed1dfe30f36acf42a1c087e
+Size: 8248618
+MD5sum: 32527177408b3aca257a3456a029f7c1
+SHA1: d2f8976fb934c3645a2b1f4c3851c8221932c72b
+SHA256: 1c6647b08546f0b7a94abd1c6c5d14f8f6979df4d9132a726ed4a024701a4fb4
 Section: utils
 Priority: optional
 Homepage: https://github.com/khaosdoctor/opensynapse

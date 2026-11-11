@@ -427,7 +427,7 @@ impl App {
         self.actions.get(i)?.as_ref()
     }
 
-    /// Every edit goes straight to the queue: a valid action that differs
+    /// Every edit goes straight to the queue. A valid action that differs
     /// from what the button will do is queued (or dropped when it's back to
     /// the device value). Buttons that couldn't be read are left alone.
     fn queue_edits(&mut self) {
@@ -595,7 +595,7 @@ fn unqueue(ops: &mut Vec<Op>, op: &Op) {
     ops.retain(|o| !o.same_target(op));
 }
 
-/// Top-down mouse silhouette: a squared-off ellipse, narrower at the front.
+/// Top-down mouse silhouette, a squared-off ellipse that is narrower at the front.
 fn mouse_outline(body: egui::Rect) -> Vec<egui::Pos2> {
     let (c, a, b) = (body.center(), body.width() / 2.0, body.height() / 2.0);
     (0..96)
@@ -1211,7 +1211,7 @@ impl App {
         self.queue_dpi_edits();
         ui.add_space(24.0);
 
-        // pending operations, pinned to the bottom of the sidebar (bottom_up: first added = lowest)
+        // pending operations, pinned to the bottom of the sidebar (bottom_up puts the first one added lowest)
         ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
             ui.add_enabled_ui(!self.ops.is_empty(), |ui| {
                 ui.horizontal(|ui| {
@@ -1336,7 +1336,7 @@ impl App {
     /// `alone` is true when no button grid goes under the drawing.
     fn mouse_view(&self, ui: &mut egui::Ui, buttons: &[Button], placed: &[usize], lit: &[bool], max_height: f32, alone: bool) -> Option<usize> {
         // 16:10 canvas so `at` percentages mean the same thing at any window size
-        // center what's drawn (body plus side plates), not the canvas: a thumb grid on one side
+        // center what's drawn (body plus side plates) instead of the canvas, since a thumb grid on one side
         // would otherwise push the whole drawing off to that side. lo..hi is that span in percent
         // of the canvas (a marker is 52 wide plus 12 of plate padding on a 736-wide canvas).
         let half_marker = (26.0 + 12.0) / 736.0 * 100.0;
@@ -1591,8 +1591,7 @@ impl App {
 
     /// Lighting on the mouse as it was last read or written.
     fn lighting_now(&self) -> Vec<rgb::ZoneState> {
-        let state = |z: &ZoneUi| rgb::ZoneState { zone: z.name.clone(), effect: z.effect(), brightness: z.brightness };
-        self.zone_base.iter().map(state).collect()
+        self.zone_base.iter().map(|z| rgb::ZoneState { zone: z.name.clone(), effect: z.effect(), brightness: z.brightness }).collect()
     }
 
     /// Queues the original lighting snapshot.
@@ -1697,8 +1696,8 @@ impl App {
                 }
             });
             for (group, cols, keys) in SPECIAL_KEYS {
-                // egui only wraps single widgets, so measure the group: a chip is its text
-                // plus padding, the widest key sets the column width
+                // egui only wraps single widgets, so we measure the group. A chip is its text
+                // plus padding and the widest key sets the column width
                 let widest = keys.iter().map(|k| k.len()).max().unwrap_or(0) as f32;
                 let font = egui::TextStyle::Button.resolve(ui.style());
                 let char_w = ui.fonts_mut(|f| f.glyph_width(&font, 'M'));

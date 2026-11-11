@@ -42,10 +42,13 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
             commit -qm "feat(devices): add $NAME"
           git push -f origin "$branch"
-          # new-device makes device-release.yml ship a patch release once it's merged
-          url=$(gh pr create --head "$branch" --title "feat(devices): add $NAME" --label new-device \
+          url=$(gh pr create --head "$branch" --title "feat(devices): add $NAME" \
             --body "Adds $NAME from #$ISSUE. Closes #$ISSUE" 2>/dev/null \
             || gh pr view "$branch" --json url -q .url)
+          # new-device makes device-release.yml ship a patch release once it's merged. We add it
+          # here, also when the PR already existed, because PRs opened with this workflow's token
+          # don't start label-device.yml
+          gh pr edit "$url" --add-label new-device
           # Copilot review is a nice-to-have, it fails when Copilot isn't available for the repo
           gh pr edit "$url" --add-reviewer @copilot || echo "couldn't request a Copilot review"
           gh issue comment "$ISSUE" --body "Thanks! Opened $url to add it, it goes in the next release once it's merged."

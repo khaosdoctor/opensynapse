@@ -123,7 +123,7 @@ pub fn has_control_report(node: &Path) -> bool {
 /// Walks the HID items and adds up the Feature fields of each report ID.
 /// True when the unnumbered report `Hid::command` sends is REPORT_LEN bytes.
 fn descriptor_has_control_report(desc: &[u8]) -> bool {
-    // Report Size, Report Count, Report ID: global items that Push/Pop save and restore
+    // Report Size, Report Count and Report ID are global items, Push/Pop saves and restores them
     let mut global = (0u32, 0u32, 0u32);
     let mut saved = Vec::new();
     let mut feature_bits: HashMap<u32, u32> = HashMap::new();
@@ -179,7 +179,7 @@ mod tests {
         // 90 bytes under report ID 1, which the unnumbered command can't reach
         let numbered = [0x85, 0x01, 0x75, 0x08, 0x95, 0x5a, 0xb1, 0x02];
         assert!(!descriptor_has_control_report(&numbered));
-        // Push/Pop: the size inside the push doesn't leak out
+        // a size set between Push and Pop doesn't leak out
         let pushed = [0x75, 0x08, 0xa4, 0x75, 0x10, 0xb4, 0x95, 0x5a, 0xb1, 0x02];
         assert!(descriptor_has_control_report(&pushed));
     }

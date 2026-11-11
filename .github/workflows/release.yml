@@ -103,8 +103,8 @@ jobs:
           dpkg-deb --root-owner-group --build "$r" "opensynapse_${TAG#v}_${{ matrix.deb }}.deb"
 
       # The AppImage runs the GUI. The udev rule can't come with it, so users
-      # install that by hand like a cargo install. winit dlopens xkbcommon, which
-      # isn't on every system, so it ships inside and AppRun points the loader at it.
+      # install that by hand like a cargo install. winit loads xkbcommon at runtime
+      # and not every distro has it, so we bundle it and AppRun points the loader at our copy.
       - name: AppImage
         run: |
           a=AppDir

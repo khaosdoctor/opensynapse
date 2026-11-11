@@ -35,10 +35,10 @@ fn guess_name(id: u8) -> String {
     name.to_string()
 }
 
-/// Opens the current hidraw node of one interface. A probe on the wrong
-/// interface can make the mouse reset and come back under new hidraw numbers,
-/// and the node can show up before udev grants access to it, so this keeps
-/// looking the node up and opening it for up to 3s.
+/// Opens the hidraw node of one interface, looking it up again on every try.
+/// A probe on the wrong interface can reset the mouse and bring it back under
+/// new hidraw numbers, and the node can show up before udev gives us access,
+/// so we keep trying for up to 3s.
 fn open(pid: u16, iface: u8, tid: u8) -> io::Result<Hid> {
     let mut last_err = io::Error::other(format!("interface {iface} didn't come back"));
     for _ in 0..30 {
@@ -54,10 +54,10 @@ fn open(pid: u16, iface: u8, tid: u8) -> io::Result<Hid> {
     Err(last_err)
 }
 
-/// Finds the interface and transaction id the mouse answers on, with reads
-/// only. Only the interfaces whose descriptor has the Razer 90-byte feature
-/// report are tried, since sending to the others can reset some mice; when
-/// no descriptor shows it, every interface is tried in order.
+/// Finds the interface and transaction id the mouse answers on, only with
+/// reads. Sending to the wrong interface can reset some mice, so we only try
+/// the ones whose descriptor has the 90-byte Razer report. When none of them
+/// has it we try every interface in order.
 fn connect(pid: u16) -> io::Result<(Hid, u8, u8)> {
     let all = hid::find_all(RAZER, pid);
     if all.is_empty() {

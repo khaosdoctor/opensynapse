@@ -37,11 +37,12 @@ Everything here ends up as bytes on a real device, and a wrong write can leave a
 | `src/generators/protocol.rs` | writes `devices/protocols/<slug>.md` for `opensynapse protocol` |
 | `src/main.rs` | the CLI |
 | `src/bin/opensynapse-gui/` | the GUI, see below |
+| `src/bin/device-from-issue.rs` | turns an issue from `protocol send` into `devices/<slug>.jsonc` and its protocol file for `add-device.yml`. The packages only ship `opensynapse` and `opensynapse-gui` |
 | `devices/*.jsonc` | one file per supported mouse, `devices/protocols/*.md` documents what was found |
 | `themes/*.css` | built-in GUI themes, `opensynapse.css` lists every property |
 | `udev/` | the rule that lets your user open the mouse without root |
 | `contrib/` | AUR PKGBUILDs, the Homebrew formula and shell completions |
-| `tools/` | `probe.py` for raw read-only probing, `device_from_issue.py` for the add-device workflow |
+| `tools/` | `probe.py` for raw read-only probing |
 
 The GUI is split by job, and every file stays under 500 lines:
 
@@ -75,7 +76,7 @@ Themes are different. `themes/*.css` are compiled in, and every `~/.config/opens
 ## Releases and CI
 
 - `release.yml` runs on a `v*` tag. It checks the tag matches `Cargo.toml`, builds the tar.gz, `.deb` and AppImage for x86_64 and aarch64, writes the release notes from the commits with git-cliff, then publishes to the AUR, Homebrew and the apt repo on the `apt-repo` branch.
-- `add-device.yml` runs when an issue gets the `add-device` label. It turns the issue sent by `opensynapse protocol send` into a PR that adds the device. Only people with triage access can add that label, so random issues can't start it.
+- `add-device.yml` runs when an issue gets the `add-device` label. It runs `device-from-issue` on the issue sent by `opensynapse protocol send`, which checks the device file with the app's parser and writes it, then opens a PR that adds the device. Only people with triage access can add that label, so random issues can't start it.
 - `device-release.yml` ships a patch release when a PR labeled `new-device` is merged.
 - `pages.yml` publishes `docs/` to the website.
 

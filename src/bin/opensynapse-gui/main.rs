@@ -1,5 +1,5 @@
 use eframe::egui::{
-    self, Align, Align2, Color32, ComboBox, StrokeKind, CornerRadius, DragValue, FontFamily, FontId, Frame, Layout, Margin, RichText, Stroke,
+    self, Align, Align2, Color32, ComboBox, StrokeKind, CornerRadius, DragValue, FontId, Frame, Layout, Margin, RichText, Stroke,
     TextEdit,
 };
 use opensynapse::action::{Action, key_name};
@@ -11,6 +11,9 @@ use opensynapse::rgb::{self, Effect, Lighting};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use theme::t;
+
+mod theme;
 
 const POLL: Duration = Duration::from_millis(500);
 /// The mouse body ends at y 74%; reserve a bit below it for side plates.
@@ -20,18 +23,6 @@ const EDITOR_HEIGHT: f32 = 344.0;
 const SIDEBAR_WIDTH: f32 = 250.0;
 /// The mouse drawing never grows past this, so big screens don't get a giant mouse.
 const MAX_VIEW_WIDTH: f32 = 900.0;
-
-const BG: Color32 = Color32::from_rgb(0x07, 0x07, 0x0d);
-const PANEL: Color32 = Color32::from_rgb(0x0e, 0x0e, 0x1a);
-const CARD: Color32 = Color32::from_rgb(0x14, 0x14, 0x24);
-const CYAN: Color32 = Color32::from_rgb(0x00, 0xf0, 0xff);
-const PINK: Color32 = Color32::from_rgb(0xff, 0x2a, 0x6d);
-const YELLOW: Color32 = Color32::from_rgb(0xfc, 0xee, 0x0a);
-const DIM: Color32 = Color32::from_rgb(0x5a, 0x5a, 0x7a);
-const RED: Color32 = Color32::from_rgb(0xff, 0x30, 0x30);
-const GREEN: Color32 = Color32::from_rgb(0x39, 0xff, 0x14);
-/// edge of a button whose action is OFF
-const OFF: Color32 = Color32::from_rgb(0x2a, 0x2a, 0x3a);
 
 /// (title, grid columns, keys): each group renders as its own column.
 const SPECIAL_KEYS: &[(&str, usize, &[&str])] = &[
@@ -672,15 +663,15 @@ fn short(a: &Action) -> String {
 
 /// Frameless tab: cyan and underlined when active.
 fn tab(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Response {
-    let label = if selected { RichText::new(text).color(CYAN).strong().underline() } else { RichText::new(text).color(DIM) };
+    let label = if selected { RichText::new(text).color(t().accent).strong().underline() } else { RichText::new(text).color(t().muted) };
     ui.add(egui::Button::new(label).frame(false))
 }
 
 /// Top-level view switch, drawn as a tab with a border so it doesn't read as a setting.
 fn view_tab(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Response {
     let (fg, edge, fill) = match selected {
-        true => (CYAN, CYAN, CARD),
-        false => (DIM, DIM, BG),
+        true => (t().accent, t().accent, t().card),
+        false => (t().muted, t().muted, t().bg),
     };
     ui.add(
         egui::Button::new(RichText::new(text).color(fg).strong())
@@ -705,7 +696,7 @@ fn toggle_button(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Respons
 }
 
 fn chip_sized(ui: &mut egui::Ui, text: &str, selected: bool, height: f32) -> egui::Response {
-    let (fg, edge, fill) = if selected { (BG, PINK, PINK) } else { (Color32::WHITE, DIM, BG) };
+    let (fg, edge, fill) = if selected { (t().bg, t().accent2, t().accent2) } else { (t().strong, t().muted, t().bg) };
     ui.add(
         egui::Button::new(RichText::new(text).color(fg))
             .fill(fill)
@@ -719,7 +710,7 @@ fn chip_sized(ui: &mut egui::Ui, text: &str, selected: bool, height: f32) -> egu
 fn outline_button(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Response {
     ui.add(
         egui::Button::new(RichText::new(text).color(color))
-            .fill(BG)
+            .fill(t().bg)
             .stroke(Stroke::new(1.0, color))
             .corner_radius(CornerRadius::ZERO)
             .min_size(egui::vec2(0.0, BUTTON_HEIGHT)),
@@ -728,7 +719,7 @@ fn outline_button(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Respon
 
 fn neon_button(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Response {
     ui.add(
-        egui::Button::new(RichText::new(text).color(BG).strong())
+        egui::Button::new(RichText::new(text).color(t().bg).strong())
             .fill(color)
             .corner_radius(CornerRadius::ZERO)
             .min_size(egui::vec2(0.0, BUTTON_HEIGHT)),
@@ -738,17 +729,17 @@ fn neon_button(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Response 
 /// Small red X that removes a row.
 fn delete_button(ui: &mut egui::Ui) -> egui::Response {
     ui.add(
-        egui::Button::new(RichText::new("X").color(RED).strong())
+        egui::Button::new(RichText::new("X").color(t().error).strong())
             .small()
-            .fill(BG)
-            .stroke(Stroke::new(1.0, RED))
+            .fill(t().bg)
+            .stroke(Stroke::new(1.0, t().error))
             .corner_radius(CornerRadius::ZERO),
     )
     .on_hover_text("remove")
 }
 
 fn heading(ui: &mut egui::Ui, text: &str) {
-    ui.label(RichText::new(format!("> {text}")).color(PINK).strong());
+    ui.label(RichText::new(format!("> {text}")).color(t().accent2).strong());
     ui.add_space(4.0);
 }
 
@@ -762,31 +753,31 @@ impl eframe::App for App {
             // the modal's backdrop dims everything behind it and blocks clicks
             egui::Modal::new(egui::Id::unique("disconnected")).show(&self.ctx, |ui| {
                 ui.set_max_width(420.0);
-                ui.label(RichText::new("! MOUSE DISCONNECTED").color(PINK).strong());
+                ui.label(RichText::new("! MOUSE DISCONNECTED").color(t().accent2).strong());
                 ui.add_space(6.0);
                 ui.label("Plug it back in and opensynapse picks it up again. Pending changes are kept.");
             });
         }
         // the sidebar goes first so it runs the full height, the tabs only span the rest
-        let side = Frame::new().fill(PANEL).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, DIM));
+        let side = Frame::new().fill(t().panel).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().muted));
         egui::Panel::left("dpi").exact_size(SIDEBAR_WIDTH).resizable(false).frame(side).show(ui, |ui| {
             self.device_box(ui);
             self.dpi_panel(ui);
         });
 
-        let bar = Frame::new().fill(PANEL).inner_margin(Margin { left: 12, right: 12, top: 12, bottom: 0 });
+        let bar = Frame::new().fill(t().panel).inner_margin(Margin { left: 12, right: 12, top: 12, bottom: 0 });
         egui::Panel::top("tabs").frame(bar).show(ui, |ui| self.tabs(ui));
 
-        let status = Frame::new().fill(BG).inner_margin(Margin::symmetric(12, 6));
+        let status = Frame::new().fill(t().bg).inner_margin(Margin::symmetric(12, 6));
         let (text, color) = match &self.status {
-            Ok(s) => (format!("> {s}"), CYAN),
-            Err(e) => (format!("! {e}"), PINK),
+            Ok(s) => (format!("> {s}"), t().accent),
+            Err(e) => (format!("! {e}"), t().accent2),
         };
         egui::Panel::bottom("status").frame(status).show(ui, |ui| {
             ui.label(RichText::new(text).color(color));
         });
 
-        let center = Frame::new().fill(BG).inner_margin(Margin::same(16));
+        let center = Frame::new().fill(t().bg).inner_margin(Margin::same(16));
         if self.view == View::Lighting {
             egui::CentralPanel::default().frame(center).show(ui, |ui| self.lighting_ui(ui));
             return;
@@ -794,13 +785,13 @@ impl eframe::App for App {
 
         let name = self.mice.get(self.current).and_then(|m| m.def.buttons.get(self.selected)).map(|b| b.name.clone());
         if let Some(name) = name {
-            let editor = Frame::new().fill(PANEL).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, DIM));
+            let editor = Frame::new().fill(t().panel).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().muted));
             egui::Panel::bottom("editor").exact_size(EDITOR_HEIGHT).resizable(false).frame(editor).show(ui, |ui| {
                 self.editor_ui(ui, &name);
             });
         }
         if !self.mice.is_empty() {
-            let side = Frame::new().fill(BG).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, DIM));
+            let side = Frame::new().fill(t().bg).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().muted));
             egui::Panel::left("profile").exact_size(190.0).resizable(false).frame(side).show(ui, |ui| self.profile_box(ui));
         }
         egui::CentralPanel::default().frame(center).show(ui, |ui| self.buttons(ui));
@@ -811,23 +802,23 @@ impl App {
     fn lighting_ui(&mut self, ui: &mut egui::Ui) {
         let area = ui.max_rect();
         let Some(light) = &self.lighting else {
-            ui.label(RichText::new("NO LIGHTING").color(PINK).size(28.0));
-            ui.label(RichText::new("lighting goes through the OpenRazer driver, install openrazer-driver-dkms").color(DIM));
+            ui.label(RichText::new("NO LIGHTING").color(t().accent2).size(28.0));
+            ui.label(RichText::new("lighting goes through the OpenRazer driver, install openrazer-driver-dkms").color(t().muted));
             return;
         };
         let online = light.uses_daemon();
         let (badge, color, tip) = match online {
-            true => ("OPENRAZER ONLINE", GREEN, "Lighting goes through the OpenRazer daemon, which keeps it after a replug."),
+            true => ("OPENRAZER ONLINE", t().ok, "Lighting goes through the OpenRazer daemon, which keeps it after a replug."),
             false => (
                 "OPENRAZER OFFLINE",
-                RED,
+                t().error,
                 "The OpenRazer daemon isn't running or doesn't see this mouse, so lighting is off. Start it with \
                  `systemctl --user restart openrazer-daemon` and press RESCAN.",
             ),
         };
         // ui.horizontal centers items on the row, so the title lines up with the taller buttons
         ui.horizontal(|ui| {
-            ui.label(RichText::new("> LIGHTING").color(PINK).strong());
+            ui.label(RichText::new("> LIGHTING").color(t().accent2).strong());
             ui.add_space(12.0);
             // status badge on the far right of the row
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -858,15 +849,15 @@ impl App {
             ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
             for (i, z) in self.zone_ui.iter_mut().take(shown).enumerate() {
                 let title = if self.sync_zones { "ALL ZONES".to_string() } else { z.name.to_uppercase() };
-                Frame::new().fill(PANEL).stroke(Stroke::new(1.0, DIM)).inner_margin(Margin::same(14)).show(ui, |ui| {
+                Frame::new().fill(t().panel).stroke(Stroke::new(1.0, t().muted)).inner_margin(Margin::same(14)).show(ui, |ui| {
                     ui.set_width(ui.available_width().min(760.0));
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new(title).color(CYAN).strong().underline());
+                        ui.label(RichText::new(title).color(t().accent).strong().underline());
                         ui.add_space(16.0);
-                        ui.label(RichText::new("BRIGHTNESS").color(DIM).small());
+                        ui.label(RichText::new("BRIGHTNESS").color(t().muted).small());
                         ui.add(egui::Slider::new(&mut z.brightness, 0..=255).trailing_fill(true));
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if neon_button(ui, "APPLY NOW", CYAN).clicked() {
+                            if neon_button(ui, "APPLY NOW", t().accent).clicked() {
                                 apply = Some(i);
                             }
                         });
@@ -884,7 +875,7 @@ impl App {
                 });
             }
             ui.add_space(4.0);
-            if neon_button(ui, "APPLY ALL NOW", CYAN).on_hover_text("send every zone's change right away").clicked() {
+            if neon_button(ui, "APPLY ALL NOW", t().accent).on_hover_text("send every zone's change right away").clicked() {
                 all = true;
             }
         });
@@ -1016,7 +1007,7 @@ impl ZoneUi {
             self.random = !self.random;
         }
         if needs_color {
-            ui.label(RichText::new("COLOR").color(DIM).small());
+            ui.label(RichText::new("COLOR").color(t().muted).small());
             ui.color_edit_button_srgb(&mut self.color);
             let [r, g, b] = self.color;
             ui.label(RichText::new(format!("#{r:02x}{g:02x}{b:02x}")).color(Color32::from_rgb(r, g, b)));
@@ -1030,7 +1021,7 @@ impl ZoneUi {
             }
         }
         if self.fx == Fx::Reactive {
-            ui.label(RichText::new("FADE").color(DIM).small());
+            ui.label(RichText::new("FADE").color(t().muted).small());
             for (s, label) in [(1, "FAST"), (2, "MEDIUM"), (3, "SLOW")] {
                 if chip(ui, label, self.speed == s).clicked() {
                     self.speed = s;
@@ -1038,7 +1029,7 @@ impl ZoneUi {
             }
         }
         if matches!(self.fx, Fx::Spectrum | Fx::Off) {
-            ui.label(RichText::new("no options").color(DIM).small());
+            ui.label(RichText::new("no options").color(t().muted).small());
         }
     }
 }
@@ -1047,11 +1038,11 @@ impl App {
     /// Top of the sidebar: logo, version, the mouse picker and RESCAN.
     fn device_box(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label(RichText::new("OPEN").color(CYAN).size(22.0).strong());
-            ui.label(RichText::new("SYNAPSE").color(PINK).size(22.0).strong());
+            ui.label(RichText::new("OPEN").color(t().accent).size(22.0).strong());
+            ui.label(RichText::new("SYNAPSE").color(t().accent2).size(22.0).strong());
         });
-        let version = RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).color(YELLOW).small();
-        Frame::new().stroke(Stroke::new(1.0, YELLOW)).inner_margin(Margin::symmetric(5, 1)).show(ui, |ui| {
+        let version = RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).color(t().warn).small();
+        Frame::new().stroke(Stroke::new(1.0, t().warn)).inner_margin(Margin::symmetric(5, 1)).show(ui, |ui| {
             ui.label(version);
         });
         ui.add_space(14.0);
@@ -1061,7 +1052,7 @@ impl App {
         let mut pick = None;
         let width = ui.available_width();
         ComboBox::from_id_salt("device")
-            .selected_text(RichText::new(current).color(YELLOW).small())
+            .selected_text(RichText::new(current).color(t().warn).small())
             .width(width)
             .truncate()
             .show_ui(ui, |ui| {
@@ -1077,7 +1068,7 @@ impl App {
         if let Some(i) = pick.filter(|&i| i != self.current) {
             self.switch_to(i);
         }
-        let rescan = egui::Button::new(RichText::new("RESCAN").color(BG).strong()).fill(CYAN).corner_radius(CornerRadius::ZERO);
+        let rescan = egui::Button::new(RichText::new("RESCAN").color(t().bg).strong()).fill(t().accent).corner_radius(CornerRadius::ZERO);
         if ui.add_sized([width, 28.0], rescan).clicked() {
             self.connect();
         }
@@ -1107,9 +1098,9 @@ impl App {
         let label = |p: u8| {
             let mut job = egui::text::LayoutJob::default();
             let font = FontId::monospace(14.0);
-            job.append(&format!("P{p}"), 0.0, egui::TextFormat::simple(font.clone(), Color32::WHITE));
+            job.append(&format!("P{p}"), 0.0, egui::TextFormat::simple(font.clone(), t().strong));
             if p == 0 {
-                job.append("[LIVE]", 6.0, egui::TextFormat::simple(font, GREEN));
+                job.append("[LIVE]", 6.0, egui::TextFormat::simple(font, t().ok));
             }
             job
         };
@@ -1123,13 +1114,13 @@ impl App {
             })
             .response
             .on_hover_text("P0 is live and lost when you unplug the mouse. P1 is stored on it and loads after a replug.");
-        let reset = egui::Button::new(RichText::new("RESET").color(BG).strong()).fill(PINK).corner_radius(CornerRadius::ZERO);
+        let reset = egui::Button::new(RichText::new("RESET").color(t().bg).strong()).fill(t().accent2).corner_radius(CornerRadius::ZERO);
         if ui.add_sized([width, 26.0], reset).on_hover_text("put back this profile's original").clicked() {
             self.confirm = Some(Confirm::ResetButtons);
         }
-        let set = egui::Button::new(RichText::new("SET DEFAULT").color(YELLOW))
-            .fill(BG)
-            .stroke(Stroke::new(1.0, YELLOW))
+        let set = egui::Button::new(RichText::new("SET DEFAULT").color(t().warn))
+            .fill(t().bg)
+            .stroke(Stroke::new(1.0, t().warn))
             .corner_radius(CornerRadius::ZERO);
         if ui.add_sized([width, 26.0], set).on_hover_text("make what's on the mouse now the original RESET goes back to").clicked() {
             self.confirm = Some(Confirm::SetDefault);
@@ -1155,7 +1146,7 @@ impl App {
     fn dpi_panel(&mut self, ui: &mut egui::Ui) {
         heading(ui, "SENSITIVITY");
         let max = self.mice.get(self.current).map_or(20000, |m| m.def.dpi_max);
-        ui.label(RichText::new(format!("{} DPI", self.dpi)).color(YELLOW).size(26.0).strong());
+        ui.label(RichText::new(format!("{} DPI", self.dpi)).color(t().warn).size(26.0).strong());
         ui.spacing_mut().slider_width = ui.available_width();
         ui.add(egui::Slider::new(&mut self.dpi, 100..=max).step_by(50.0).show_value(false).trailing_fill(true));
         ui.add_space(14.0);
@@ -1165,7 +1156,7 @@ impl App {
         for (i, dpi) in self.stages.iter_mut().enumerate() {
             let n = i as u8 + 1;
             ui.horizontal(|ui| {
-                let mark = if self.active == n { RichText::new("▶").color(CYAN) } else { RichText::new("·").color(DIM) };
+                let mark = if self.active == n { RichText::new("▶").color(t().accent) } else { RichText::new("·").color(t().muted) };
                 if ui.selectable_label(self.active == n, mark).clicked() {
                     self.active = n;
                 }
@@ -1189,18 +1180,18 @@ impl App {
         ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
             ui.add_enabled_ui(!self.ops.is_empty(), |ui| {
                 ui.horizontal(|ui| {
-                    if neon_button(ui, "CLEAR", PINK).clicked() {
+                    if neon_button(ui, "CLEAR", t().accent2).clicked() {
                         self.status = Ok(format!("CLEARED {} PENDING", self.ops.len()));
                         self.ops.clear();
                         self.reset_edits();
                     }
-                    if neon_button(ui, "WRITE TO DEVICE", CYAN).clicked() {
+                    if neon_button(ui, "WRITE TO DEVICE", t().accent).clicked() {
                         self.apply();
                     }
                 });
             });
             if self.ops.is_empty() {
-                ui.label(RichText::new("no pending changes").color(DIM).small());
+                ui.label(RichText::new("no pending changes").color(t().muted).small());
             }
             let Some(def) = self.mice.get(self.current).map(|m| &m.def) else { return };
             // newest 12 only, a scroll area here would eat the whole sidebar
@@ -1212,11 +1203,11 @@ impl App {
                     if delete_button(ui).clicked() {
                         remove = Some(i);
                     }
-                    ui.label(RichText::new(op.describe(def)).color(Color32::WHITE).small());
+                    ui.label(RichText::new(op.describe(def)).color(t().strong).small());
                 });
             }
             if hidden > 0 {
-                ui.label(RichText::new(format!("+{hidden} more")).color(DIM).small());
+                ui.label(RichText::new(format!("+{hidden} more")).color(t().muted).small());
             }
             if let Some(i) = remove {
                 let op = self.ops.remove(i);
@@ -1258,7 +1249,7 @@ impl App {
 
     fn buttons(&mut self, ui: &mut egui::Ui) {
         let Some(m) = self.mice.get(self.current) else {
-            ui.label(RichText::new("NO LINK").color(PINK).size(28.0));
+            ui.label(RichText::new("NO LINK").color(t().accent2).size(28.0));
             return;
         };
         let buttons = &m.def.buttons;
@@ -1283,18 +1274,18 @@ impl App {
                     let off = action.as_ref() == Some(&Action::Disabled);
                     let text = action.map_or("??".into(), |a| format!("{a}{mark}"));
                     let accent = match (lit[i], i == self.selected, pending) {
-                        (true, ..) => YELLOW,
-                        (_, true, _) => CYAN,
-                        (.., true) => PINK,
-                        _ if off => OFF,
-                        _ => DIM,
+                        (true, ..) => t().warn,
+                        (_, true, _) => t().accent,
+                        (.., true) => t().accent2,
+                        _ if off => t().off,
+                        _ => t().muted,
                     };
-                    let card = Frame::new().fill(CARD).stroke(Stroke::new(1.0, accent)).inner_margin(Margin::same(8));
+                    let card = Frame::new().fill(t().card).stroke(Stroke::new(1.0, accent)).inner_margin(Margin::same(8));
                     let r = card
                         .show(ui, |ui| {
                             ui.set_min_width(150.0);
                             ui.label(RichText::new(buttons[i].name.to_uppercase()).color(accent).small());
-                            ui.label(RichText::new(text).color(if off { DIM } else { Color32::WHITE }));
+                            ui.label(RichText::new(text).color(if off { t().muted } else { t().strong }));
                         })
                         .response
                         .interact(egui::Sense::click());
@@ -1332,8 +1323,8 @@ impl App {
         let p = ui.painter_at(rect);
         // yellow outline while editing the Hypershift (or any non-default) layer
         let outline = match self.layer {
-            0 => PINK,
-            _ => YELLOW,
+            0 => t().accent2,
+            _ => t().warn,
         };
 
         let marker = |i: usize| {
@@ -1345,13 +1336,13 @@ impl App {
         let outside = placed.iter().filter(|&&i| buttons[i].at.is_some_and(|[x, _]| !(30.0..=70.0).contains(&x)));
         if let Some(plate) = outside.map(|&i| marker(i)).reduce(|a, b| a.union(b)) {
             let plate = plate.expand(12.0 * k);
-            p.rect_filled(plate, CornerRadius::same(14), PANEL);
+            p.rect_filled(plate, CornerRadius::same(14), t().panel);
             p.rect_stroke(plate, CornerRadius::same(14), Stroke::new(1.5, outline), StrokeKind::Outside);
         }
 
         let body = egui::Rect::from_min_max(at(30.0, 2.0), at(70.0, 74.0));
-        let seam = Stroke::new(1.0, DIM);
-        p.add(egui::Shape::convex_polygon(mouse_outline(body), PANEL, Stroke::new(1.5, outline)));
+        let seam = Stroke::new(1.0, t().muted);
+        p.add(egui::Shape::convex_polygon(mouse_outline(body), t().panel, Stroke::new(1.5, outline)));
         // where the buttons end and the palm begins
         let split = body.top() + body.height() * 0.6;
         let curve: Vec<egui::Pos2> = (0..=20)
@@ -1363,7 +1354,7 @@ impl App {
         p.add(egui::Shape::line(curve, seam));
         p.line_segment([egui::pos2(body.center().x, body.top()), egui::pos2(body.center().x, split)], seam);
         let wheel = egui::Rect::from_center_size(at(50.0, 18.0), egui::vec2(body.width() * 0.12, body.height() * 0.28));
-        p.rect_filled(wheel, CornerRadius::same(10), BG);
+        p.rect_filled(wheel, CornerRadius::same(10), t().bg);
         p.rect_stroke(wheel, CornerRadius::same(10), seam, StrokeKind::Inside);
 
         let mut clicked = None;
@@ -1375,12 +1366,12 @@ impl App {
             let shown = self.effective(i);
             let off = shown == Some(Action::Disabled);
             let (fill, edge, text) = match (lit[i], i == self.selected, resp.hovered(), pending) {
-                (true, ..) => (YELLOW, YELLOW, BG),
-                (_, true, ..) => (BG, CYAN, CYAN),
-                (_, _, true, _) => (BG, CYAN, Color32::WHITE),
-                (.., true) => (BG, PINK, PINK),
-                _ if off => (BG, OFF, DIM),
-                _ => (BG, DIM, Color32::WHITE),
+                (true, ..) => (t().warn, t().warn, t().bg),
+                (_, true, ..) => (t().bg, t().accent, t().accent),
+                (_, _, true, _) => (t().bg, t().accent, t().strong),
+                (.., true) => (t().bg, t().accent2, t().accent2),
+                _ if off => (t().bg, t().off, t().muted),
+                _ => (t().bg, t().muted, t().strong),
             };
             p.rect_filled(r, CornerRadius::ZERO, fill);
             p.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, edge), StrokeKind::Inside);
@@ -1407,8 +1398,8 @@ impl App {
         self.file_row(ui);
         ui.separator();
         ui.horizontal(|ui| {
-            ui.label(RichText::new("> REMAP:").color(PINK).strong());
-            ui.label(RichText::new(name.to_uppercase()).color(CYAN).strong().underline());
+            ui.label(RichText::new("> REMAP:").color(t().accent2).strong());
+            ui.label(RichText::new(name.to_uppercase()).color(t().accent).strong().underline());
             if matches!(self.editor.kind, Kind::Key | Kind::Mouse) {
                 ui.add_space(32.0);
                 turbo_toggle(ui, &mut self.editor);
@@ -1421,20 +1412,20 @@ impl App {
     /// Profile file: the folder files are saved in, export and import.
     fn file_row(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label(RichText::new("> PROFILE FILE:").color(PINK).strong());
+            ui.label(RichText::new("> PROFILE FILE:").color(t().accent2).strong());
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if neon_button(ui, "IMPORT", PINK).clicked() {
+                if neon_button(ui, "IMPORT", t().accent2).clicked() {
                     self.pick_import();
                 }
-                if neon_button(ui, "EXPORT", CYAN).clicked() {
+                if neon_button(ui, "EXPORT", t().accent).clicked() {
                     self.export();
                 }
-                if neon_button(ui, "CHANGE FOLDER", YELLOW).on_hover_text("where profile files are saved").clicked() {
+                if neon_button(ui, "CHANGE FOLDER", t().warn).on_hover_text("where profile files are saved").clicked() {
                     self.pick_folder();
                 }
                 // the path gets whatever width the buttons leave
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    ui.add(egui::Label::new(RichText::new(&self.path).color(DIM)).truncate()).on_hover_text(&self.path);
+                    ui.add(egui::Label::new(RichText::new(&self.path).color(t().muted)).truncate()).on_hover_text(&self.path);
                 });
             });
         });
@@ -1469,21 +1460,21 @@ impl App {
         }
         let modal = egui::Modal::new(egui::Id::unique("confirm-import")).show(&self.ctx, |ui| {
             ui.set_max_width(420.0);
-            ui.label(RichText::new("! OVERWRITE PROFILE").color(PINK).strong());
+            ui.label(RichText::new("! OVERWRITE PROFILE").color(t().accent2).strong());
             ui.add_space(6.0);
             ui.label(format!(
                 "Importing replaces profile P{} with the contents of this file. The changes go to PENDING \
                  and reach the mouse when you press WRITE TO DEVICE.",
                 self.profile
             ));
-            ui.label(RichText::new(&self.path).color(DIM).small());
+            ui.label(RichText::new(&self.path).color(t().muted).small());
             ui.add_space(10.0);
             let mut choice = None;
             ui.horizontal(|ui| {
-                if neon_button(ui, "IMPORT", PINK).clicked() {
+                if neon_button(ui, "IMPORT", t().accent2).clicked() {
                     choice = Some(true);
                 }
-                if neon_button(ui, "CANCEL", DIM).clicked() {
+                if neon_button(ui, "CANCEL", t().muted).clicked() {
                     choice = Some(false);
                 }
             });
@@ -1541,16 +1532,16 @@ impl App {
         };
         let modal = egui::Modal::new(egui::Id::unique("confirm")).show(&self.ctx, |ui| {
             ui.set_max_width(420.0);
-            ui.label(RichText::new(title).color(PINK).strong());
+            ui.label(RichText::new(title).color(t().accent2).strong());
             ui.add_space(6.0);
             ui.label(text);
             ui.add_space(10.0);
             let mut choice = None;
             ui.horizontal(|ui| {
-                if neon_button(ui, button, PINK).clicked() {
+                if neon_button(ui, button, t().accent2).clicked() {
                     choice = Some(true);
                 }
-                if neon_button(ui, "CANCEL", DIM).clicked() {
+                if neon_button(ui, "CANCEL", t().muted).clicked() {
                     choice = Some(false);
                 }
             });
@@ -1593,16 +1584,16 @@ impl App {
         if toggle_button(ui, "SYNC ALL ZONES", self.sync_zones).clicked() {
             self.sync_zones = !self.sync_zones;
         }
-        if neon_button(ui, "RESET", PINK).on_hover_text("put back the original lighting").clicked() {
+        if neon_button(ui, "RESET", t().accent2).on_hover_text("put back the original lighting").clicked() {
             self.confirm = Some(Confirm::ResetLighting);
         }
-        if outline_button(ui, "SET DEFAULT", YELLOW)
+        if outline_button(ui, "SET DEFAULT", t().warn)
             .on_hover_text("make the lighting on the mouse now the original RESET goes back to")
             .clicked()
         {
             self.confirm = Some(Confirm::DefaultLighting);
         }
-        if outline_button(ui, "FACTORY RESET", PINK).on_hover_text("static Razer green on every zone").clicked() {
+        if outline_button(ui, "FACTORY RESET", t().accent2).on_hover_text("static Razer green on every zone").clicked() {
             self.confirm = Some(Confirm::FactoryLighting);
         }
     }
@@ -1679,13 +1670,13 @@ impl App {
                         "Hold this button and the other buttons do what their HYPERSHIFT layer says \
                          (switch LAYER at the top to edit it). Let go and they go back to normal.",
                     )
-                    .color(DIM),
+                    .color(t().muted),
                 );
             }
             Kind::Dpi => pick(ui, DPI_ACTIONS, &mut e.dpi),
             Kind::Profile => pick(ui, PROFILE_ACTIONS, &mut e.profile),
             Kind::Disabled => {
-                ui.label(RichText::new("button does nothing").color(DIM));
+                ui.label(RichText::new("button does nothing").color(t().muted));
             }
             Kind::Raw => {
                 ui.add(TextEdit::singleline(&mut e.raw).hint_text("hex bytes").desired_width(200.0));
@@ -1699,7 +1690,7 @@ impl App {
             ui.spacing_mut().item_spacing.x = 28.0;
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
-                ui.label(RichText::new("COMMON KEYS").color(DIM).small());
+                ui.label(RichText::new("COMMON KEYS").color(t().muted).small());
                 egui::Grid::new("mods").spacing([6.0, 6.0]).show(ui, |ui| {
                     for (i, (label, bit)) in opensynapse::action::MODS[..4].iter().enumerate() {
                         if chip(ui, &label.to_uppercase(), e.mods & bit != 0).clicked() {
@@ -1713,13 +1704,13 @@ impl App {
                 // an empty box just means no key picked yet
                 let err = e.build().err().filter(|_| !e.key.trim().is_empty());
                 let color = match err {
-                    Some(_) => PINK,
-                    None => YELLOW,
+                    Some(_) => t().accent2,
+                    None => t().warn,
                 };
                 let edit = TextEdit::singleline(&mut e.key).hint_text("a, 1, ctrl+z, f13").desired_width(140.0);
                 ui.add(edit.text_color(color));
                 if let Some(err) = err {
-                    ui.label(RichText::new(err).color(PINK).small());
+                    ui.label(RichText::new(err).color(t().accent2).small());
                 }
             });
             for (group, cols, keys) in SPECIAL_KEYS {
@@ -1735,7 +1726,7 @@ impl App {
                     ui.end_row();
                 }
                 ui.vertical(|ui| {
-                    ui.label(RichText::new(*group).color(DIM).small());
+                    ui.label(RichText::new(*group).color(t().muted).small());
                     egui::Grid::new(group).spacing([6.0, 6.0]).show(ui, |ui| {
                         for (i, k) in keys.iter().enumerate() {
                             if chip(ui, &k.to_uppercase(), e.key == *k).clicked() {
@@ -1757,15 +1748,15 @@ impl App {
 fn offline_overlay(ui: &egui::Ui, area: egui::Rect) {
     // Middle sits above the panels and below modals, so dialogs still show on top
     let p = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Middle, egui::Id::unique("openrazer-offline")));
-    p.rect_filled(area, CornerRadius::ZERO, BG.gamma_multiply(0.75));
+    p.rect_filled(area, CornerRadius::ZERO, t().bg.gamma_multiply(0.75));
     let c = area.center();
-    p.text(c - egui::vec2(0.0, 18.0), Align2::CENTER_CENTER, "OPENRAZER DAEMON OFFLINE", FontId::monospace(26.0), RED);
+    p.text(c - egui::vec2(0.0, 18.0), Align2::CENTER_CENTER, "OPENRAZER DAEMON OFFLINE", FontId::monospace(26.0), t().error);
     p.text(
         c + egui::vec2(0.0, 14.0),
         Align2::CENTER_CENTER,
         "lighting needs the daemon: systemctl --user restart openrazer-daemon, then RESCAN",
         FontId::monospace(13.0),
-        Color32::WHITE,
+        t().strong,
     );
 }
 
@@ -1781,55 +1772,28 @@ fn pick(ui: &mut egui::Ui, list: &[(&str, Action)], current: &mut Action) {
 fn turbo_toggle(ui: &mut egui::Ui, e: &mut Editor) {
     const TIP: &str = "While you hold the button, TURBO repeats the key or click every this many milliseconds, \
                        instead of sending it once.";
-    ui.checkbox(&mut e.turbo, RichText::new("TURBO").color(YELLOW)).on_hover_text(TIP);
+    ui.checkbox(&mut e.turbo, RichText::new("TURBO").color(t().warn)).on_hover_text(TIP);
     if e.turbo {
-        ui.label(RichText::new("EVERY").color(DIM)).on_hover_text(TIP);
+        ui.label(RichText::new("EVERY").color(t().muted)).on_hover_text(TIP);
         // no vertical padding, so the box is as tall as the text and the row doesn't jump
         ui.spacing_mut().button_padding.y = 0.0;
         ui.add(DragValue::new(&mut e.rate).range(1..=2000).suffix(" ms")).on_hover_text(TIP);
     }
 }
 
-fn cyberpunk(ctx: &egui::Context) {
-    let mut v = egui::Visuals::dark();
-    v.panel_fill = BG;
-    v.window_fill = PANEL;
-    v.extreme_bg_color = Color32::from_rgb(0x03, 0x03, 0x08);
-    v.override_text_color = Some(Color32::from_rgb(0xd0, 0xd0, 0xe8));
-    v.selection.bg_fill = PINK;
-    v.selection.stroke = Stroke::new(1.0, BG);
-    for (w, stroke) in [
-        (&mut v.widgets.noninteractive, DIM),
-        (&mut v.widgets.inactive, DIM),
-        (&mut v.widgets.hovered, CYAN),
-        (&mut v.widgets.active, PINK),
-        (&mut v.widgets.open, CYAN),
-    ] {
-        w.corner_radius = CornerRadius::ZERO;
-        w.bg_stroke = Stroke::new(1.0, stroke);
-        w.weak_bg_fill = CARD;
-        w.bg_fill = CARD;
-    }
-    ctx.set_visuals(v);
-    ctx.all_styles_mut(|s| {
-        for font in s.text_styles.values_mut() {
-            *font = FontId::new(font.size, FontFamily::Monospace);
-        }
-    });
-}
-
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1000.0, 760.0])
-            .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../../assets/icon.png")).unwrap_or_default()),
+            .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/icon.png")).unwrap_or_default()),
         ..Default::default()
     };
     eframe::run_native(
         "opensynapse",
         options,
         Box::new(|cc| {
-            cyberpunk(&cc.egui_ctx);
+            theme::apply(&cc.egui_ctx);
+            theme::follow_desktop(cc.egui_ctx.clone());
             Ok(Box::new(App::new(cc.egui_ctx.clone())))
         }),
     )

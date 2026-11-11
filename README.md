@@ -104,6 +104,19 @@ Open `opensynapse-gui`, or OpenSynapse from your app launcher. The first time it
 
 The lighting tab needs the OpenRazer daemon running, the badge at the top says ***OPENRAZER ONLINE*** when it is.
 
+The GUI is dark or light following your desktop's color scheme, and switches when you change it. To change the colors, put CSS custom properties in `~/.config/opensynapse/theme.css`. Only `--name: #hex;` declarations are read, and a `prefers-color-scheme` block applies to that scheme only:
+
+```css
+:root {
+  --accent: #00f0ff;
+}
+@media (prefers-color-scheme: light) {
+  :root { --accent: #007a8a; }
+}
+```
+
+The properties are `--bg`, `--panel`, `--card`, `--deep` (text fields), `--text`, `--strong` (highlighted text), `--accent`, `--accent-2`, `--warn`, `--muted`, `--error`, `--ok` and `--off` (buttons set to OFF). The file is read at startup and on each color scheme change.
+
 ### With the CLI
 
 Make a backup first, then change one button and check it:

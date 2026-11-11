@@ -4,6 +4,8 @@
 
 use crate::hid::{self, Hid};
 use std::io;
+use std::thread::sleep;
+use std::time::Duration;
 
 const RAZER: u16 = 0x1532;
 /// Transaction ids used across Razer mice (OpenRazer, OpenRGB), newest first.
@@ -33,22 +35,50 @@ fn guess_name(id: u8) -> String {
     name.to_string()
 }
 
-/// Finds the interface and transaction id the mouse answers on by trying
-/// every interface with every known transaction id, with reads only.
+/// Opens the current hidraw node of one interface. A probe on the wrong
+/// interface can make the mouse reset and come back under new hidraw numbers,
+/// and the node can show up before udev grants access to it, so this keeps
+/// looking the node up and opening it for up to 3s.
+fn open(pid: u16, iface: u8, tid: u8) -> io::Result<Hid> {
+    let mut last_err = io::Error::other(format!("interface {iface} didn't come back"));
+    for _ in 0..30 {
+        let found = hid::find_all(RAZER, pid).into_iter().find(|(n, _)| *n == iface);
+        if let Some((_, path)) = found {
+            match Hid::open(&path, tid) {
+                Ok(hid) => return Ok(hid),
+                Err(e) => last_err = e,
+            }
+        }
+        sleep(Duration::from_millis(100));
+    }
+    Err(last_err)
+}
+
+/// Finds the interface and transaction id the mouse answers on, with reads
+/// only. Only the interfaces whose descriptor has the Razer 90-byte feature
+/// report are tried, since sending to the others can reset some mice; when
+/// no descriptor shows it, every interface is tried in order.
 fn connect(pid: u16) -> io::Result<(Hid, u8, u8)> {
-    let mut ifaces = hid::find_all(RAZER, pid);
-    if ifaces.is_empty() {
+    let all = hid::find_all(RAZER, pid);
+    if all.is_empty() {
         return Err(io::Error::other(format!("no hidraw node for 1532:{pid:04x}, is it plugged in?")));
     }
-    ifaces.sort_by_key(|(n, _)| *n);
+    let any_control = all.iter().any(|(_, p)| hid::has_control_report(p));
+    let mut ifaces: Vec<u8> =
+        all.iter().filter(|(_, p)| !any_control || hid::has_control_report(p)).map(|(n, _)| *n).collect();
+    ifaces.sort();
     let mut last_err = io::Error::other("the mouse didn't answer on any interface");
-    for (iface, path) in &ifaces {
+    for iface in ifaces {
         for tid in TIDS {
             // firmware version: a read every Razer mouse answers
-            match Hid::open(path, tid) {
-                Ok(hid) if hid.command(0x00, 0x81, 0x02, &[]).is_ok() => return Ok((hid, *iface, tid)),
+            match open(pid, iface, tid) {
+                Ok(hid) if hid.command(0x00, 0x81, 0x02, &[]).is_ok() => return Ok((hid, iface, tid)),
                 Ok(_) => {}
-                Err(e) => last_err = e,
+                // the open doesn't depend on the transaction id, so the other ids would fail too
+                Err(e) => {
+                    last_err = e;
+                    break;
+                }
             }
         }
     }

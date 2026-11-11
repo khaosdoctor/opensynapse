@@ -1,6 +1,6 @@
 //! Starts a device file for a Razer mouse that doesn't have one, using only
-//! read commands: the transport is found by trial and the buttons come from
-//! asking the mouse, so there's no per-mouse table to keep up to date.
+//! read commands. We find the transport by trial and ask the mouse for its
+//! buttons, so there's no per-mouse table to keep up to date.
 
 use crate::hid::{self, Hid};
 use std::io;
@@ -69,7 +69,7 @@ fn connect(pid: u16) -> io::Result<(Hid, u8, u8)> {
     let mut last_err = io::Error::other("the mouse didn't answer on any interface");
     for iface in ifaces {
         for tid in TIDS {
-            // firmware version: a read every Razer mouse answers
+            // we ask for the firmware version, since every Razer mouse answers that read
             match open(pid, iface, tid) {
                 Ok(hid) if hid.command(0x00, 0x81, 0x02, &[]).is_ok() => return Ok((hid, iface, tid)),
                 Ok(_) => {}

@@ -15,7 +15,7 @@ const BUILTIN: &[(&str, &str)] = &[
     ("razer-naga-x", include_str!("../devices/razer-naga-x.jsonc")),
 ];
 
-/// Device files are JSONC: cuts `//` comments outside strings, line by line
+/// Device files are JSONC, so this cuts `//` comments outside strings, line by line
 /// so serde's line numbers still match. Block comments aren't supported.
 pub fn strip_comments(src: &str) -> String {
     let strip = |line: &'_ str| -> String {
@@ -196,7 +196,7 @@ impl Mouse {
             return Err(io::Error::other("action too long"));
         }
         self.hid.command(CLASS_KEYMAP, 0x0c, 0x0a, &args)?;
-        // read back: a write that "succeeds" but doesn't stick is worse than an error
+        // we read it back, since a write that "succeeds" but doesn't stick is worse than an error
         let got = self.get_button(profile, button, layer)?;
         if got.encode() != action.encode() {
             return Err(io::Error::other(format!("wrote {action}, device reports {got}")));
@@ -231,7 +231,7 @@ impl Mouse {
     pub fn dpi_stages(&self) -> io::Result<DpiStages> {
         let r = self.hid.command(CLASS_DPI, 0x86, 0x26, &[0x00])?;
         let count = r[10] as usize;
-        // each stage: id, x(2), y(2), 0, 0 starting at byte 11
+        // each stage is id, x(2), y(2), 0, 0, starting at byte 11
         let stages = (0..count.min(5))
             .map(|i| u16::from_be_bytes([r[12 + i * 7], r[13 + i * 7]]))
             .collect();
@@ -253,8 +253,8 @@ impl Mouse {
     }
 
     /// Effect and brightness of one LED zone, read from the mouse (verified on
-    /// the Naga: static green read back as `01 .. 01 00 ff 00`). The reply uses
-    /// the layout OpenRazer writes in razerchromacommon.c:
+    /// the Naga, where static green reads back as `01 .. 01 00 ff 00`). The reply
+    /// uses the layout OpenRazer writes in razerchromacommon.c, which is
     /// [store, led, effect, direction/type, speed, colour count, r, g, b].
     pub fn led(&self, led: u8) -> io::Result<(Effect, u8)> {
         let r = self.hid.command(CLASS_LIGHT, 0x82, 0x0c, &[VARSTORE, led])?;

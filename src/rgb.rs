@@ -67,8 +67,8 @@ pub struct ZoneState {
     pub brightness: u8,
 }
 
-/// <serial>-lighting.original.json in the device folder: the lighting the
-/// first time opensynapse saw the mouse, or what SET DEFAULT saved.
+/// <serial>-lighting.original.json in the device folder, which holds the lighting
+/// the first time opensynapse saw the mouse, or what SET DEFAULT saved.
 pub fn original_path(vid: u16, pid: u16, serial: &str) -> Option<PathBuf> {
     device::model_file(vid, pid, serial, "lighting.original.json")
 }
@@ -214,8 +214,8 @@ impl Lighting {
         fs::write(path, data).map_err(hint)
     }
 
-    /// What a zone shows right now: asked from the daemon when it's running,
-    /// otherwise its saved state (the driver's effect files are write-only).
+    /// What a zone shows right now. We ask the daemon when it's running and
+    /// otherwise use its saved state (the driver's effect files are write-only).
     pub fn current_effect(&self, zone: &str) -> Option<Effect> {
         let Some((conn, path)) = &self.daemon else { return saved_effect(&self.serial, zone) };
         let get = |what: &str| call(conn, path, zone, "get", what, &());

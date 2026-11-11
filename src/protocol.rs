@@ -67,7 +67,7 @@ pub fn generate(mouse: &Mouse) -> String {
     out
 }
 
-/// Issue body for `protocol send`: the protocol file plus the device file.
+/// Issue body for `protocol send`, the protocol file plus the device file.
 pub fn issue(protocol: &str, mouse: &Mouse) -> (String, String) {
     let def = &mouse.def;
     let title = format!("Device support: {} ({:04x}:{:04x})", def.name, def.vid, def.pid);

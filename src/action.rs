@@ -13,7 +13,7 @@ pub enum Action {
     Key { mods: u8, usage: u8 },
     /// Repeats a key every `interval` ms.
     KeyTurbo { mods: u8, usage: u8, interval: u16 },
-    /// HID consumer page usage: play/pause, next, previous...
+    /// HID consumer page usage, like play/pause, next or previous.
     Media(u16),
     /// DPI step: 1 up, 2 down, 6 up with wrap, 7 down with wrap
     Dpi(u8),
@@ -60,8 +60,8 @@ impl Action {
         }
     }
 
-    /// Decodes by type. The length byte is ignored on purpose: the Naga reads
-    /// back lengths that don't match the data (`02 01 00 1e`, `0e 01 ...`).
+    /// Decodes by type. We ignore the length byte on purpose, because the Naga
+    /// reads back lengths that don't match the data (`02 01 00 1e`, `0e 01 ...`).
     pub fn decode(b: &[u8]) -> Action {
         let at = |i: usize| b.get(i).copied().unwrap_or(0);
         let u16_at = |i: usize| u16::from_be_bytes([at(i), at(i + 1)]);
@@ -322,7 +322,7 @@ mod tests {
             assert_eq!(a.to_string(), *text);
             assert_eq!(text.parse::<Action>().unwrap(), a);
         }
-        // razerqdhid encodings: text -> bytes -> same text
+        // razerqdhid encodings go text -> bytes -> same text
         let qd: &[(&str, &[u8])] = &[
             ("media:playpause", &[0x0a, 0x02, 0x00, 0xcd]),
             ("keyturbo:ctrl+a:50", &[0x0d, 0x04, 0x01, 0x04, 0x00, 0x32]),

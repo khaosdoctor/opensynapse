@@ -49,7 +49,7 @@ fn read(mouse: &Mouse, profile: u8) -> io::Result<ProfileFile> {
     })
 }
 
-/// The button writes a file would make: (layer, button index, action), only for
+/// The button writes a file would make, as (layer, button index, action), only for
 /// buttons that differ from the device, so an unknown flag byte on untouched
 /// keys is preserved. Nothing is written here, so a typo writes nothing.
 pub fn plan(mouse: &Mouse, profile: u8, file: &ProfileFile) -> io::Result<Vec<(u8, usize, Action)>> {
@@ -87,8 +87,8 @@ pub fn default_path(mouse: &Mouse, profile: u8) -> Option<PathBuf> {
     device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, &format!("{profile}.json"))
 }
 
-/// <serial>-<profile>.original.json next to the default path: what the
-/// profile looked like the first time opensynapse saw the mouse. RESET puts
+/// <serial>-<profile>.original.json next to the default path, which holds what
+/// the profile looked like the first time opensynapse saw the mouse. RESET puts
 /// it back, SET DEFAULT replaces it.
 pub fn original_path(mouse: &Mouse, profile: u8) -> Option<PathBuf> {
     default_path(mouse, profile).map(|p| p.with_extension("original.json"))

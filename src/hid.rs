@@ -72,12 +72,18 @@ impl Hid {
     }
 }
 
+const SYSFS: &str = "/sys/class/hidraw";
+
+/// Every hidraw node in sysfs as (text of its device/uevent, sysfs path).
+fn nodes() -> Vec<(String, PathBuf)> {
+    let entries = fs::read_dir(SYSFS).into_iter().flatten().flatten().map(|e| e.path());
+    entries.filter_map(|p| Some((fs::read_to_string(p.join("device/uevent")).ok()?, p))).collect()
+}
+
 /// Connected Razer USB devices as (pid, name), one entry per device.
 pub fn razer_devices() -> Vec<(u16, String)> {
     let mut found: Vec<(u16, String)> = Vec::new();
-    let Ok(dir) = fs::read_dir("/sys/class/hidraw") else { return found };
-    for entry in dir.flatten() {
-        let Ok(uevent) = fs::read_to_string(entry.path().join("device/uevent")) else { continue };
+    for (uevent, _) in nodes() {
         let field = |k: &str| uevent.lines().find_map(|l| l.strip_prefix(k)).map(str::to_string);
         let Some(id) = field("HID_ID=0003:00001532:") else { continue };
         let Ok(pid) = u16::from_str_radix(&id, 16) else { continue };
@@ -94,29 +100,31 @@ pub fn razer_devices() -> Vec<(u16, String)> {
 pub fn find_all(vid: u16, pid: u16) -> Vec<(u8, PathBuf)> {
     let want = format!("HID_ID=0003:{vid:08X}:{pid:08X}");
     let mut found = Vec::new();
-    let Ok(dir) = fs::read_dir("/sys/class/hidraw") else { return found };
-    for entry in dir.flatten() {
-        let dev = entry.path().join("device");
-        let Ok(uevent) = fs::read_to_string(dev.join("uevent")) else { continue };
+    for (uevent, node) in nodes() {
         if !uevent.lines().any(|l| l == want) {
             continue;
         }
         // .../1-9.3.2:1.0/0003:1532:008D.0017 -> interface is the digit after the last '.'
-        let Ok(real) = fs::canonicalize(&dev) else { continue };
+        let Ok(real) = fs::canonicalize(node.join("device")) else { continue };
         let usb_if = real.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str());
         let Some(n) = usb_if.and_then(|s| s.rsplit('.').next()).and_then(|n| n.parse::<u8>().ok()) else {
             continue;
         };
-        found.push((n, Path::new("/dev").join(entry.file_name())));
+        let Some(name) = node.file_name() else { continue };
+        found.push((n, Path::new("/dev").join(name)));
     }
     found
+}
+
+pub fn find(vid: u16, pid: u16, interface: u8) -> Option<PathBuf> {
+    find_all(vid, pid).into_iter().find(|(n, _)| *n == interface).map(|(_, path)| path)
 }
 
 /// Whether a hidraw node's report descriptor declares the 90-byte feature
 /// report Razer mice take commands on. False when sysfs can't be read.
 pub fn has_control_report(node: &Path) -> bool {
     let Some(name) = node.file_name() else { return false };
-    let path = Path::new("/sys/class/hidraw").join(name).join("device/report_descriptor");
+    let path = Path::new(SYSFS).join(name).join("device/report_descriptor");
     fs::read(path).is_ok_and(|d| descriptor_has_control_report(&d))
 }
 

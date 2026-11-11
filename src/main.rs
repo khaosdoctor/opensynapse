@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::sync::mpsc;
 use std::time::Duration;
-use std::fs;
 
 const USAGE: &str = "\
 usage: opensynapse <command> [--profile N] [--layer NAME] [--device PID]
@@ -202,7 +201,7 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
         }
         ["protocol", "send", rest @ ..] if rest.len() <= 1 => {
             let path = rest.first().map_or_else(|| protocol_path(def), PathBuf::from);
-            let text = fs::read_to_string(&path)
+            let text = std::fs::read_to_string(&path)
                 .map_err(|e| format!("{}: {e} > run `opensynapse protocol` first", path.display()))?;
             let (title, body) = protocol::issue(&text, mouse);
             if o.dry_run {
@@ -230,7 +229,6 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// `init [pid] [file.jsonc]`: starts a device file for a mouse without one.
 fn init(args: &[&str], force: bool) -> Result<(), Box<dyn Error>> {
     let connected = hid::razer_devices();
     let known_pids: Vec<u16> = device::definitions().iter().map(|d| d.pid).collect();
@@ -260,15 +258,12 @@ fn init(args: &[&str], force: bool) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Writes a file, creating its folder, and refuses to overwrite one unless forced.
+/// Like `device::write`, but refuses to overwrite a file unless forced.
 fn write_new(path: &Path, contents: &str, force: bool) -> Result<(), Box<dyn Error>> {
     if path.exists() && !force {
         return Err(format!("{} already exists, use --force to overwrite it", path.display()).into());
     }
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir)?;
-    }
-    Ok(fs::write(path, contents)?)
+    Ok(device::write(path, contents)?)
 }
 
 /// devices/protocols/<device file>.md inside a checkout of the repo, else ./<device file>.md

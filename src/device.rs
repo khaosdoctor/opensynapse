@@ -3,12 +3,13 @@
 use crate::action::Action;
 use crate::hid::{self, Hid};
 use crate::rgb::Effect;
-use serde::{Deserialize, Deserializer};
-use std::{env, fs, io, path::PathBuf};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize};
+use std::path::{Path, PathBuf};
+use std::{env, fs, io};
 
-/// Built into the binary as (file name without .jsonc, contents).
-/// New devices: add a JSONC file and a line here.
-// one line per device, tools/device_from_issue.py adds new ones before the closing `];`
+/// (file name without .jsonc, contents), one line per device.
+/// tools/device_from_issue.py adds new ones before the closing `];`.
 const BUILTIN: &[(&str, &str)] = &[
     ("razer-naga-left-handed-2020", include_str!("../devices/razer-naga-left-handed-2020.jsonc")),
     ("razer-naga-x", include_str!("../devices/razer-naga-x.jsonc")),
@@ -119,9 +120,15 @@ pub fn model_dir(vid: u16, pid: u16) -> Option<PathBuf> {
     devices_dir().map(|d| d.join(format!("{vid:04x}-{pid:04x}")))
 }
 
-/// ~/.config/opensynapse/devices: one folder per model (see `model_dir`) with
-/// its saved profiles and an optional buttons.jsonc, which wins over a built-in definition.
-pub fn devices_dir() -> Option<PathBuf> {
+/// <serial>-<name> in the model folder, or plain <name> when the mouse doesn't report a serial.
+pub fn model_file(vid: u16, pid: u16, serial: &str, name: &str) -> Option<PathBuf> {
+    let name = if serial.is_empty() { name.to_string() } else { format!("{serial}-{name}") };
+    model_dir(vid, pid).map(|d| d.join(name))
+}
+
+/// One folder per model with its saved profiles and an optional buttons.jsonc,
+/// which wins over a built-in definition.
+fn devices_dir() -> Option<PathBuf> {
     config_dir().map(|c| c.join("opensynapse/devices"))
 }
 
@@ -130,6 +137,22 @@ pub fn config_dir() -> Option<PathBuf> {
     env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+}
+
+/// Writes a file, creating its folder first.
+pub fn write(path: &Path, contents: impl AsRef<[u8]>) -> io::Result<()> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)?;
+    }
+    fs::write(path, contents)
+}
+
+pub fn save_json(path: &Path, value: &impl Serialize) -> io::Result<()> {
+    write(path, serde_json::to_string_pretty(value).map_err(io::Error::other)?)
+}
+
+pub fn load_json<T: DeserializeOwned>(path: &Path) -> io::Result<T> {
+    serde_json::from_str(&fs::read_to_string(path)?).map_err(io::Error::other)
 }
 
 pub struct Mouse {
@@ -148,9 +171,7 @@ pub struct DpiStages {
 pub fn detect() -> io::Result<Vec<Mouse>> {
     let mut found = Vec::new();
     for def in definitions() {
-        let Some((_, path)) = hid::find_all(def.vid, def.pid).into_iter().find(|(n, _)| *n == def.interface) else {
-            continue;
-        };
+        let Some(path) = hid::find(def.vid, def.pid, def.interface) else { continue };
         let hid = Hid::open(&path, def.transaction_id).map_err(|e| {
             let denied = e.kind() == io::ErrorKind::PermissionDenied;
             let hint = if denied { " > install udev/70-opensynapse.rules (see README)" } else { "" };
@@ -262,5 +283,15 @@ mod tests {
             let def: DeviceDef = serde_json::from_str(&strip_comments(src)).unwrap_or_else(|e| panic!("{file}.jsonc: {e}"));
             assert!(!def.buttons.is_empty(), "{file}.jsonc has no buttons");
         }
+        let naga = definitions().into_iter().find(|d| d.pid == 0x008d).expect("builtin naga");
+        assert_eq!((naga.vid, naga.transaction_id, naga.buttons.len()), (0x1532, 0x1f, 22));
+        assert_eq!(naga.button("thumb1").map(|b| b.id), Some(0x40));
+    }
+
+    #[test]
+    fn jsonc_comments() {
+        let src = "// head\n{ \"a\": \"x // \\\"y\", // note\n \"b\": 1 } // end";
+        let v: serde_json::Value = serde_json::from_str(&strip_comments(src)).unwrap();
+        assert_eq!((v["a"].as_str(), v["b"].as_u64()), (Some("x // \"y"), Some(1)));
     }
 }

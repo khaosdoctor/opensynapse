@@ -6,12 +6,14 @@
 //! remembers the change and doesn't put its own saved colors back on the next
 //! replug. Without it we write the driver's sysfs files directly.
 
+use crate::device;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{fs, io};
 use zbus::Message;
 use zbus::blocking::Connection;
-use zbus::zvariant::DynamicType;
+use zbus::zvariant::{DynamicType, Type};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Effect {
@@ -65,15 +67,10 @@ pub struct ZoneState {
     pub brightness: u8,
 }
 
-fn lighting_file(vid: u16, pid: u16, serial: &str, name: &str) -> Option<PathBuf> {
-    let prefix = if serial.is_empty() { String::new() } else { format!("{serial}-") };
-    crate::device::model_dir(vid, pid).map(|d| d.join(format!("{prefix}{name}")))
-}
-
 /// <serial>-lighting.original.json in the device folder: the lighting the
 /// first time opensynapse saw the mouse, or what SET DEFAULT saved.
 pub fn original_path(vid: u16, pid: u16, serial: &str) -> Option<PathBuf> {
-    lighting_file(vid, pid, serial, "lighting.original.json")
+    device::model_file(vid, pid, serial, "lighting.original.json")
 }
 
 /// The LED id the mouse uses for an OpenRazer zone name (OpenRazer's razercommon.h).
@@ -88,15 +85,12 @@ pub fn led_id(zone: &str) -> Option<u8> {
     }
 }
 
-pub fn save_zones(path: &std::path::Path, zones: &[ZoneState]) -> io::Result<()> {
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir)?;
-    }
-    fs::write(path, serde_json::to_string_pretty(zones).map_err(io::Error::other)?)
+pub fn save_zones(path: &Path, zones: &[ZoneState]) -> io::Result<()> {
+    device::save_json(path, &zones)
 }
 
-pub fn load_zones(path: &std::path::Path) -> io::Result<Vec<ZoneState>> {
-    serde_json::from_str(&fs::read_to_string(path)?).map_err(io::Error::other)
+pub fn load_zones(path: &Path) -> io::Result<Vec<ZoneState>> {
+    device::load_json(path)
 }
 
 pub struct Lighting {
@@ -108,17 +102,6 @@ pub struct Lighting {
     serial: String,
 }
 
-impl Lighting {
-    pub fn uses_daemon(&self) -> bool {
-        self.daemon.is_some()
-    }
-
-    /// False when there's no daemon or it doesn't know this zone.
-    fn daemon_call<B: Serialize + DynamicType>(&self, zone: &str, name: &str, body: &B) -> bool {
-        self.daemon.as_ref().is_some_and(|(conn, path)| call(conn, path, zone, "set", name, body).is_some())
-    }
-}
-
 /// Calls razer.device.lighting.<zone>.<verb><Zone><name> on the OpenRazer daemon.
 fn call<B: Serialize + DynamicType>(conn: &Connection, path: &str, zone: &str, verb: &str, name: &str, body: &B) -> Option<Message> {
     let mut cap = zone.to_string();
@@ -127,23 +110,20 @@ fn call<B: Serialize + DynamicType>(conn: &Connection, path: &str, zone: &str, v
     conn.call_method(Some("org.razer"), path, Some(iface.as_str()), format!("{verb}{cap}{name}").as_str(), body).ok()
 }
 
+fn reply<T: DeserializeOwned + Type>(msg: Option<Message>) -> Option<T> {
+    msg?.body().deserialize().ok()
+}
+
 /// Whether the OpenRazer daemon is running and knows this mouse. Unlike any
 /// call to the daemon itself, this doesn't start it through D-Bus activation.
 pub fn daemon_sees(serial: &str) -> bool {
     let Ok(conn) = Connection::session() else { return false };
     let dbus = (Some("org.freedesktop.DBus"), "/org/freedesktop/DBus", Some("org.freedesktop.DBus"));
-    let running = conn
-        .call_method(dbus.0, dbus.1, dbus.2, "NameHasOwner", &("org.razer",))
-        .ok()
-        .and_then(|m| m.body().deserialize::<bool>().ok())
-        .unwrap_or(false);
-    if !running {
+    if reply(conn.call_method(dbus.0, dbus.1, dbus.2, "NameHasOwner", &("org.razer",)).ok()) != Some(true) {
         return false;
     }
-    conn.call_method(Some("org.razer"), "/org/razer", Some("razer.devices"), "getDevices", &())
-        .ok()
-        .and_then(|m| m.body().deserialize::<Vec<String>>().ok())
-        .is_some_and(|devices| devices.iter().any(|d| d == serial))
+    let devices: Option<Vec<String>> = reply(conn.call_method(Some("org.razer"), "/org/razer", Some("razer.devices"), "getDevices", &()).ok());
+    devices.is_some_and(|devices| devices.iter().any(|d| d == serial))
 }
 
 fn connect_daemon(serial: &str, zone: &str) -> Option<(Connection, String)> {
@@ -195,8 +175,21 @@ fn hint(e: io::Error) -> io::Error {
 }
 
 impl Lighting {
+    pub fn uses_daemon(&self) -> bool {
+        self.daemon.is_some()
+    }
+
+    /// False when there's no daemon or it doesn't know this zone.
+    fn daemon_call<B: Serialize + DynamicType>(&self, zone: &str, name: &str, body: &B) -> bool {
+        self.daemon.as_ref().is_some_and(|(conn, path)| call(conn, path, zone, "set", name, body).is_some())
+    }
+
+    fn file(&self, zone: &str, name: &str) -> PathBuf {
+        self.dir.join(format!("{zone}_{name}"))
+    }
+
     pub fn brightness(&self, zone: &str) -> io::Result<u8> {
-        let raw = fs::read_to_string(self.dir.join(format!("{zone}_led_brightness"))).map_err(hint)?;
+        let raw = fs::read_to_string(self.file(zone, "led_brightness")).map_err(hint)?;
         raw.trim().parse().map_err(io::Error::other)
     }
 
@@ -205,7 +198,7 @@ impl Lighting {
         if self.daemon_call(zone, "Brightness", &(f64::from(value) * 100.0 / 255.0,)) {
             return Ok(());
         }
-        fs::write(self.dir.join(format!("{zone}_led_brightness")), value.to_string()).map_err(hint)
+        fs::write(self.file(zone, "led_brightness"), value.to_string()).map_err(hint)
     }
 
     pub fn set_effect(&self, zone: &str, effect: &Effect) -> io::Result<()> {
@@ -222,11 +215,22 @@ impl Lighting {
             return Ok(());
         }
         let (name, data) = effect.file_and_data();
-        let path = self.dir.join(format!("{zone}_matrix_effect_{name}"));
+        let path = self.file(zone, &format!("matrix_effect_{name}"));
         if !path.exists() {
             return Err(io::Error::other(format!("{zone} doesn't support {name}")));
         }
         fs::write(path, data).map_err(hint)
+    }
+
+    /// What a zone shows right now: asked from the daemon when it's running,
+    /// otherwise its saved state (the driver's effect files are write-only).
+    pub fn current_effect(&self, zone: &str) -> Option<Effect> {
+        let Some((conn, path)) = &self.daemon else { return saved_effect(&self.serial, zone) };
+        let get = |what: &str| call(conn, path, zone, "get", what, &());
+        let name: String = reply(get("Effect"))?;
+        let colors: Vec<u8> = reply(get("EffectColors")).unwrap_or_default();
+        let speed: Option<i32> = reply(get("EffectSpeed"));
+        Some(effect_from(&name, &colors, speed.map(|s| s as u8), reply(get("WaveDir"))))
     }
 }
 
@@ -253,7 +257,7 @@ fn effect_from(name: &str, colors: &[u8], speed: Option<u8>, wave_dir: Option<i3
 /// The last effect the OpenRazer daemon saved for a zone in persistence.conf.
 /// The daemon only writes that file on exit, so prefer Lighting::current_effect.
 fn saved_effect(serial: &str, zone: &str) -> Option<Effect> {
-    let conf = fs::read_to_string(crate::device::config_dir()?.join("openrazer/persistence.conf")).ok()?;
+    let conf = fs::read_to_string(device::config_dir()?.join("openrazer/persistence.conf")).ok()?;
     let section = conf.split(&format!("[{serial}]")).nth(1)?.split("\n[").next()?;
     let value = |key: &str| {
         section.lines().find_map(|l| l.strip_prefix(&format!("{zone}_{key} = ")).map(str::trim))
@@ -262,20 +266,6 @@ fn saved_effect(serial: &str, zone: &str) -> Option<Effect> {
     let speed = value("speed").and_then(|s| s.parse().ok());
     let wave_dir = value("wave_dir").and_then(|s| s.parse().ok());
     Some(effect_from(value("effect")?, &colors, speed, wave_dir))
-}
-
-impl Lighting {
-    /// What a zone shows right now: asked from the daemon when it's running,
-    /// otherwise its saved state (the driver's effect files are write-only).
-    pub fn current_effect(&self, zone: &str) -> Option<Effect> {
-        let Some((conn, path)) = &self.daemon else { return saved_effect(&self.serial, zone) };
-        let get = |what: &str| call(conn, path, zone, "get", what, &());
-        let name: String = get("Effect")?.body().deserialize().ok()?;
-        let colors: Vec<u8> = get("EffectColors").and_then(|m| m.body().deserialize().ok()).unwrap_or_default();
-        let speed: Option<i32> = get("EffectSpeed").and_then(|m| m.body().deserialize().ok());
-        let wave_dir: Option<i32> = get("WaveDir").and_then(|m| m.body().deserialize().ok());
-        Some(effect_from(&name, &colors, speed.map(|s| s as u8), wave_dir))
-    }
 }
 
 #[cfg(test)]

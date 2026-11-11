@@ -42,8 +42,7 @@ fn guess_name(id: u8) -> String {
 fn open(pid: u16, iface: u8, tid: u8) -> io::Result<Hid> {
     let mut last_err = io::Error::other(format!("interface {iface} didn't come back"));
     for _ in 0..30 {
-        let found = hid::find_all(RAZER, pid).into_iter().find(|(n, _)| *n == iface);
-        if let Some((_, path)) = found {
+        if let Some(path) = hid::find(RAZER, pid, iface) {
             match Hid::open(&path, tid) {
                 Ok(hid) => return Ok(hid),
                 Err(e) => last_err = e,
@@ -144,21 +143,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn jsonc_comments() {
-        let src = "// head\n{ \"a\": \"x // \\\"y\", // note\n \"b\": 1 } // end";
-        let v: serde_json::Value = serde_json::from_str(&crate::device::strip_comments(src)).unwrap();
-        assert_eq!((v["a"].as_str(), v["b"].as_u64()), (Some("x // \"y"), Some(1)));
-    }
-
-    #[test]
     fn slugs() {
         assert_eq!(slug("Razer Naga Pro (Wired)"), "razer-naga-pro-wired");
-    }
-
-    #[test]
-    fn builtin_device_parses_hex_ids() {
-        let naga = crate::device::definitions().into_iter().find(|d| d.pid == 0x008d).expect("builtin naga");
-        assert_eq!((naga.vid, naga.transaction_id, naga.buttons.len()), (0x1532, 0x1f, 22));
-        assert_eq!(naga.button("thumb1").map(|b| b.id), Some(0x40));
     }
 }

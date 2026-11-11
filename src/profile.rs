@@ -2,13 +2,11 @@
 //! so files are hand-editable: `"thumb1": "key:ctrl+1"`.
 
 use crate::action::Action;
-use crate::device::{DpiStages, Mouse};
+use crate::device::{self, DpiStages, Mouse};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProfileFile {
@@ -51,7 +49,7 @@ fn read(mouse: &Mouse, profile: u8) -> io::Result<ProfileFile> {
     })
 }
 
-/// The button writes a file would make: (layer, button id, action), only for
+/// The button writes a file would make: (layer, button index, action), only for
 /// buttons that differ from the device, so an unknown flag byte on untouched
 /// keys is preserved. Nothing is written here, so a typo writes nothing.
 pub fn plan(mouse: &Mouse, profile: u8, file: &ProfileFile) -> io::Result<Vec<(u8, usize, Action)>> {
@@ -84,11 +82,9 @@ pub fn apply(mouse: &Mouse, profile: u8, file: &ProfileFile) -> io::Result<usize
     Ok(writes.len())
 }
 
-/// ~/.config/opensynapse/devices/<vid-pid>/<serial>-<profile>.json, or
-/// <profile>.json when the mouse doesn't report a serial.
+/// <serial>-<profile>.json in the model folder.
 pub fn default_path(mouse: &Mouse, profile: u8) -> Option<PathBuf> {
-    let name = if mouse.serial.is_empty() { format!("{profile}.json") } else { format!("{}-{profile}.json", mouse.serial) };
-    crate::device::model_dir(mouse.def.vid, mouse.def.pid).map(|d| d.join(name))
+    device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, &format!("{profile}.json"))
 }
 
 /// <serial>-<profile>.original.json next to the default path: what the
@@ -120,12 +116,9 @@ pub fn ensure_defaults(mouse: &Mouse) -> io::Result<usize> {
 }
 
 pub fn export(mouse: &Mouse, profile: u8, path: &Path) -> io::Result<()> {
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir)?;
-    }
-    fs::write(path, serde_json::to_string_pretty(&read(mouse, profile)?).map_err(io::Error::other)?)
+    device::save_json(path, &read(mouse, profile)?)
 }
 
 pub fn load(path: &Path) -> io::Result<ProfileFile> {
-    serde_json::from_str(&fs::read_to_string(path)?).map_err(io::Error::other)
+    device::load_json(path)
 }

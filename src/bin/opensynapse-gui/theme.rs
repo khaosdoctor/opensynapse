@@ -16,11 +16,12 @@
 use eframe::egui::{self, Color32, CornerRadius, FontData, FontFamily, FontId, RichText, Stroke, Theme};
 use opensynapse::device;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::OwnedValue;
 
@@ -54,49 +55,20 @@ pub struct Palette {
     pub hover: Color32,
 }
 
-/// Every theme gets applied on top of this, so a theme file can skip
-/// properties. It has to match themes/opensynapse.css, there's a test for that.
-const FALLBACK_DARK: Palette = Palette {
-    bg: Color32::from_rgb(0x07, 0x07, 0x0d),
-    panel: Color32::from_rgb(0x0e, 0x0e, 0x1a),
-    card: Color32::from_rgb(0x14, 0x14, 0x24),
-    pane: Color32::from_rgb(0x0e, 0x0e, 0x1a),
-    deep: Color32::from_rgb(0x03, 0x03, 0x08),
-    button: Color32::from_rgb(0x07, 0x07, 0x0d),
-    border: Color32::from_rgb(0x5a, 0x5a, 0x7a),
-    text: Color32::from_rgb(0xd0, 0xd0, 0xe8),
-    strong: Color32::WHITE,
-    on_accent: Color32::from_rgb(0x07, 0x07, 0x0d),
-    accent: Color32::from_rgb(0x00, 0xf0, 0xff),
-    accent2: Color32::from_rgb(0xff, 0x2a, 0x6d),
-    warn: Color32::from_rgb(0xfc, 0xee, 0x0a),
-    muted: Color32::from_rgb(0x5a, 0x5a, 0x7a),
-    error: Color32::from_rgb(0xff, 0x30, 0x30),
-    ok: Color32::from_rgb(0x39, 0xff, 0x14),
-    off: Color32::from_rgb(0x2a, 0x2a, 0x3a),
-    hover: Color32::from_rgba_unmultiplied_const(0xff, 0xff, 0xff, 0x1a),
-};
+/// One color everywhere, the starting point before any CSS is read.
+const fn uniform(c: Color32) -> Palette {
+    Palette {
+        bg: c, panel: c, card: c, pane: c, deep: c, button: c, border: c, text: c, strong: c,
+        on_accent: c, accent: c, accent2: c, warn: c, muted: c, error: c, ok: c, off: c, hover: c,
+    }
+}
 
-const FALLBACK_LIGHT: Palette = Palette {
-    bg: Color32::from_rgb(0xf4, 0xf4, 0xfa),
-    panel: Color32::from_rgb(0xe8, 0xe8, 0xf2),
-    card: Color32::from_rgb(0xff, 0xff, 0xff),
-    pane: Color32::from_rgb(0xe8, 0xe8, 0xf2),
-    deep: Color32::from_rgb(0xdc, 0xdc, 0xe8),
-    button: Color32::from_rgb(0xf4, 0xf4, 0xfa),
-    border: Color32::from_rgb(0x7a, 0x7a, 0x96),
-    text: Color32::from_rgb(0x20, 0x20, 0x2e),
-    strong: Color32::from_rgb(0x0a, 0x0a, 0x14),
-    on_accent: Color32::from_rgb(0xf4, 0xf4, 0xfa),
-    accent: Color32::from_rgb(0x00, 0x7a, 0x8a),
-    accent2: Color32::from_rgb(0xd4, 0x00, 0x4f),
-    warn: Color32::from_rgb(0x8a, 0x6a, 0x00),
-    muted: Color32::from_rgb(0x7a, 0x7a, 0x96),
-    error: Color32::from_rgb(0xc8, 0x1e, 0x1e),
-    ok: Color32::from_rgb(0x1a, 0x8a, 0x00),
-    off: Color32::from_rgb(0xc8, 0xc8, 0xd8),
-    hover: Color32::from_rgba_unmultiplied_const(0x00, 0x00, 0x00, 0x14),
-};
+/// Every theme goes on top of themes/opensynapse.css, so a theme file can skip properties.
+fn base(light: bool) -> Style {
+    let mut style = Style { p: uniform(Color32::BLACK), radius: 0, font: String::new(), pane: None };
+    parse(BUILTIN[0].1, light, &mut style);
+    style
+}
 
 const BUILTIN: &[(&str, &str)] = &[
     ("opensynapse", include_str!("../../../themes/opensynapse.css")),
@@ -108,11 +80,21 @@ const BUILTIN: &[(&str, &str)] = &[
     ("dracula", include_str!("../../../themes/dracula.css")),
 ];
 
-static CURRENT: RwLock<Palette> = RwLock::new(FALLBACK_DARK);
+// `start` fills it in before the first frame
+static CURRENT: RwLock<Palette> = RwLock::new(uniform(Color32::BLACK));
 static RADIUS: AtomicU8 = AtomicU8::new(0);
 
+/// A poisoned lock still holds usable data, a panic elsewhere shouldn't take the theme down.
+fn read<T>(lock: &RwLock<T>) -> RwLockReadGuard<'_, T> {
+    lock.read().unwrap_or_else(|e| e.into_inner())
+}
+
+fn write<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
+    lock.write().unwrap_or_else(|e| e.into_inner())
+}
+
 pub fn t() -> Palette {
-    *CURRENT.read().unwrap_or_else(|e| e.into_inner())
+    *read(&CURRENT)
 }
 
 /// Phosphor icons, look the codepoints up on https://phosphoricons.com
@@ -144,7 +126,7 @@ struct Settings {
 static SETTINGS: RwLock<Settings> = RwLock::new(Settings { mode: Mode::System, theme: String::new(), font: None });
 
 fn settings() -> Settings {
-    SETTINGS.read().unwrap_or_else(|e| e.into_inner()).clone()
+    read(&SETTINGS).clone()
 }
 
 struct ThemeFile {
@@ -200,20 +182,19 @@ pub fn start(ctx: &egui::Context) {
         .and_then(|f| fs::read_to_string(f).ok())
         .and_then(|s| serde_json::from_str::<Settings>(&s).ok());
     if let Some(s) = saved {
-        *SETTINGS.write().unwrap_or_else(|e| e.into_inner()) = s;
+        *write(&SETTINGS) = s;
     }
-    *THEMES.write().unwrap_or_else(|e| e.into_inner()) = scan();
+    *write(&THEMES) = scan();
     apply(ctx);
     follow_desktop(ctx.clone());
 }
 
 fn save(ctx: &egui::Context, s: Settings) {
     let json = serde_json::to_string_pretty(&s).unwrap_or_default();
-    *SETTINGS.write().unwrap_or_else(|e| e.into_inner()) = s;
+    *write(&SETTINGS) = s;
     apply(ctx);
     let Some(file) = config("settings.json") else { return };
-    let written = file.parent().map_or(Ok(()), fs::create_dir_all).and_then(|_| fs::write(&file, json));
-    if let Err(e) = written {
+    if let Err(e) = device::write(&file, json) {
         eprintln!("could not save settings to {}: {e}", file.display());
     }
 }
@@ -235,9 +216,7 @@ pub fn settings_ui(ui: &mut egui::Ui) {
 
     ui.add_space(16.0);
     super::heading(ui, "THEME");
-    let ids: Vec<(String, String)> = THEMES
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
+    let ids: Vec<(String, String)> = read(&THEMES)
         .iter()
         .map(|th| (th.id.clone(), th.path.as_ref().map_or("built in".into(), |p| p.display().to_string())))
         .collect();
@@ -252,7 +231,7 @@ pub fn settings_ui(ui: &mut egui::Ui) {
     let dir = config("themes").map(|d| d.display().to_string()).unwrap_or_default();
     ui.horizontal(|ui| {
         if super::outline_button(ui, "RELOAD", t().accent).on_hover_text("read the themes folder and theme.css again").clicked() {
-            *THEMES.write().unwrap_or_else(|e| e.into_inner()) = scan();
+            *write(&THEMES) = scan();
             apply(ui.ctx());
         }
         ui.label(RichText::new(format!("add .css themes to {dir}")).color(t().muted).small());
@@ -260,10 +239,10 @@ pub fn settings_ui(ui: &mut egui::Ui) {
 
     ui.add_space(16.0);
     super::heading(ui, "FONT");
-    if FONTS.read().unwrap_or_else(|e| e.into_inner()).is_empty() {
-        *FONTS.write().unwrap_or_else(|e| e.into_inner()) = system_fonts();
+    if read(&FONTS).is_empty() {
+        *write(&FONTS) = system_fonts();
     }
-    let fonts = FONTS.read().unwrap_or_else(|e| e.into_inner()).clone();
+    let fonts = read(&FONTS).clone();
     let mut pick = None;
     let open = egui::ComboBox::from_id_salt("font")
         .selected_text(s.font.clone().unwrap_or("THEME DEFAULT".into()))
@@ -302,7 +281,7 @@ pub fn settings_ui(ui: &mut egui::Ui) {
 fn load_previews(ctx: &egui::Context, fonts: &[(String, PathBuf)], visible: std::ops::Range<usize>) {
     let start = (visible.start / PREVIEW_BLOCK).saturating_sub(1) * PREVIEW_BLOCK;
     let end = ((visible.end / PREVIEW_BLOCK + 2) * PREVIEW_BLOCK).min(fonts.len());
-    let mut previews = PREVIEWS.write().unwrap_or_else(|e| e.into_inner());
+    let mut previews = write(&PREVIEWS);
     if previews.0 == (start..end) {
         return;
     }
@@ -320,7 +299,7 @@ fn load_previews(ctx: &egui::Context, fonts: &[(String, PathBuf)], visible: std:
 }
 
 fn unload_previews(ctx: &egui::Context) {
-    let mut previews = PREVIEWS.write().unwrap_or_else(|e| e.into_inner());
+    let mut previews = write(&PREVIEWS);
     if previews.1.is_empty() {
         return;
     }
@@ -329,7 +308,7 @@ fn unload_previews(ctx: &egui::Context) {
 }
 
 fn set_fonts_with_previews(ctx: &egui::Context, previews: &[Preview]) {
-    let mut defs = BASE_FONTS.read().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default();
+    let mut defs = read(&BASE_FONTS).clone().unwrap_or_default();
     for (name, data) in previews {
         let key = format!("preview {name}");
         defs.font_data.insert(key.clone(), data.clone());
@@ -341,13 +320,12 @@ fn set_fonts_with_previews(ctx: &egui::Context, previews: &[Preview]) {
 /// Only fonts that cover English, so symbol fonts like Wingdings can't turn
 /// every label into pictures.
 fn system_fonts() -> Vec<(String, PathBuf)> {
-    let format = "--format=%{family[0]}\t%{style[0]}\t%{file}\n";
-    let Ok(out) = Command::new("fc-list").args([format, ":lang=en"]).output() else {
+    let Some(out) = fontconfig("fc-list", &["--format=%{family[0]}\t%{style[0]}\t%{file}\n", ":lang=en"]) else {
         return Vec::new();
     };
     // family -> (how far from regular the style is, file)
-    let mut best: std::collections::BTreeMap<String, (u8, PathBuf)> = std::collections::BTreeMap::new();
-    for line in String::from_utf8_lossy(&out.stdout).lines() {
+    let mut best: BTreeMap<String, (u8, PathBuf)> = BTreeMap::new();
+    for line in out.lines() {
         let mut parts = line.split('\t');
         let (Some(family), Some(style), Some(file)) = (parts.next(), parts.next(), parts.next()) else { continue };
         // egui reads TrueType and OpenType, bitmap fonts like .pcf.gz can't be previewed or used
@@ -373,13 +351,17 @@ fn system_fonts() -> Vec<(String, PathBuf)> {
 
 fn font_bytes(families: &str) -> Option<Vec<u8>> {
     let pattern: String = families.split(',').map(|f| f.trim().trim_matches(['"', '\''])).collect::<Vec<_>>().join(",");
-    let out = Command::new("fc-match").args(["--format=%{file}", &pattern]).output().ok()?;
-    fs::read(String::from_utf8_lossy(&out.stdout).trim()).ok()
+    fs::read(fontconfig("fc-match", &["--format=%{file}", &pattern])?.trim()).ok()
+}
+
+fn fontconfig(cmd: &str, args: &[&str]) -> Option<String> {
+    let out = Command::new(cmd).args(args).output().ok()?;
+    Some(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// Falls back to the first theme when `id` is gone.
 fn theme_css(id: &str) -> (String, String) {
-    let themes = THEMES.read().unwrap_or_else(|e| e.into_inner());
+    let themes = read(&THEMES);
     let th = themes.iter().find(|th| th.id == id).or(themes.first());
     th.map_or((String::new(), String::new()), |th| (th.id.clone(), th.css.clone()))
 }
@@ -418,14 +400,14 @@ pub fn apply(ctx: &egui::Context) {
         Mode::Dark => false,
         Mode::System => user_css.as_deref().and_then(forced_scheme).unwrap_or_else(prefers_light),
     };
-    let mut style = Style { p: if light { FALLBACK_LIGHT } else { FALLBACK_DARK }, radius: 0, font: "monospace".into(), pane: None };
+    let mut style = base(light);
     parse(&theme_css(&s.theme).1, light, &mut style);
     if let Some(css) = &user_css {
         parse(css, light, &mut style);
     }
     let mut p = style.p;
     p.pane = style.pane.unwrap_or(p.bg.lerp_to_gamma(p.panel, 0.5));
-    *CURRENT.write().unwrap_or_else(|e| e.into_inner()) = p;
+    *write(&CURRENT) = p;
     RADIUS.store(style.radius, Ordering::Relaxed);
     let radius = radius();
 
@@ -479,9 +461,9 @@ pub fn apply(ctx: &egui::Context) {
             FontFamily::Proportional
         }
     };
-    *BASE_FONTS.write().unwrap_or_else(|e| e.into_inner()) = Some(defs.clone());
+    *write(&BASE_FONTS) = Some(defs.clone());
     // keep whatever previews are loaded, the font list may be open while the theme changes
-    let previews = PREVIEWS.read().unwrap_or_else(|e| e.into_inner()).1.clone();
+    let previews = read(&PREVIEWS).1.clone();
     set_fonts_with_previews(ctx, &previews);
     ctx.all_styles_mut(|st| {
         for f in st.text_styles.values_mut() {
@@ -549,6 +531,7 @@ fn parse(css: &str, light: bool, style: &mut Style) {
 fn set(style: &mut Style, decl: &str) {
     let Some((name, value)) = decl.split_once(':') else { return };
     let (name, value) = (name.trim(), value.trim());
+    let color = || Color32::from_hex(value).map_err(|_| eprintln!("theme: {name}: {value} is not a #hex color")).ok();
     let p = &mut style.p;
     let slot = match name {
         "--radius" => {
@@ -563,10 +546,7 @@ fn set(style: &mut Style, decl: &str) {
             return;
         }
         "--pane" => {
-            match Color32::from_hex(value) {
-                Ok(color) => style.pane = Some(color),
-                Err(_) => eprintln!("theme: --pane: {value} is not a #hex color"),
-            }
+            style.pane = color().or(style.pane);
             return;
         }
         "--bg" => &mut p.bg,
@@ -592,9 +572,8 @@ fn set(style: &mut Style, decl: &str) {
             return;
         }
     };
-    match Color32::from_hex(value) {
-        Ok(color) => *slot = color,
-        Err(_) => eprintln!("theme: {name}: {value} is not a #hex color"),
+    if let Some(c) = color() {
+        *slot = c;
     }
 }
 
@@ -619,7 +598,7 @@ mod tests {
         @media (prefers-color-scheme: dark) { :root { --ok: #010203; } }";
 
     fn parsed(css: &str, light: bool) -> Style {
-        let mut style = Style { p: if light { FALLBACK_LIGHT } else { FALLBACK_DARK }, radius: 0, font: "monospace".into(), pane: None };
+        let mut style = base(light);
         parse(css, light, &mut style);
         style
     }
@@ -629,7 +608,7 @@ mod tests {
         let s = parsed(CSS, false);
         assert_eq!(s.p.accent, Color32::from_rgb(0x11, 0x22, 0x33));
         assert_eq!(s.p.ok, Color32::from_rgb(1, 2, 3));
-        assert_eq!(s.p.bg, FALLBACK_DARK.bg);
+        assert_eq!(s.p.bg, Color32::from_rgb(0x07, 0x07, 0x0d));
         assert_eq!(s.radius, 6);
         assert_eq!(s.font, "\"Noto Sans\"");
     }
@@ -639,7 +618,7 @@ mod tests {
         let s = parsed(CSS, true);
         assert_eq!(s.p.accent, Color32::from_rgb(0x44, 0x55, 0x66));
         assert_eq!(s.p.bg, Color32::WHITE);
-        assert_eq!(s.p.ok, FALLBACK_LIGHT.ok);
+        assert_eq!(s.p.ok, Color32::from_rgb(0x1a, 0x8a, 0x00));
     }
 
     #[test]
@@ -650,40 +629,12 @@ mod tests {
     }
 
     #[test]
-    fn opensynapse_css_matches_fallback() {
-        let css = BUILTIN[0].1;
-        assert_eq!(parsed(css, false).p, FALLBACK_DARK);
-        assert_eq!(parsed(css, true).p, FALLBACK_LIGHT);
-    }
-
-    #[test]
     fn builtin_themes_set_every_color() {
         // parsed onto a palette of a color no theme uses, any color a theme forgets keeps it
         let unset = Color32::from_rgb(0x12, 0x34, 0x56);
-        let blank = Palette {
-            bg: unset,
-            panel: unset,
-            card: unset,
-            // pane is optional in theme files, apply works it out when it's missing
-            pane: Color32::WHITE,
-            deep: unset,
-            button: unset,
-            border: unset,
-            text: unset,
-            strong: unset,
-            on_accent: unset,
-            accent: unset,
-            accent2: unset,
-            warn: unset,
-            muted: unset,
-            error: unset,
-            ok: unset,
-            off: unset,
-            hover: unset,
-        };
         for (id, css) in BUILTIN {
             for light in [false, true] {
-                let mut style = Style { p: blank, radius: 0, font: String::new(), pane: None };
+                let mut style = Style { p: uniform(unset), radius: 0, font: String::new(), pane: None };
                 parse(css, light, &mut style);
                 let p = style.p;
                 let colors = [

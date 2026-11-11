@@ -2,7 +2,7 @@
 
 use super::palette::BUILTIN;
 use super::{FONTS, apply, load_previews, read, system_fonts, unload_previews, write};
-use crate::shared::widgets::{heading, note, outline, tall, toggle_button};
+use crate::shared::widgets::{heading, modal, neon, note, outline, tall, toggle_button};
 use crate::theme::t;
 use eframe::egui::{self, FontFamily, FontId, RichText};
 use opensynapse::device;
@@ -38,6 +38,56 @@ pub(super) struct ThemeFile {
 }
 
 pub(super) static THEMES: RwLock<Vec<ThemeFile>> = RwLock::new(Vec::new());
+
+/// Some while the NEW THEME dialog is open: the name typed so far and the last error.
+static NEW_THEME: RwLock<Option<(String, Option<String>)>> = RwLock::new(None);
+
+fn new_theme_dialog(ctx: &egui::Context) {
+    let Some((mut name, error)) = read(&NEW_THEME).clone() else { return };
+    let mut close = false;
+    let mut failed = error;
+    modal(ctx, "new-theme", 400.0, "NEW THEME", |ui| {
+        note(ui, "We copy the OPENSYNAPSE theme, which lists every property, into your themes folder.");
+        ui.text_edit_singleline(&mut name).request_focus();
+        if let Some(e) = &failed {
+            ui.label(RichText::new(e).color(t().error).small());
+        }
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if tall(ui, outline("CANCEL", t().muted)).clicked() {
+                close = true;
+            }
+            if !tall(ui, neon("CREATE", t().accent)).clicked() {
+                return;
+            }
+            match create_theme(&name) {
+                Ok(()) => {
+                    *write(&THEMES) = scan();
+                    close = true;
+                }
+                Err(e) => failed = Some(e),
+            }
+        });
+    });
+    *write(&NEW_THEME) = (!close).then_some((name, failed));
+}
+
+/// Copies the default theme to themes/<name>.css. The name becomes the file name
+/// and the button, so we keep it to letters, digits, - and _.
+fn create_theme(name: &str) -> Result<(), String> {
+    let name = name.trim().to_lowercase();
+    if name.is_empty() {
+        return Err("give the theme a name".into());
+    }
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("only letters, digits, - and _".into());
+    }
+    let file = config("themes").ok_or("no config folder")?.join(format!("{name}.css"));
+    if file.exists() {
+        return Err(format!("{} already exists", file.display()));
+    }
+    device::write(&file, BUILTIN[0].1).map_err(|e| format!("could not write {}: {e}", file.display()))
+}
 
 pub(super) fn config(name: &str) -> Option<PathBuf> {
     device::config_dir().map(|c| c.join("opensynapse").join(name))
@@ -118,8 +168,12 @@ pub fn settings_ui(ui: &mut egui::Ui) {
             *write(&THEMES) = scan();
             apply(ui.ctx());
         }
+        if tall(ui, outline("NEW THEME", t().accent2)).on_hover_text("start your own theme from a copy of the default one").clicked() {
+            *write(&NEW_THEME) = Some((String::new(), None));
+        }
         note(ui, format!("add .css themes to {dir}"));
     });
+    new_theme_dialog(ui.ctx());
 
     ui.add_space(16.0);
     heading(ui, "FONT");
@@ -157,5 +211,15 @@ pub fn settings_ui(ui: &mut egui::Ui) {
     }
     if let Some(font) = pick.filter(|f| *f != s.font) {
         save(ui.ctx(), Settings { font, ..s });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn theme_names_stay_file_safe() {
+        assert!(super::create_theme("  ").is_err());
+        assert!(super::create_theme("../evil").is_err());
+        assert!(super::create_theme("my theme").is_err());
     }
 }

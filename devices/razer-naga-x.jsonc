@@ -1,0 +1,33 @@
+// `at` places a button on the drawn mouse as [x, y], in percent of the view.
+// The body is drawn at x 30..70, y 2..74; buttons left of x 30 or right of x 70 get a side plate.
+// Leave `at` out on every button to get a plain grid instead.
+{
+  "name": "Razer Naga X",
+  "vid": "0x1532",
+  "pid": "0x0096",
+  "interface": 3,
+  "transaction_id": "0x1f",
+  "profiles": [0, 1],
+  "layers": ["normal", "hypershift"],
+  "dpi_max": 18000,
+  "buttons": [
+    { "id": "0x01", "name": "left", "at": [40, 28] },
+    { "id": "0x02", "name": "right", "at": [60, 28] },
+    { "id": "0x03", "name": "scroll-click", "at": [50, 18] },
+    { "id": "0x09", "name": "wheel-up", "at": [50, 10] },
+    { "id": "0x0a", "name": "wheel-down", "at": [50, 26] },
+    { "id": "0x60", "name": "dpi-cycle", "at": [50, 40] },
+    { "id": "0x40", "name": "thumb1", "at": [6, 30] },
+    { "id": "0x41", "name": "thumb2", "at": [14, 30] },
+    { "id": "0x42", "name": "thumb3", "at": [22, 30] },
+    { "id": "0x43", "name": "thumb4", "at": [6, 40] },
+    { "id": "0x44", "name": "thumb5", "at": [14, 40] },
+    { "id": "0x45", "name": "thumb6", "at": [22, 40] },
+    { "id": "0x46", "name": "thumb7", "at": [6, 50] },
+    { "id": "0x47", "name": "thumb8", "at": [14, 50] },
+    { "id": "0x48", "name": "thumb9", "at": [22, 50] },
+    { "id": "0x49", "name": "thumb10", "at": [6, 60] },
+    { "id": "0x4a", "name": "thumb11", "at": [14, 60] },
+    { "id": "0x4b", "name": "thumb12", "at": [22, 60] }
+  ]
+}

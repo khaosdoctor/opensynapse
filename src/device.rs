@@ -11,6 +11,7 @@ use std::{env, fs, io, path::PathBuf};
 // one line per device, tools/device_from_issue.py adds new ones before the closing `];`
 const BUILTIN: &[(&str, &str)] = &[
     ("razer-naga-left-handed-2020", include_str!("../devices/razer-naga-left-handed-2020.jsonc")),
+    ("razer-naga-x", include_str!("../devices/razer-naga-x.jsonc")),
 ];
 
 /// Device files are JSONC: cuts `//` comments outside strings, line by line

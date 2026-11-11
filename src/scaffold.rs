@@ -128,7 +128,7 @@ pub fn scaffold(pid: u16, name: &str) -> io::Result<Scaffold> {
   ]
 }}
 ",
-        repo = crate::protocol::REPO
+        repo = crate::generators::protocol::REPO
     );
     Ok(Scaffold { json, transaction_id: tid, interface, buttons: ids.len() })
 }

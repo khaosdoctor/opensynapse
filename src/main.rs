@@ -1,7 +1,8 @@
 use opensynapse::action::Action;
 use opensynapse::device;
 use opensynapse::rgb::{self, Effect};
-use opensynapse::{hid, input, profile, protocol, scaffold};
+use opensynapse::generators::protocol;
+use opensynapse::{hid, input, profile, scaffold};
 use std::error::Error;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};

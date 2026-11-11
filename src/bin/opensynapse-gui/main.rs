@@ -24,7 +24,7 @@ const SIDEBAR_WIDTH: f32 = 250.0;
 /// The mouse drawing never grows past this, so big screens don't get a giant mouse.
 const MAX_VIEW_WIDTH: f32 = 900.0;
 
-/// (title, grid columns, keys): each group renders as its own column.
+/// (title, grid columns, keys), each group gets its own column.
 const SPECIAL_KEYS: &[(&str, usize, &[&str])] = &[
     (
         "FUNCTION",
@@ -105,15 +105,15 @@ enum Kind {
     Raw,
 }
 
-const KINDS: [(Kind, &str); 8] = [
-    (Kind::Key, "KEY"),
-    (Kind::Mouse, "MOUSE"),
-    (Kind::Media, "MEDIA"),
-    (Kind::Dpi, "DPI"),
-    (Kind::Profile, "PROFILE"),
-    (Kind::Hypershift, "HYPERSHIFT"),
-    (Kind::Raw, "RAW"),
-    (Kind::Disabled, "OFF"),
+const KINDS: &[(&str, Kind)] = &[
+    ("KEY", Kind::Key),
+    ("MOUSE", Kind::Mouse),
+    ("MEDIA", Kind::Media),
+    ("DPI", Kind::Dpi),
+    ("PROFILE", Kind::Profile),
+    ("HYPERSHIFT", Kind::Hypershift),
+    ("RAW", Kind::Raw),
+    ("OFF", Kind::Disabled),
 ];
 
 struct Editor {
@@ -208,7 +208,7 @@ struct App {
     dpi: u16,
     stages: Vec<u16>,
     active: u8,
-    path: String,
+    path: PathBuf,
     last_poll: Instant,
     ctx: egui::Context,
     pressed: Option<Arc<Mutex<Pressed>>>,
@@ -218,9 +218,7 @@ struct App {
     ops: Vec<Op>,
     /// (dpi, active stage, stages) as last read from the device
     device_dpi: (u16, u8, Vec<u16>),
-    /// IMPORT was clicked and the overwrite warning is showing
-    confirm_import: bool,
-    /// a RESET or SET DEFAULT warning is showing
+    /// a warning that waits for the user before IMPORT, RESET or SET DEFAULT
     confirm: Option<Confirm>,
     view: View,
     lighting: Option<Lighting>,
@@ -244,7 +242,6 @@ impl App {
             flash: None,
             ops: Vec::new(),
             device_dpi: (0, 0, Vec::new()),
-            confirm_import: false,
             confirm: None,
             view: View::Buttons,
             lighting: None,
@@ -266,7 +263,7 @@ impl App {
             dpi: 800,
             stages: Vec::new(),
             active: 1,
-            path: String::new(), // set per device/profile by update_path
+            path: PathBuf::new(), // set per device/profile by update_path
             last_poll: Instant::now(),
         };
         app.connect();
@@ -311,11 +308,10 @@ impl App {
     /// The path field follows the selected device, profile and folder.
     fn update_path(&mut self) {
         let Some(p) = self.mice.get(self.current).and_then(|m| profile::default_path(m, self.profile)) else { return };
-        let p = match (&self.dir, p.file_name()) {
+        self.path = match (&self.dir, p.file_name()) {
             (Some(dir), Some(name)) => dir.join(name),
             _ => p,
         };
-        self.path = p.display().to_string();
     }
 
     fn reload(&mut self) {
@@ -422,13 +418,7 @@ impl App {
         })
     }
 
-    fn queue(&mut self, op: Op) {
-        // a newer op for the same target replaces the older one
-        self.ops.retain(|o| !o.same_target(&op));
-        self.ops.push(op);
-    }
-
-    /// What a button will do: the queued change, or the device value.
+    /// What a button will do, the queued change or else the device value.
     fn effective(&self, index: usize) -> Option<Action> {
         self.pending(index).or(self.device_action(index)).cloned()
     }
@@ -464,21 +454,20 @@ impl App {
         }
     }
 
-    /// Same for DPI: valid values that differ from the device are queued,
+    /// Same for DPI, valid values that differ from the device are queued and
     /// putting the device values back drops the queued change.
     fn queue_dpi_edits(&mut self) {
         let max = self.mice.get(self.current).map_or(0, |m| m.def.dpi_max);
         let valid = (1..=5).contains(&self.stages.len())
             && (1..=self.stages.len() as u8).contains(&self.active)
             && self.stages.iter().chain([&self.dpi]).all(|d| (100..=max).contains(d));
-        let wanted = (self.dpi, self.active, &self.stages);
-        if wanted == (self.device_dpi.0, self.device_dpi.1, &self.device_dpi.2) {
-            self.ops.retain(|o| !matches!(o, Op::Dpi { .. }));
+        let op = Op::Dpi { dpi: self.dpi, active: self.active, stages: self.stages.clone() };
+        if (self.dpi, self.active, &self.stages) == (self.device_dpi.0, self.device_dpi.1, &self.device_dpi.2) {
+            unqueue(&mut self.ops, &op);
             return;
         }
-        let queued = self.ops.iter().any(|o| matches!(o, Op::Dpi { dpi, active, stages } if (*dpi, *active, stages) == wanted));
-        if valid && !queued {
-            self.queue_dpi();
+        if valid && queue(&mut self.ops, op) {
+            self.status = Ok(format!("QUEUED DPI {} > STAGE {}", self.dpi, self.active));
         }
     }
 
@@ -491,15 +480,11 @@ impl App {
             }
         }
         for (z, base) in self.zone_ui.iter().zip(&self.zone_base) {
-            let op = Op::Light { zone: z.name.clone(), effect: z.effect(), brightness: z.brightness };
             if z == base {
-                self.ops.retain(|o| !o.same_target(&op));
+                unqueue(&mut self.ops, &z.op());
                 continue;
             }
-            if !self.ops.contains(&op) {
-                self.ops.retain(|o| !o.same_target(&op));
-                self.ops.push(op);
-            }
+            queue(&mut self.ops, z.op());
         }
     }
 
@@ -515,18 +500,12 @@ impl App {
         let name = self.mice.get(self.current).map_or(String::new(), |m| m.def.buttons[index].name.to_uppercase());
         let op = Op::Button { profile: self.profile, layer: self.layer, index, action: action.clone() };
         if self.device_action(index) == Some(&action) {
-            // back to what the device already has: nothing to do
-            self.ops.retain(|o| !o.same_target(&op));
+            unqueue(&mut self.ops, &op);
             self.status = Ok(format!("{name} REVERTED > nothing to write"));
             return;
         }
-        self.queue(op);
+        queue(&mut self.ops, op);
         self.status = Ok(format!("QUEUED {name} > {action}"));
-    }
-
-    fn queue_dpi(&mut self) {
-        self.queue(Op::Dpi { dpi: self.dpi, active: self.active, stages: self.stages.clone() });
-        self.status = Ok(format!("QUEUED DPI {} > STAGE {}", self.dpi, self.active));
     }
 
     /// Runs the queue in order and stops at the first failure, keeping what's left.
@@ -600,6 +579,22 @@ impl Op {
     }
 }
 
+/// A newer op for the same target replaces the older one. Returns false when
+/// the exact op is queued already, so the editors that run every frame don't
+/// move it to the end or repeat their status line.
+fn queue(ops: &mut Vec<Op>, op: Op) -> bool {
+    if ops.contains(&op) {
+        return false;
+    }
+    unqueue(ops, &op);
+    ops.push(op);
+    true
+}
+
+fn unqueue(ops: &mut Vec<Op>, op: &Op) {
+    ops.retain(|o| !o.same_target(op));
+}
+
 /// Top-down mouse silhouette: a squared-off ellipse, narrower at the front.
 fn mouse_outline(body: egui::Rect) -> Vec<egui::Pos2> {
     let (c, a, b) = (body.center(), body.width() / 2.0, body.height() / 2.0);
@@ -661,7 +656,6 @@ fn short(a: &Action) -> String {
     }
 }
 
-/// Frameless tab: cyan and underlined when active.
 fn tab(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Response {
     let label = if selected { RichText::new(text).color(t().accent).strong().underline() } else { RichText::new(text).color(t().muted) };
     hover(ui.add(egui::Button::new(label).frame(false)))
@@ -684,12 +678,8 @@ fn view_tab(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Response {
         true => (t().accent, t().accent, t().card),
         false => (t().muted, t().border, t().bg),
     };
-    let button = egui::Button::new(RichText::new(text).color(fg).strong())
-        .fill(fill)
-        .stroke(Stroke::new(1.0, edge))
-        .corner_radius(CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 })
-        .min_size(egui::vec2(0.0, 28.0));
-    hover(ui.add(button))
+    let button = framed(RichText::new(text).color(fg).strong(), fill, edge).corner_radius(CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 });
+    tall(ui, button)
 }
 
 /// Status bar links, Phosphor codepoints for the GitHub logo, a bug and a globe.
@@ -707,55 +697,71 @@ const LINKS: &[(&str, &str, &str)] = &[
     ("\u{E288}", "website", "https://oss.lsantos.dev/opensynapse/"),
 ];
 
-/// Height shared by every button that can sit in a row with a neon_button.
-const BUTTON_HEIGHT: f32 = 28.0;
-
-/// Bordered toggle-style button used across the editor.
-fn chip(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Response {
-    chip_sized(ui, text, selected, 0.0)
+fn framed(text: RichText, fill: Color32, edge: Color32) -> egui::Button<'static> {
+    egui::Button::new(text).fill(fill).stroke(Stroke::new(1.0, edge)).corner_radius(theme::radius())
 }
 
-/// A chip as tall as the neon buttons next to it.
-fn toggle_button(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Response {
-    chip_sized(ui, text, selected, BUTTON_HEIGHT)
+fn neon(text: &str, color: Color32) -> egui::Button<'static> {
+    egui::Button::new(RichText::new(text).color(t().on_accent).strong()).fill(color).corner_radius(theme::radius())
 }
 
-fn chip_sized(ui: &mut egui::Ui, text: &str, selected: bool, height: f32) -> egui::Response {
+fn outline(text: &str, color: Color32) -> egui::Button<'static> {
+    framed(RichText::new(text).color(color), t().button, color)
+}
+
+fn chip_button(text: &str, selected: bool) -> egui::Button<'static> {
     let (fg, edge, fill) = if selected { (t().on_accent, t().accent2, t().accent2) } else { (t().strong, t().border, t().button) };
-    let button = egui::Button::new(RichText::new(text).color(fg))
-        .fill(fill)
-        .stroke(Stroke::new(1.0, edge))
-        .corner_radius(theme::radius())
-        .min_size(egui::vec2(0.0, height));
-    hover(ui.add(button))
+    framed(RichText::new(text).color(fg), fill, edge)
 }
 
-/// Secondary action: colored text and border on the background.
+fn chip(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Response {
+    hover(ui.add(chip_button(text, selected)))
+}
+
+fn toggle_button(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Response {
+    tall(ui, chip_button(text, selected))
+}
+
 fn outline_button(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Response {
-    let button = egui::Button::new(RichText::new(text).color(color))
-        .fill(t().button)
-        .stroke(Stroke::new(1.0, color))
-        .corner_radius(theme::radius())
-        .min_size(egui::vec2(0.0, BUTTON_HEIGHT));
-    hover(ui.add(button))
+    tall(ui, outline(text, color))
 }
 
-fn neon_button(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Response {
-    let button = egui::Button::new(RichText::new(text).color(t().on_accent).strong())
-        .fill(color)
-        .corner_radius(theme::radius())
-        .min_size(egui::vec2(0.0, BUTTON_HEIGHT));
-    hover(ui.add(button))
+/// Every button that can share a row with another is this tall, so the row lines up.
+fn tall(ui: &mut egui::Ui, button: egui::Button) -> egui::Response {
+    hover(ui.add(button.min_size(egui::vec2(0.0, 28.0))))
 }
 
-/// Small red X that removes a row.
 fn delete_button(ui: &mut egui::Ui) -> egui::Response {
-    let button = egui::Button::new(RichText::new("X").color(t().error).strong())
-        .small()
-        .fill(t().bg)
-        .stroke(Stroke::new(1.0, t().error))
-        .corner_radius(theme::radius());
-    hover(ui.add(button)).on_hover_text("remove")
+    hover(ui.add(framed(RichText::new("X").color(t().error).strong(), t().bg, t().error).small())).on_hover_text("remove")
+}
+
+/// One button per choice, the current one highlighted.
+fn pick<T: Clone + PartialEq>(
+    ui: &mut egui::Ui,
+    list: &[(&str, T)],
+    current: &mut T,
+    button: fn(&mut egui::Ui, &str, bool) -> egui::Response,
+) {
+    for (label, v) in list {
+        if button(ui, label, current == v).clicked() {
+            *current = v.clone();
+        }
+    }
+}
+
+fn tab_row<T: Clone + PartialEq>(ui: &mut egui::Ui, list: &[(&str, T)], current: &mut T) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 20.0;
+        pick(ui, list, current, tab);
+    });
+}
+
+fn panel(fill: Color32) -> Frame {
+    Frame::new().fill(fill).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().border))
+}
+
+fn badge(ui: &mut egui::Ui, text: RichText, color: Color32, margin: Margin) -> egui::Response {
+    Frame::new().stroke(Stroke::new(1.0, color)).inner_margin(margin).show(ui, |ui| ui.label(text)).response
 }
 
 fn heading(ui: &mut egui::Ui, text: &str) {
@@ -763,24 +769,32 @@ fn heading(ui: &mut egui::Ui, text: &str) {
     ui.add_space(4.0);
 }
 
+fn note(ui: &mut egui::Ui, text: impl Into<String>) {
+    ui.label(RichText::new(text).color(t().muted).small());
+}
+
+/// A modal with a title. The backdrop dims everything behind it and blocks clicks.
+fn modal<R>(ctx: &egui::Context, id: &str, width: f32, title: &str, body: impl FnOnce(&mut egui::Ui) -> R) -> egui::ModalResponse<R> {
+    egui::Modal::new(egui::Id::unique(id)).show(ctx, |ui| {
+        ui.set_max_width(width);
+        ui.label(RichText::new(title).color(t().accent2).strong());
+        ui.add_space(6.0);
+        body(ui)
+    })
+}
+
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll_dpi();
         self.poll_daemon();
-        self.import_dialog();
         self.confirm_dialog();
         if self.disconnected.is_some() {
-            // the modal's backdrop dims everything behind it and blocks clicks
-            egui::Modal::new(egui::Id::unique("disconnected")).show(&self.ctx, |ui| {
-                ui.set_max_width(420.0);
-                ui.label(RichText::new("! MOUSE DISCONNECTED").color(t().accent2).strong());
-                ui.add_space(6.0);
+            modal(&self.ctx, "disconnected", 420.0, "! MOUSE DISCONNECTED", |ui| {
                 ui.label("Plug it back in and opensynapse picks it up again. Pending changes are kept.");
             });
         }
         // the sidebar goes first so it runs the full height, the tabs only span the rest
-        let side = Frame::new().fill(t().panel).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().border));
-        egui::Panel::left("dpi").exact_size(SIDEBAR_WIDTH).resizable(false).frame(side).show(ui, |ui| {
+        egui::Panel::left("dpi").exact_size(SIDEBAR_WIDTH).resizable(false).frame(panel(t().panel)).show(ui, |ui| {
             self.device_box(ui);
             self.dpi_panel(ui);
         });
@@ -812,28 +826,25 @@ impl eframe::App for App {
             });
         });
 
-        let center = Frame::new().fill(t().bg).inner_margin(Margin::same(16));
-        if self.view == View::Lighting {
-            egui::CentralPanel::default().frame(center).show(ui, |ui| self.lighting_ui(ui));
-            return;
-        }
-        if self.view == View::Settings {
-            egui::CentralPanel::default().frame(center).show(ui, |ui| self.settings_ui(ui));
+        let center = egui::CentralPanel::default().frame(Frame::new().fill(t().bg).inner_margin(Margin::same(16)));
+        if self.view != View::Buttons {
+            center.show(ui, |ui| match self.view {
+                View::Lighting => self.lighting_ui(ui),
+                _ => self.settings_ui(ui),
+            });
             return;
         }
 
         let name = self.mice.get(self.current).and_then(|m| m.def.buttons.get(self.selected)).map(|b| b.name.clone());
         if let Some(name) = name {
-            let editor = Frame::new().fill(t().pane).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().border));
-            egui::Panel::bottom("editor").exact_size(EDITOR_HEIGHT).resizable(false).frame(editor).show(ui, |ui| {
+            egui::Panel::bottom("editor").exact_size(EDITOR_HEIGHT).resizable(false).frame(panel(t().pane)).show(ui, |ui| {
                 self.editor_ui(ui, &name);
             });
         }
         if !self.mice.is_empty() {
-            let side = Frame::new().fill(t().bg).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().border));
-            egui::Panel::left("profile").exact_size(190.0).resizable(false).frame(side).show(ui, |ui| self.profile_box(ui));
+            egui::Panel::left("profile").exact_size(190.0).resizable(false).frame(panel(t().bg)).show(ui, |ui| self.profile_box(ui));
         }
-        egui::CentralPanel::default().frame(center).show(ui, |ui| self.buttons(ui));
+        center.show(ui, |ui| self.buttons(ui));
     }
 }
 
@@ -846,7 +857,7 @@ impl App {
             return;
         };
         let online = light.uses_daemon();
-        let (badge, color, tip) = match online {
+        let (state, color, tip) = match online {
             true => ("OPENRAZER ONLINE", t().ok, "Lighting goes through the OpenRazer daemon, which keeps it after a replug."),
             false => (
                 "OPENRAZER OFFLINE",
@@ -859,13 +870,8 @@ impl App {
         ui.horizontal(|ui| {
             ui.label(RichText::new("> LIGHTING").color(t().accent2).strong());
             ui.add_space(12.0);
-            // status badge on the far right of the row
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                Frame::new().stroke(Stroke::new(1.0, color)).inner_margin(Margin::symmetric(6, 2)).show(ui, |ui| {
-                    ui.label(RichText::new(badge).color(color).small());
-                })
-                .response
-                .on_hover_text(tip);
+                badge(ui, RichText::new(state).color(color).small(), color, Margin::symmetric(6, 2)).on_hover_text(tip);
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     if !online {
                         ui.disable();
@@ -888,33 +894,26 @@ impl App {
             ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
             for (i, z) in self.zone_ui.iter_mut().take(shown).enumerate() {
                 let title = if self.sync_zones { "ALL ZONES".to_string() } else { z.name.to_uppercase() };
-                Frame::new().fill(t().panel).stroke(Stroke::new(1.0, t().border)).inner_margin(Margin::same(14)).show(ui, |ui| {
+                panel(t().panel).show(ui, |ui| {
                     ui.set_width(ui.available_width().min(760.0));
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(title).color(t().accent).strong().underline());
                         ui.add_space(16.0);
-                        ui.label(RichText::new("BRIGHTNESS").color(t().muted).small());
+                        note(ui, "BRIGHTNESS");
                         ui.add(egui::Slider::new(&mut z.brightness, 0..=255).trailing_fill(true));
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if neon_button(ui, "APPLY NOW", t().accent).clicked() {
+                            if tall(ui, neon("APPLY NOW", t().accent)).clicked() {
                                 apply = Some(i);
                             }
                         });
                     });
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 20.0;
-                        for (fx, label) in FX {
-                            if tab(ui, label, z.fx == fx).clicked() {
-                                z.fx = fx;
-                            }
-                        }
-                    });
+                    tab_row(ui, FX, &mut z.fx);
                     ui.separator();
                     ui.horizontal(|ui| z.options(ui));
                 });
             }
             ui.add_space(4.0);
-            if neon_button(ui, "APPLY ALL NOW", t().accent).on_hover_text("send every zone's change right away").clicked() {
+            if tall(ui, neon("APPLY ALL NOW", t().accent)).on_hover_text("send every zone's change right away").clicked() {
                 all = true;
             }
         });
@@ -931,10 +930,7 @@ impl App {
         };
         self.ops.retain(|o| !matches!(o, Op::Light { zone, .. } if names.contains(zone)));
         let rest = std::mem::take(&mut self.ops);
-        self.ops = (self.zone_ui.iter())
-            .filter(|z| names.contains(&z.name))
-            .map(|z| Op::Light { zone: z.name.clone(), effect: z.effect(), brightness: z.brightness })
-            .collect();
+        self.ops = self.zone_ui.iter().filter(|z| names.contains(&z.name)).map(ZoneUi::op).collect();
         self.apply();
         self.ops.extend(rest);
     }
@@ -968,6 +964,7 @@ impl App {
 
 #[derive(Clone, Copy)]
 enum Confirm {
+    Import,
     ResetButtons,
     SetDefault,
     ResetLighting,
@@ -992,16 +989,15 @@ enum Fx {
     Off,
 }
 
-const FX: [(Fx, &str); 6] = [
-    (Fx::Static, "STATIC"),
-    (Fx::Breath, "BREATH"),
-    (Fx::Spectrum, "SPECTRUM"),
-    (Fx::Wave, "WAVE"),
-    (Fx::Reactive, "REACTIVE"),
-    (Fx::Off, "OFF"),
+const FX: &[(&str, Fx)] = &[
+    ("STATIC", Fx::Static),
+    ("BREATH", Fx::Breath),
+    ("SPECTRUM", Fx::Spectrum),
+    ("WAVE", Fx::Wave),
+    ("REACTIVE", Fx::Reactive),
+    ("OFF", Fx::Off),
 ];
 
-/// Editable state of one lighting zone card.
 #[derive(Clone, PartialEq)]
 struct ZoneUi {
     name: String,
@@ -1040,42 +1036,35 @@ impl ZoneUi {
         }
     }
 
-    /// The controls each effect needs (color, direction, speed).
+    fn op(&self) -> Op {
+        Op::Light { zone: self.name.clone(), effect: self.effect(), brightness: self.brightness }
+    }
+
     fn options(&mut self, ui: &mut egui::Ui) {
         let needs_color = matches!(self.fx, Fx::Static | Fx::Reactive) || (self.fx == Fx::Breath && !self.random);
         if self.fx == Fx::Breath && chip(ui, "RANDOM COLORS", self.random).clicked() {
             self.random = !self.random;
         }
         if needs_color {
-            ui.label(RichText::new("COLOR").color(t().muted).small());
+            note(ui, "COLOR");
             ui.color_edit_button_srgb(&mut self.color);
             let [r, g, b] = self.color;
             ui.label(RichText::new(format!("#{r:02x}{g:02x}{b:02x}")).color(Color32::from_rgb(r, g, b)));
         }
         if self.fx == Fx::Wave {
-            if chip(ui, "◄ LEFT", !self.reverse).clicked() {
-                self.reverse = false;
-            }
-            if chip(ui, "RIGHT ►", self.reverse).clicked() {
-                self.reverse = true;
-            }
+            pick(ui, &[("◄ LEFT", false), ("RIGHT ►", true)], &mut self.reverse, chip);
         }
         if self.fx == Fx::Reactive {
-            ui.label(RichText::new("FADE").color(t().muted).small());
-            for (s, label) in [(1, "FAST"), (2, "MEDIUM"), (3, "SLOW")] {
-                if chip(ui, label, self.speed == s).clicked() {
-                    self.speed = s;
-                }
-            }
+            note(ui, "FADE");
+            pick(ui, &[("FAST", 1), ("MEDIUM", 2), ("SLOW", 3)], &mut self.speed, chip);
         }
         if matches!(self.fx, Fx::Spectrum | Fx::Off) {
-            ui.label(RichText::new("no options").color(t().muted).small());
+            note(ui, "no options");
         }
     }
 }
 
 impl App {
-    /// Top of the sidebar: logo, version, the mouse picker and RESCAN.
     fn device_box(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label(RichText::new("OPEN").color(t().accent).size(22.0).strong());
@@ -1083,9 +1072,7 @@ impl App {
         });
         let version = RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).color(t().warn).small();
         ui.horizontal(|ui| {
-            Frame::new().stroke(Stroke::new(1.0, t().warn)).inner_margin(Margin::symmetric(5, 1)).show(ui, |ui| {
-                ui.label(version);
-            });
+            badge(ui, version, t().warn, Margin::symmetric(5, 1));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let on = self.view == View::Settings;
                 if toggle_button(ui, "SETTINGS", on).clicked() {
@@ -1116,8 +1103,7 @@ impl App {
         if let Some(i) = pick.filter(|&i| i != self.current) {
             self.switch_to(i);
         }
-        let rescan = egui::Button::new(RichText::new("RESCAN").color(t().on_accent).strong()).fill(t().accent).corner_radius(theme::radius());
-        if hover(ui.add_sized([width, 28.0], rescan)).clicked() {
+        if hover(ui.add_sized([width, 28.0], neon("RESCAN", t().accent))).clicked() {
             self.connect();
         }
         ui.add_space(18.0);
@@ -1126,16 +1112,11 @@ impl App {
     fn tabs(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
-            if view_tab(ui, "BUTTONS", self.view == View::Buttons).clicked() {
-                self.view = View::Buttons;
-            }
-            if view_tab(ui, "LIGHTING", self.view == View::Lighting).clicked() {
-                self.view = View::Lighting;
-            }
+            pick(ui, &[("BUTTONS", View::Buttons), ("LIGHTING", View::Lighting)], &mut self.view, view_tab);
         });
     }
 
-    /// Left of the mouse drawing: which profile and layer are shown, RESET and SET DEFAULT.
+    /// The column left of the mouse drawing, with the profile and layer pickers and the profile file actions.
     fn profile_box(&mut self, ui: &mut egui::Ui) {
         let Some(m) = self.mice.get(self.current) else { return };
         let (profiles, layers) = (m.def.profiles.clone(), m.def.layers.clone());
@@ -1162,33 +1143,18 @@ impl App {
             })
             .response
             .on_hover_text("P0 is live and lost when you unplug the mouse. P1 is stored on it and loads after a replug.");
-        let reset = egui::Button::new(RichText::new("RESET").color(t().on_accent).strong()).fill(t().accent2).corner_radius(theme::radius());
-        if hover(ui.add_sized([width, 26.0], reset)).on_hover_text("put back this profile's original").clicked() {
+        let mut wide = |button, tip| hover(ui.add_sized([width, 26.0], button)).on_hover_text(tip).clicked();
+        if wide(neon("RESET", t().accent2), "put back this profile's original") {
             self.confirm = Some(Confirm::ResetButtons);
         }
-        let set = egui::Button::new(RichText::new("SET DEFAULT").color(t().warn))
-            .fill(t().button)
-            .stroke(Stroke::new(1.0, t().warn))
-            .corner_radius(theme::radius());
-        if hover(ui.add_sized([width, 26.0], set)).on_hover_text("make what's on the mouse now the original RESET goes back to").clicked() {
+        if wide(outline("SET DEFAULT", t().warn), "make what's on the mouse now the original RESET goes back to") {
             self.confirm = Some(Confirm::SetDefault);
         }
-        for (text, color, tip, import) in [
-            ("EXPORT", t().accent, "save this profile to a file", false),
-            ("IMPORT", t().accent2, "queue a profile file's buttons over this profile", true),
-        ] {
-            let button = egui::Button::new(RichText::new(text).color(color))
-                .fill(t().button)
-                .stroke(Stroke::new(1.0, color))
-                .corner_radius(theme::radius());
-            if !hover(ui.add_sized([width, 26.0], button)).on_hover_text(tip).clicked() {
-                continue;
-            }
-            if import {
-                self.pick_import();
-            } else {
-                self.export();
-            }
+        if wide(outline("EXPORT", t().accent), "save this profile to a file") {
+            self.export();
+        }
+        if wide(outline("IMPORT", t().accent2), "queue a profile file's buttons over this profile") {
+            self.pick_import();
         }
         ui.add_space(18.0);
 
@@ -1249,18 +1215,18 @@ impl App {
         ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
             ui.add_enabled_ui(!self.ops.is_empty(), |ui| {
                 ui.horizontal(|ui| {
-                    if neon_button(ui, "CLEAR", t().accent2).clicked() {
+                    if tall(ui, neon("CLEAR", t().accent2)).clicked() {
                         self.status = Ok(format!("CLEARED {} PENDING", self.ops.len()));
                         self.ops.clear();
                         self.reset_edits();
                     }
-                    if neon_button(ui, "WRITE TO DEVICE", t().accent).clicked() {
+                    if tall(ui, neon("WRITE TO DEVICE", t().accent)).clicked() {
                         self.apply();
                     }
                 });
             });
             if self.ops.is_empty() {
-                ui.label(RichText::new("no pending changes").color(t().muted).small());
+                note(ui, "no pending changes");
             }
             let Some(def) = self.mice.get(self.current).map(|m| &m.def) else { return };
             // newest 12 only, a scroll area here would eat the whole sidebar
@@ -1276,7 +1242,7 @@ impl App {
                 });
             }
             if hidden > 0 {
-                ui.label(RichText::new(format!("+{hidden} more")).color(t().muted).small());
+                note(ui, format!("+{hidden} more"));
             }
             if let Some(i) = remove {
                 let op = self.ops.remove(i);
@@ -1288,32 +1254,26 @@ impl App {
     }
 
     fn export(&mut self) {
-        let name = PathBuf::from(&self.path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let name = self.path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         let Some(path) = self.dialog().set_file_name(name).save_file() else { return };
         let Some(m) = self.mice.get(self.current) else { return };
-        let r = profile::export(m, self.profile, &path);
-        self.status = r.map(|_| format!("P{} SAVED > {}", self.profile, path.display())).map_err(|e| e.to_string());
-    }
-
-    fn import(&mut self) {
-        let path = PathBuf::from(&self.path);
-        self.status = self.queue_file(&path).map(|n| format!("P{} LOADED > {n} BUTTON CHANGES QUEUED", self.profile));
+        self.status = profile::export(m, self.profile, &path).map(|_| format!("P{} SAVED > {}", self.profile, path.display())).map_err(|e| e.to_string());
     }
 
     /// Queues the differences between a profile file and the device. Returns
-    /// how many buttons differ.
-    fn queue_file(&mut self, path: &std::path::Path) -> Result<usize, String> {
+    /// the status line, with `verb` saying why.
+    fn queue_file(&mut self, path: &std::path::Path, verb: &str) -> Result<String, String> {
         let m = self.mice.get(self.current).ok_or("no mouse")?;
         let file = profile::load(path).map_err(|e| format!("{}: {e}", path.display()))?;
         let plan = profile::plan(m, self.profile, &file).map_err(|e| e.to_string())?;
         let n = plan.len();
         for (layer, index, action) in plan {
-            self.queue(Op::Button { profile: self.profile, layer, index, action });
+            queue(&mut self.ops, Op::Button { profile: self.profile, layer, index, action });
         }
         // the DPI editor queues its own changes, so give it the file's values
         (self.dpi, self.active, self.stages) = (file.dpi, file.active_stage, file.dpi_stages);
         self.select(self.selected);
-        Ok(n)
+        Ok(format!("P{} {verb} > {n} BUTTON CHANGES QUEUED", self.profile))
     }
 
     fn buttons(&mut self, ui: &mut egui::Ui) {
@@ -1410,9 +1370,7 @@ impl App {
         // side plate behind any buttons placed outside the body (thumb grids, side buttons)
         let outside = placed.iter().filter(|&&i| buttons[i].at.is_some_and(|[x, _]| !(30.0..=70.0).contains(&x)));
         if let Some(plate) = outside.map(|&i| marker(i)).reduce(|a, b| a.union(b)) {
-            let plate = plate.expand(12.0 * k);
-            p.rect_filled(plate, CornerRadius::same(14), t().panel);
-            p.rect_stroke(plate, CornerRadius::same(14), Stroke::new(1.5, outline), StrokeKind::Outside);
+            p.rect(plate.expand(12.0 * k), CornerRadius::same(14), t().panel, Stroke::new(1.5, outline), StrokeKind::Outside);
         }
 
         let body = egui::Rect::from_min_max(at(30.0, 2.0), at(70.0, 74.0));
@@ -1429,8 +1387,7 @@ impl App {
         p.add(egui::Shape::line(curve, seam));
         p.line_segment([egui::pos2(body.center().x, body.top()), egui::pos2(body.center().x, split)], seam);
         let wheel = egui::Rect::from_center_size(at(50.0, 18.0), egui::vec2(body.width() * 0.12, body.height() * 0.28));
-        p.rect_filled(wheel, CornerRadius::same(10), t().bg);
-        p.rect_stroke(wheel, CornerRadius::same(10), seam, StrokeKind::Inside);
+        p.rect(wheel, CornerRadius::same(10), t().bg, seam, StrokeKind::Inside);
 
         let mut clicked = None;
         for &i in placed {
@@ -1448,8 +1405,7 @@ impl App {
                 _ if off => (t().bg, t().off, t().muted),
                 _ => (t().bg, t().muted, t().strong),
             };
-            p.rect_filled(r, theme::radius(), fill);
-            p.rect_stroke(r, theme::radius(), Stroke::new(1.0, edge), StrokeKind::Inside);
+            p.rect(r, theme::radius(), fill, Stroke::new(1.0, edge), StrokeKind::Inside);
             let mark = if pending { "*" } else { "" };
             let label = shown.as_ref().map_or("??".into(), |a| format!("{}{mark}", short(a)));
             p.text(r.center(), Align2::CENTER_CENTER, label, FontId::monospace(11.0 * k), text);
@@ -1487,10 +1443,10 @@ impl App {
         ui.spacing_mut().button_padding = egui::vec2(10.0, 4.0);
         heading(ui, "PROFILE FILES LOCATION");
         ui.horizontal(|ui| {
-            if neon_button(ui, "CHANGE FOLDER", t().warn).on_hover_text("where EXPORT saves profile files").clicked() {
+            if tall(ui, neon("CHANGE FOLDER", t().warn)).on_hover_text("where EXPORT saves profile files").clicked() {
                 self.pick_folder();
             }
-            let dir = PathBuf::from(&self.path).parent().map(|d| d.display().to_string()).unwrap_or_default();
+            let dir = self.path.parent().map(|d| d.display().to_string()).unwrap_or_default();
             ui.add(egui::Label::new(RichText::new(&dir).color(t().muted)).truncate()).on_hover_text(&dir);
         });
         ui.add_space(16.0);
@@ -1499,9 +1455,8 @@ impl App {
 
     /// Native dialogs go through the XDG desktop portal and block the UI while open.
     fn dialog(&self) -> rfd::FileDialog {
-        let path = PathBuf::from(&self.path);
         let dialog = rfd::FileDialog::new().add_filter("opensynapse profile", &["json"]);
-        let Some(dir) = path.parent() else { return dialog };
+        let Some(dir) = self.path.parent() else { return dialog };
         dialog.set_directory(dir)
     }
 
@@ -1515,50 +1470,22 @@ impl App {
 
     fn pick_import(&mut self) {
         let Some(file) = self.dialog().pick_file() else { return };
-        self.path = file.display().to_string();
-        self.confirm_import = true;
+        self.path = file;
+        self.confirm = Some(Confirm::Import);
     }
 
-    /// Asks before IMPORT queues changes over the selected profile.
-    fn import_dialog(&mut self) {
-        if !self.confirm_import {
-            return;
-        }
-        let modal = egui::Modal::new(egui::Id::unique("confirm-import")).show(&self.ctx, |ui| {
-            ui.set_max_width(420.0);
-            ui.label(RichText::new("! OVERWRITE PROFILE").color(t().accent2).strong());
-            ui.add_space(6.0);
-            ui.label(format!(
-                "Importing replaces profile P{} with the contents of this file. The changes go to PENDING \
-                 and reach the mouse when you press WRITE TO DEVICE.",
-                self.profile
-            ));
-            ui.label(RichText::new(&self.path).color(t().muted).small());
-            ui.add_space(10.0);
-            let mut choice = None;
-            ui.horizontal(|ui| {
-                if neon_button(ui, "IMPORT", t().accent2).clicked() {
-                    choice = Some(true);
-                }
-                if neon_button(ui, "CANCEL", t().muted).clicked() {
-                    choice = Some(false);
-                }
-            });
-            choice
-        });
-        let choice = modal.inner.or(modal.should_close().then_some(false));
-        let Some(go) = choice else { return };
-        self.confirm_import = false;
-        if go {
-            self.import();
-        }
-    }
-
-    /// Asks before RESET or SET DEFAULT.
     fn confirm_dialog(&mut self) {
         let Some(what) = self.confirm else { return };
         let p = self.profile;
         let (title, text, button) = match what {
+            Confirm::Import => (
+                "! OVERWRITE PROFILE",
+                format!(
+                    "Importing replaces profile P{p} with the contents of this file. The changes go to PENDING \
+                     and reach the mouse when you press WRITE TO DEVICE."
+                ),
+                "IMPORT",
+            ),
             Confirm::ResetButtons => (
                 "! RESET PROFILE",
                 format!(
@@ -1596,18 +1523,19 @@ impl App {
                 "SET DEFAULT",
             ),
         };
-        let modal = egui::Modal::new(egui::Id::unique("confirm")).show(&self.ctx, |ui| {
-            ui.set_max_width(420.0);
-            ui.label(RichText::new(title).color(t().accent2).strong());
-            ui.add_space(6.0);
+        let path = self.path.display().to_string();
+        let modal = modal(&self.ctx, "confirm", 420.0, title, |ui| {
             ui.label(text);
+            if matches!(what, Confirm::Import) {
+                note(ui, path);
+            }
             ui.add_space(10.0);
             let mut choice = None;
             ui.horizontal(|ui| {
-                if neon_button(ui, button, t().accent2).clicked() {
+                if tall(ui, neon(button, t().accent2)).clicked() {
                     choice = Some(true);
                 }
-                if neon_button(ui, "CANCEL", t().muted).clicked() {
+                if tall(ui, neon("CANCEL", t().muted)).clicked() {
                     choice = Some(false);
                 }
             });
@@ -1619,6 +1547,7 @@ impl App {
             return;
         }
         match what {
+            Confirm::Import => self.status = self.queue_file(&self.path.clone(), "LOADED"),
             Confirm::ResetButtons => self.reset_buttons(),
             Confirm::SetDefault => self.set_default(),
             Confirm::ResetLighting => self.reset_lighting(),
@@ -1630,15 +1559,14 @@ impl App {
     /// Queues the profile's original snapshot.
     fn reset_buttons(&mut self) {
         let Some(path) = self.mice.get(self.current).and_then(|m| profile::original_path(m, self.profile)) else { return };
-        self.status = self.queue_file(&path).map(|n| format!("P{} RESET > {n} BUTTON CHANGES QUEUED", self.profile));
+        self.status = self.queue_file(&path, "RESET");
     }
 
     /// Replaces the profile's original snapshot with what's on the mouse.
     fn set_default(&mut self) {
         let Some(m) = self.mice.get(self.current) else { return };
         let Some(path) = profile::original_path(m, self.profile) else { return };
-        let r = profile::export(m, self.profile, &path);
-        self.status = r.map(|_| format!("P{} IS THE NEW ORIGINAL > {}", self.profile, path.display())).map_err(|e| e.to_string());
+        self.status = profile::export(m, self.profile, &path).map(|_| format!("P{} IS THE NEW ORIGINAL > {}", self.profile, path.display())).map_err(|e| e.to_string());
     }
 
     fn lighting_original(&self) -> Option<PathBuf> {
@@ -1650,17 +1578,14 @@ impl App {
         if toggle_button(ui, "SYNC ALL ZONES", self.sync_zones).clicked() {
             self.sync_zones = !self.sync_zones;
         }
-        if neon_button(ui, "RESET", t().accent2).on_hover_text("put back the original lighting").clicked() {
-            self.confirm = Some(Confirm::ResetLighting);
-        }
-        if outline_button(ui, "SET DEFAULT", t().warn)
-            .on_hover_text("make the lighting on the mouse now the original RESET goes back to")
-            .clicked()
-        {
-            self.confirm = Some(Confirm::DefaultLighting);
-        }
-        if outline_button(ui, "FACTORY RESET", t().accent2).on_hover_text("static Razer green on every zone").clicked() {
-            self.confirm = Some(Confirm::FactoryLighting);
+        for (button, tip, confirm) in [
+            (neon("RESET", t().accent2), "put back the original lighting", Confirm::ResetLighting),
+            (outline("SET DEFAULT", t().warn), "make the lighting on the mouse now the original RESET goes back to", Confirm::DefaultLighting),
+            (outline("FACTORY RESET", t().accent2), "static Razer green on every zone", Confirm::FactoryLighting),
+        ] {
+            if tall(ui, button).on_hover_text(tip).clicked() {
+                self.confirm = Some(confirm);
+            }
         }
     }
 
@@ -1691,8 +1616,7 @@ impl App {
 
     fn set_lighting_default(&mut self) {
         let Some(path) = self.lighting_original() else { return };
-        let r = rgb::save_zones(&path, &self.lighting_now());
-        self.status = r.map(|_| format!("LIGHTING IS THE NEW ORIGINAL > {}", path.display())).map_err(|e| e.to_string());
+        self.status = rgb::save_zones(&path, &self.lighting_now()).map(|_| format!("LIGHTING IS THE NEW ORIGINAL > {}", path.display())).map_err(|e| e.to_string());
     }
 
     fn factory_lighting(&mut self) {
@@ -1705,14 +1629,7 @@ impl App {
 
     fn editor_fields(&mut self, ui: &mut egui::Ui) {
         let e = &mut self.editor;
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 20.0;
-            for (k, label) in KINDS {
-                if tab(ui, label, e.kind == k).clicked() {
-                    e.kind = k;
-                }
-            }
-        });
+        tab_row(ui, KINDS, &mut e.kind);
         ui.separator();
         ui.horizontal_wrapped(|ui| match e.kind {
             Kind::Key => {} // laid out as columns below
@@ -1729,7 +1646,7 @@ impl App {
                     }
                 }
             }
-            Kind::Media => pick(ui, MEDIA_KEYS, &mut e.media),
+            Kind::Media => pick(ui, MEDIA_KEYS, &mut e.media, chip),
             Kind::Hypershift => {
                 ui.label(
                     RichText::new(
@@ -1739,8 +1656,8 @@ impl App {
                     .color(t().muted),
                 );
             }
-            Kind::Dpi => pick(ui, DPI_ACTIONS, &mut e.dpi),
-            Kind::Profile => pick(ui, PROFILE_ACTIONS, &mut e.profile),
+            Kind::Dpi => pick(ui, DPI_ACTIONS, &mut e.dpi, chip),
+            Kind::Profile => pick(ui, PROFILE_ACTIONS, &mut e.profile, chip),
             Kind::Disabled => {
                 ui.label(RichText::new("button does nothing").color(t().muted));
             }
@@ -1756,7 +1673,7 @@ impl App {
             ui.spacing_mut().item_spacing.x = 28.0;
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
-                ui.label(RichText::new("COMMON KEYS").color(t().muted).small());
+                note(ui, "COMMON KEYS");
                 egui::Grid::new("mods").spacing([6.0, 6.0]).show(ui, |ui| {
                     for (i, (label, bit)) in opensynapse::action::MODS[..4].iter().enumerate() {
                         if chip(ui, &label.to_uppercase(), e.mods & bit != 0).clicked() {
@@ -1792,7 +1709,7 @@ impl App {
                     ui.end_row();
                 }
                 ui.vertical(|ui| {
-                    ui.label(RichText::new(*group).color(t().muted).small());
+                    note(ui, *group);
                     egui::Grid::new(group).spacing([6.0, 6.0]).show(ui, |ui| {
                         for (i, k) in keys.iter().enumerate() {
                             if chip(ui, &k.to_uppercase(), e.key == *k).clicked() {
@@ -1824,15 +1741,6 @@ fn offline_overlay(ui: &egui::Ui, area: egui::Rect) {
         FontId::monospace(13.0),
         t().strong,
     );
-}
-
-/// One chip per action in the list, the current one highlighted.
-fn pick(ui: &mut egui::Ui, list: &[(&str, Action)], current: &mut Action) {
-    for (label, a) in list {
-        if chip(ui, label, current == a).clicked() {
-            *current = a.clone();
-        }
-    }
 }
 
 fn turbo_toggle(ui: &mut egui::Ui, e: &mut Editor) {
@@ -1914,7 +1822,6 @@ struct Launcher {
     /// Some while the alert shows, with the other GUI's PID if we know it
     busy: Option<Option<i32>>,
     _lock: Option<std::fs::File>,
-    ctx: egui::Context,
 }
 
 impl eframe::App for Launcher {
@@ -1924,11 +1831,9 @@ impl eframe::App for Launcher {
             return;
         }
         let pid = self.busy.flatten();
+        let ctx = ui.ctx().clone();
         egui::CentralPanel::default().show(ui, |_| {});
-        egui::Modal::new(egui::Id::unique("already-running")).show(&self.ctx, |ui| {
-            ui.set_max_width(460.0);
-            ui.label(RichText::new("! OPENSYNAPSE IS ALREADY RUNNING").color(t().accent2).strong());
-            ui.add_space(6.0);
+        modal(&ctx, "already-running", 460.0, "! OPENSYNAPSE IS ALREADY RUNNING", |ui| {
             let which = pid.map_or("Another window".to_string(), |p| format!("Another window, PID {p},"));
             ui.label(format!(
                 "{which} is open already, maybe minimized or on another workspace. You can go back to it, or close it and \
@@ -1937,12 +1842,12 @@ impl eframe::App for Launcher {
             ui.add_space(10.0);
             ui.horizontal(|ui| {
                 if outline_button(ui, "QUIT", t().muted).clicked() {
-                    self.ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
-                if neon_button(ui, "CLOSE IT AND OPEN HERE", t().accent2).clicked() {
+                if tall(ui, neon("CLOSE IT AND OPEN HERE", t().accent2)).clicked() {
                     self._lock = take_over(pid);
                     self.busy = None;
-                    self.app = Some(App::new(self.ctx.clone()));
+                    self.app = Some(App::new(ctx.clone()));
                 }
             });
         });
@@ -1965,10 +1870,9 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             theme::start(&cc.egui_ctx);
-            let ctx = cc.egui_ctx.clone();
             // while the alert shows we don't touch the mouse, the other GUI still has it
-            let app = busy.is_none().then(|| App::new(ctx.clone()));
-            Ok(Box::new(Launcher { app, busy, _lock: lock, ctx }))
+            let app = busy.is_none().then(|| App::new(cc.egui_ctx.clone()));
+            Ok(Box::new(Launcher { app, busy, _lock: lock }))
         }),
     )
 }

@@ -7,7 +7,8 @@
 //! @media (prefers-color-scheme: light) { :root { --accent: #007a8a; } }
 //! ```
 //!
-//! Only `--name: #hex;` declarations are read. Selectors are ignored, so
+//! Only `--name: #hex;` declarations and `color-scheme: light|dark` (to pick
+//! the mode when the desktop has no preference) are read. Selectors are ignored, so
 //! anything outside a `prefers-color-scheme` block applies to both schemes.
 
 use eframe::egui::{self, Color32, CornerRadius, FontFamily, FontId, Stroke, Theme};
@@ -93,9 +94,9 @@ fn prefers_light() -> bool {
 
 /// Reads the color scheme and theme.css, then restyles the whole UI.
 pub fn apply(ctx: &egui::Context) {
-    let light = prefers_light();
-    let base = if light { LIGHT } else { DARK };
     let css = device::config_dir().and_then(|c| std::fs::read_to_string(c.join("opensynapse/theme.css")).ok());
+    let light = css.as_deref().and_then(forced_scheme).unwrap_or_else(prefers_light);
+    let base = if light { LIGHT } else { DARK };
     let p = css.map_or(base, |css| parse(&css, light, base));
     *CURRENT.write().unwrap_or_else(|e| e.into_inner()) = p;
 
@@ -144,6 +145,23 @@ pub fn follow_desktop(ctx: egui::Context) {
     });
 }
 
+/// `color-scheme: light` or `dark` in theme.css, for desktops that don't
+/// report a preference. Some(true) is light.
+fn forced_scheme(css: &str) -> Option<bool> {
+    for decl in strip_comments(css).split([';', '{', '}']) {
+        let Some((name, value)) = decl.split_once(':') else { continue };
+        if name.trim() != "color-scheme" {
+            continue;
+        }
+        return match value.trim() {
+            "light" => Some(true),
+            "dark" => Some(false),
+            _ => None,
+        };
+    }
+    None
+}
+
 /// Applies the `--name: #hex;` declarations in `css` that hold for this scheme on top of `base`.
 fn parse(css: &str, light: bool, base: Palette) -> Palette {
     let mut p = base;
@@ -188,6 +206,7 @@ fn set(p: &mut Palette, decl: &str) {
         "--error" => &mut p.error,
         "--ok" => &mut p.ok,
         "--off" => &mut p.off,
+        "color-scheme" => return, // read by forced_scheme
         _ => {
             eprintln!("theme.css: unknown property {name}");
             return;
@@ -233,5 +252,12 @@ mod tests {
         assert_eq!(p.accent, Color32::from_rgb(0x44, 0x55, 0x66));
         assert_eq!(p.bg, Color32::WHITE);
         assert_eq!(p.ok, LIGHT.ok);
+    }
+
+    #[test]
+    fn color_scheme_forces_mode() {
+        assert_eq!(forced_scheme(CSS), None);
+        assert_eq!(forced_scheme(":root { color-scheme: light; --bg: #fff; }"), Some(true));
+        assert_eq!(forced_scheme("/* color-scheme: light; */ :root { color-scheme: dark }"), Some(false));
     }
 }

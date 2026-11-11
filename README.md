@@ -117,6 +117,8 @@ The GUI is dark or light following your desktop's color scheme, and switches whe
 
 The properties are `--bg`, `--panel`, `--card`, `--deep` (text fields), `--text`, `--strong` (highlighted text), `--accent`, `--accent-2`, `--warn`, `--muted`, `--error`, `--ok` and `--off` (buttons set to OFF). The file is read at startup and on each color scheme change.
 
+If your desktop doesn't report a light or dark preference, which is common on tiling window managers like Sway or Hyprland, the GUI stays dark. Pick the mode yourself with `color-scheme: light;` (or `dark`) in `:root`.
+
 ### With the CLI
 
 Make a backup first, then change one button and check it:

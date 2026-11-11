@@ -75,7 +75,7 @@ Themes are different. `themes/*.css` are compiled in, and every `~/.config/opens
 ## Releases and CI
 
 - `release.yml` runs on a `v*` tag. It checks the tag matches `Cargo.toml`, builds the tar.gz, `.deb` and AppImage for x86_64 and aarch64, writes the release notes from the commits with git-cliff, then publishes to the AUR, Homebrew and the apt repo on the `apt-repo` branch.
-- `add-device.yml` runs when an issue gets the `add-device` label. It runs `device-from-issue` on the issue sent by `opensynapse protocol send`, which checks the device file with the app's parser and writes it, then opens a PR that adds the device. Only people with triage access can add that label, so random issues can't start it.
+- `add-device.yml` runs when an issue titled `New Device:` is opened or edited, which is what `opensynapse protocol send` creates, or when someone adds the `add-device` label by hand. It labels the issue `add-device`, runs `device-from-issue`, which checks the device file with the app's parser and writes it, then opens a PR labeled `new-device`. Anyone can open such an issue, so the body is only ever parsed as data, and the PR still needs a maintainer's review to merge.
 - `label-device.yml` adds the `new-device` label to any PR whose title starts with `New Device:`, since contributors can't label their own PRs. `protocol send` issues use the same prefix.
 - `device-release.yml` ships a patch release when a PR labeled `new-device` is merged.
 - `pages.yml` publishes `docs/` to the website.

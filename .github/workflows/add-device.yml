@@ -1,18 +1,22 @@
 name: add-device
 
-# Label an issue sent with `opensynapse protocol send` with `add-device` and this
-# opens a PR that adds the mouse. Only people with triage access can add labels,
-# so nobody else can start it, and the PR still needs a review to merge.
+# An issue titled "New Device: ..." (what `opensynapse protocol send` opens) gets
+# the add-device label and a PR that adds the mouse, labeled new-device so it
+# ships a release once merged. Adding add-device by hand starts it too. Anyone can
+# open such an issue, so the body is only parsed as data, and the PR still needs
+# your review to merge.
 on:
   issues:
-    types: [labeled]
+    types: [opened, edited, reopened, labeled]
 
 permissions:
   contents: read
 
 jobs:
   pr:
-    if: github.event.label.name == 'add-device'
+    if: >-
+      (github.event.action == 'labeled' && github.event.label.name == 'add-device') ||
+      (github.event.action != 'labeled' && startsWith(github.event.issue.title, 'New Device:'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -20,6 +24,13 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # a label added with this token doesn't start another run, so this is only for you to see
+      - name: label the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: gh issue edit "$ISSUE" --add-label add-device
 
       # the issue body is untrusted, it only goes through device-from-issue as data,
       # which checks the device file with the app's own parser before writing it

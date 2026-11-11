@@ -115,6 +115,11 @@ pub fn t() -> Palette {
     *CURRENT.read().unwrap_or_else(|e| e.into_inner())
 }
 
+/// Phosphor icons, look the codepoints up on https://phosphoricons.com
+pub fn icon(size: f32) -> FontId {
+    FontId::new(size, FontFamily::Name("icons".into()))
+}
+
 pub fn radius() -> CornerRadius {
     CornerRadius::same(RADIUS.load(Ordering::Relaxed))
 }
@@ -458,6 +463,9 @@ pub fn apply(ctx: &egui::Context) {
 
     let font = s.font.unwrap_or(style.font);
     let mut defs = egui::FontDefinitions::default();
+    // its own family, Phosphor maps a-z to blank ligature glyphs and would blank out text if mixed in
+    defs.font_data.insert("icons".into(), Arc::new(FontData::from_static(include_bytes!("../../../assets/phosphor.ttf"))));
+    defs.families.insert(FontFamily::Name("icons".into()), vec!["icons".into()]);
     let family = match font.as_str() {
         "monospace" => FontFamily::Monospace,
         _ => {

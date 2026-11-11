@@ -692,6 +692,21 @@ fn view_tab(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Response {
     hover(ui.add(button))
 }
 
+/// Status bar links, Phosphor codepoints for the GitHub logo, a bug and a globe.
+const LINKS: &[(&str, &str, &str)] = &[
+    ("\u{E576}", "source code on GitHub", "https://github.com/khaosdoctor/opensynapse"),
+    (
+        "\u{E5F4}",
+        "report a bug",
+        concat!(
+            "https://github.com/khaosdoctor/opensynapse/issues/new?labels=bug&body=opensynapse%20v",
+            env!("CARGO_PKG_VERSION"),
+            "%0A%0AWhat%20happened%3A%0A"
+        ),
+    ),
+    ("\u{E288}", "website", "https://oss.lsantos.dev/opensynapse/"),
+];
+
 /// Height shared by every button that can sit in a row with a neon_button.
 const BUTTON_HEIGHT: f32 = 28.0;
 
@@ -779,7 +794,22 @@ impl eframe::App for App {
             Err(e) => (format!("! {e}"), t().accent2),
         };
         egui::Panel::bottom("status").frame(status).show(ui, |ui| {
-            ui.label(RichText::new(text).color(color));
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(text).color(color));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    // right to left, so the website ends up last
+                    for (icon, tip, url) in LINKS.iter().rev() {
+                        let button = egui::Button::new(RichText::new(*icon).font(theme::icon(17.0)).color(t().muted)).frame(false);
+                        if !hover(ui.add(button)).on_hover_text(*tip).clicked() {
+                            continue;
+                        }
+                        // eframe can't open links here, xdg-open hands it to the default browser
+                        if let Err(e) = std::process::Command::new("xdg-open").arg(url).spawn() {
+                            self.status = Err(format!("could not open {url}: {e}"));
+                        }
+                    }
+                });
+            });
         });
 
         let center = Frame::new().fill(t().bg).inner_margin(Margin::same(16));

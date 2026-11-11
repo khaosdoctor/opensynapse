@@ -4,7 +4,6 @@
 
 use crate::hid::{self, Hid};
 use std::io;
-use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -36,18 +35,23 @@ fn guess_name(id: u8) -> String {
     name.to_string()
 }
 
-/// The current hidraw node of one interface. A probe on the wrong interface
-/// can make the mouse reset and come back under new hidraw numbers, so this
-/// waits up to 3s for the interface to show up again.
-fn node(pid: u16, iface: u8) -> Option<PathBuf> {
+/// Opens the current hidraw node of one interface. A probe on the wrong
+/// interface can make the mouse reset and come back under new hidraw numbers,
+/// and the node can show up before udev grants access to it, so this keeps
+/// looking the node up and opening it for up to 3s.
+fn open(pid: u16, iface: u8, tid: u8) -> io::Result<Hid> {
+    let mut last_err = io::Error::other(format!("interface {iface} didn't come back"));
     for _ in 0..30 {
         let found = hid::find_all(RAZER, pid).into_iter().find(|(n, _)| *n == iface);
         if let Some((_, path)) = found {
-            return Some(path);
+            match Hid::open(&path, tid) {
+                Ok(hid) => return Ok(hid),
+                Err(e) => last_err = e,
+            }
         }
         sleep(Duration::from_millis(100));
     }
-    None
+    Err(last_err)
 }
 
 /// Finds the interface and transaction id the mouse answers on, with reads
@@ -66,12 +70,15 @@ fn connect(pid: u16) -> io::Result<(Hid, u8, u8)> {
     let mut last_err = io::Error::other("the mouse didn't answer on any interface");
     for iface in ifaces {
         for tid in TIDS {
-            let Some(path) = node(pid, iface) else { break };
             // firmware version: a read every Razer mouse answers
-            match Hid::open(&path, tid) {
+            match open(pid, iface, tid) {
                 Ok(hid) if hid.command(0x00, 0x81, 0x02, &[]).is_ok() => return Ok((hid, iface, tid)),
                 Ok(_) => {}
-                Err(e) => last_err = e,
+                // the open doesn't depend on the transaction id, so the other ids would fail too
+                Err(e) => {
+                    last_err = e;
+                    break;
+                }
             }
         }
     }

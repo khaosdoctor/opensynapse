@@ -1,5 +1,6 @@
 //! Razer 90-byte feature-report transport over Linux hidraw.
 
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::os::fd::AsRawFd;
@@ -119,11 +120,13 @@ pub fn has_control_report(node: &Path) -> bool {
     fs::read(path).is_ok_and(|d| descriptor_has_control_report(&d))
 }
 
-/// Walks the HID items, tracking Report Size and Report Count, and looks for
-/// a Feature item that is REPORT_LEN bytes long.
+/// Walks the HID items and adds up the Feature fields of each report ID.
+/// True when the unnumbered report `Hid::command` sends is REPORT_LEN bytes.
 fn descriptor_has_control_report(desc: &[u8]) -> bool {
-    let mut size = 0u32;
-    let mut count = 0u32;
+    // Report Size, Report Count, Report ID: global items that Push/Pop save and restore
+    let mut global = (0u32, 0u32, 0u32);
+    let mut saved = Vec::new();
+    let mut feature_bits: HashMap<u32, u32> = HashMap::new();
     let mut i = 0;
     while i < desc.len() {
         let prefix = desc[i];
@@ -136,14 +139,20 @@ fn descriptor_has_control_report(desc: &[u8]) -> bool {
         let data = desc.get(i + 1..i + 1 + len).unwrap_or(&[]);
         let value = data.iter().rev().fold(0u32, |v, b| (v << 8) | *b as u32);
         match prefix & 0xfc {
-            0x74 => size = value,
-            0x94 => count = value,
-            0xb0 if size * count == REPORT_LEN as u32 * 8 => return true,
+            0x74 => global.0 = value,
+            0x94 => global.1 = value,
+            0x84 => global.2 = value,
+            0xa4 => saved.push(global),
+            0xb4 => global = saved.pop().unwrap_or(global),
+            0xb0 => {
+                let bits = feature_bits.entry(global.2).or_default();
+                *bits = bits.saturating_add(global.0.saturating_mul(global.1));
+            }
             _ => {}
         }
         i += 1 + len;
     }
-    false
+    feature_bits.get(&0) == Some(&(REPORT_LEN as u32 * 8))
 }
 
 #[cfg(test)]
@@ -161,5 +170,17 @@ mod tests {
         assert!(descriptor_has_control_report(&naga));
         assert!(!descriptor_has_control_report(&keyboard));
         assert!(!descriptor_has_control_report(&other));
+        // one report split over two 45-byte feature items
+        let split = [0x75, 0x08, 0x95, 0x2d, 0xb1, 0x02, 0xb1, 0x02];
+        assert!(descriptor_has_control_report(&split));
+        // 90 bytes plus one more byte is 91, not the Razer report
+        let oversized = [0x75, 0x08, 0x95, 0x5a, 0xb1, 0x02, 0x95, 0x01, 0xb1, 0x02];
+        assert!(!descriptor_has_control_report(&oversized));
+        // 90 bytes under report ID 1, which the unnumbered command can't reach
+        let numbered = [0x85, 0x01, 0x75, 0x08, 0x95, 0x5a, 0xb1, 0x02];
+        assert!(!descriptor_has_control_report(&numbered));
+        // Push/Pop: the size inside the push doesn't leak out
+        let pushed = [0x75, 0x08, 0xa4, 0x75, 0x10, 0xb4, 0x95, 0x5a, 0xb1, 0x02];
+        assert!(descriptor_has_control_report(&pushed));
     }
 }

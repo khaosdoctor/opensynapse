@@ -42,7 +42,7 @@ _opensynapse() {
     done
 
     case $cmd in
-        "") COMPREPLY=($(compgen -W "init probe list dump get set dpi stages watch rgb poll export import protocol help" -- "$cur")) ;;
+        "") COMPREPLY=($(compgen -W "init probe list dump get set dpi stages watch rgb poll battery idle export import protocol help" -- "$cur")) ;;
         poll) ((${#args[@]} == 0)) && COMPREPLY=($(compgen -W "125 500 1000" -- "$cur")) ;;
         probe) ((${#args[@]} == 0)) && COMPREPLY=($(compgen -W "$(compgen -G '/dev/hidraw*')" -- "$cur")) ;;
         get) ((${#args[@]} == 0)) && COMPREPLY=($(compgen -W "$(_opensynapse_buttons)" -- "$cur")) ;;

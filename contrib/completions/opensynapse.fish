@@ -52,6 +52,8 @@ complete -c opensynapse -n __opensynapse_no_command -a stages -d 'show or set DP
 complete -c opensynapse -n __opensynapse_no_command -a watch -d 'print buttons as you press them'
 complete -c opensynapse -n __opensynapse_no_command -a rgb -d 'lighting zones (needs OpenRazer)'
 complete -c opensynapse -n __opensynapse_no_command -a poll -d 'show or set the polling rate (needs OpenRazer)'
+complete -c opensynapse -n __opensynapse_no_command -a battery -d 'battery and sleep timeout of a wireless mouse'
+complete -c opensynapse -n __opensynapse_no_command -a idle -d 'show or set the sleep timeout in seconds'
 complete -c opensynapse -n __opensynapse_no_command -a export -d 'save a profile to JSON'
 complete -c opensynapse -n __opensynapse_no_command -a import -d 'write a saved profile to the mouse'
 complete -c opensynapse -n __opensynapse_no_command -a protocol -d 'generate a protocol file for this mouse'

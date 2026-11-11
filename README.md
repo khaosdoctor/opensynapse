@@ -38,6 +38,7 @@ Right now you can:
 - See which button you're pressing, live if you have the GUI, which becomes some sort of tester
 - Change the lighting and brightness of zones through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports.
 - Change the polling rate, also through OpenRazer
+- See the battery and set how long a wireless mouse waits before it sleeps
 
 ![The buttons tab: the Naga drawn with what each button does, the DPI stages and the remap editor](docs/screenshots/buttons.png)
 
@@ -105,7 +106,7 @@ Open `opensynapse-gui`, or OpenSynapse from your app launcher. The first time it
 2. Click a button on the drawing and pick what it should do in the editor below. Every change goes to ***PENDING*** in the sidebar
 3. Hit ***WRITE TO DEVICE*** and try the button
 
-The lighting tab needs the OpenRazer daemon running, the badge at the top says ***OPENRAZER ONLINE*** when it is. The polling rate is there too, above the zones. Pick 125, 500 or 1000 Hz and it goes to ***PENDING*** like any other change.
+The lighting tab needs the OpenRazer daemon running, the badge at the top says ***OPENRAZER ONLINE*** when it is. The polling rate is there too, above the zones. Pick 125, 500 or 1000 Hz and it goes to ***PENDING*** like any other change. Wireless mice also get the battery level and ***SLEEP AFTER***, the seconds without movement before the mouse sleeps, from 60 to 900.
 
 ***SETTINGS***, next to the version at the top of the sidebar, opens the settings page. ***EXPORT*** and ***IMPORT*** stay on the ***BUTTONS*** tab under ***SET DEFAULT***, and ***CHANGE FOLDER*** in settings picks where exported profiles go.
 
@@ -163,6 +164,8 @@ opensynapse watch                        # prints buttons as you press them
 opensynapse rgb all static ff00aa        # lighting, needs OpenRazer
 opensynapse rgb scroll brightness 128
 opensynapse poll 1000                    # polling rate in Hz, needs the OpenRazer daemon
+opensynapse battery                      # battery and sleep timeout of a wireless mouse
+opensynapse idle 300                     # sleep after 300 seconds without movement
 opensynapse init                         # start a device file for an unsupported mouse
 opensynapse probe                        # read-only raw probe of your mouse, finds it on its own
 opensynapse protocol                     # protocol file for your mouse, see PROTOCOL.md

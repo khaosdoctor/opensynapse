@@ -43,6 +43,8 @@ _opensynapse() {
         'watch:print buttons as you press them'
         'rgb:lighting zones (needs OpenRazer)'
         'poll:show or set the polling rate (needs OpenRazer)'
+        'battery:battery and sleep timeout of a wireless mouse'
+        'idle:show or set the sleep timeout in seconds'
         'export:save a profile to JSON'
         'import:write a saved profile to the mouse'
         'protocol:generate a protocol file for this mouse'

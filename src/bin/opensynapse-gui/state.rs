@@ -7,7 +7,7 @@ use eframe::egui;
 use opensynapse::action::Action;
 use opensynapse::device::{DeviceDef, Mouse};
 use opensynapse::input::Pressed;
-use opensynapse::power::Power;
+use opensynapse::power::{Battery, Power};
 use opensynapse::profile;
 use opensynapse::rgb::{Effect, Lighting};
 use std::path::PathBuf;
@@ -55,6 +55,11 @@ pub(crate) struct App {
     pub(crate) poll_rate: u16,
     /// the polling rate on the mouse, None when the daemon doesn't give one
     pub(crate) device_poll: Option<u16>,
+    /// sleep timeout in seconds, the editor and the mouse's value like the polling rate
+    pub(crate) idle: u16,
+    pub(crate) device_idle: Option<u16>,
+    /// None on wired mice
+    pub(crate) battery: Option<Battery>,
     /// folder picked for profile files, None = the default config folder
     pub(crate) dir: Option<PathBuf>,
     /// (vid, pid) of a mouse that was unplugged; we keep polling until it comes back
@@ -79,6 +84,9 @@ impl App {
             power: None,
             poll_rate: 0,
             device_poll: None,
+            idle: 0,
+            device_idle: None,
+            battery: None,
             dir: None,
             disconnected: None,
             last_daemon_check: Instant::now(),
@@ -175,6 +183,9 @@ impl App {
         if !self.ops.iter().any(|o| matches!(o, Op::Poll(_))) {
             self.poll_rate = self.device_poll.unwrap_or(0);
         }
+        if !self.ops.iter().any(|o| matches!(o, Op::Idle(_))) {
+            self.idle = self.device_idle.unwrap_or(0);
+        }
     }
 
     /// Same for DPI, valid values that differ from the device are queued and
@@ -203,6 +214,8 @@ pub(crate) enum Op {
     Light { zone: String, effect: Effect, brightness: u8 },
     /// polling rate in Hz
     Poll(u16),
+    /// sleep timeout in seconds
+    Idle(u16),
 }
 
 impl Op {
@@ -213,7 +226,7 @@ impl Op {
             }
             (Op::Dpi { .. }, Op::Dpi { .. }) => true,
             (Op::Light { zone: a, .. }, Op::Light { zone: b, .. }) => a == b,
-            (Op::Poll(_), Op::Poll(_)) => true,
+            (Op::Poll(_), Op::Poll(_)) | (Op::Idle(_), Op::Idle(_)) => true,
             _ => false,
         }
     }
@@ -230,6 +243,7 @@ impl Op {
             }
             Op::Light { zone, effect, brightness } => format!("LIGHT {} > {effect:?} @{brightness}", zone.to_uppercase()),
             Op::Poll(hz) => format!("POLLING RATE > {hz} HZ"),
+            Op::Idle(s) => format!("SLEEP AFTER > {s} S"),
         }
     }
 }

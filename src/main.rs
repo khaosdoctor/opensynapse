@@ -31,6 +31,8 @@ commands:
                                | wave [reverse] | reactive RRGGBB [speed 1-3]
   rgb <zone|all> brightness N  0-255
   poll [125|500|1000]          show or set the polling rate in Hz (needs the OpenRazer daemon)
+  battery                      battery level, charging and the sleep timeout (wireless mice)
+  idle [SECONDS]               show or set how long a wireless mouse waits before it sleeps (60-900)
   export <file.json>           save keymap (all layers) + DPI of --profile
   import <file.json>           write a saved profile to --profile
   protocol [file.md]           generate a protocol file skeleton for this mouse (--force overwrites)
@@ -105,6 +107,7 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
     }
     let layer = def.layer(&o.layer).ok_or(format!("unknown layer '{}', have {:?}", o.layer, def.layers))?;
     let button = |name: &str| def.button(name).map(|b| b.id).ok_or(format!("unknown button '{name}'"));
+    let daemon = || power::find(&mouse.serial).ok_or("this needs the OpenRazer daemon running");
 
     match args.as_slice() {
         ["list"] => {
@@ -209,11 +212,26 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
             println!("{} > {}", zones.join(","), rest.join(" "));
         }
         ["poll", rest @ ..] if rest.len() <= 1 => {
-            let power = power::find(&mouse.serial).ok_or("the polling rate needs the OpenRazer daemon")?;
+            let power = daemon()?;
             if let Some(hz) = rest.first() {
                 power.set_poll_rate(hz.parse().map_err(|_| "bad polling rate")?)?;
             }
             println!("{} Hz", power.poll_rate().ok_or("this mouse has no polling rate on the daemon")?);
+        }
+        ["battery"] => {
+            let power = daemon()?;
+            let b = power.battery().ok_or("this mouse has no battery")?;
+            println!("battery {:.0}%{}", b.percent, if b.charging { ", charging" } else { "" });
+            if let Some(s) = power.idle_time() {
+                println!("sleeps after {s} s idle");
+            }
+        }
+        ["idle", rest @ ..] if rest.len() <= 1 => {
+            let power = daemon()?;
+            if let Some(s) = rest.first() {
+                power.set_idle_time(s.parse().map_err(|_| "bad seconds")?)?;
+            }
+            println!("sleeps after {} s idle", power.idle_time().ok_or("this mouse has no sleep timeout")?);
         }
         ["protocol", "send", rest @ ..] if rest.len() <= 1 => {
             let path = rest.first().map_or_else(|| protocol_path(def), PathBuf::from);

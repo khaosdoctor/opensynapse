@@ -2,8 +2,8 @@ use crate::shared::widgets::{badge, chip, neon, note, outline, panel, pick, tab_
 use crate::state::{App, Confirm, Op, queue, unqueue};
 use crate::theme::{self, t};
 use eframe::egui::{self, Align, Align2, Color32, FontId, Layout, Margin, RichText};
-use opensynapse::device;
 use opensynapse::rgb::{self, Effect};
+use opensynapse::{device, power};
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -184,14 +184,28 @@ impl App {
 
     /// Settings the OpenRazer daemon has besides lighting, hidden when it doesn't have them.
     fn device_row(&mut self, ui: &mut egui::Ui) {
-        if self.device_poll.is_none() {
+        if self.device_poll.is_none() && self.device_idle.is_none() && self.battery.is_none() {
             return;
         }
         panel(t().panel).show(ui, |ui| {
             ui.set_width(ui.available_width().min(760.0));
             ui.horizontal(|ui| {
-                note(ui, "POLLING RATE");
-                pick(ui, POLL, &mut self.poll_rate, true, chip);
+                if self.device_poll.is_some() {
+                    note(ui, "POLLING RATE");
+                    pick(ui, POLL, &mut self.poll_rate, true, chip);
+                    ui.add_space(16.0);
+                }
+                if self.device_idle.is_some() {
+                    note(ui, "SLEEP AFTER");
+                    ui.add(egui::DragValue::new(&mut self.idle).range(power::IDLE_SECONDS).speed(10).suffix(" S"))
+                        .on_hover_text("seconds without movement before the mouse sleeps");
+                }
+                let Some(b) = &self.battery else { return };
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let text = format!("BATTERY {:.0}%{}", b.percent, if b.charging { " CHARGING" } else { "" });
+                    let color = if b.percent < 15.0 && !b.charging { t().error } else { t().ok };
+                    badge(ui, RichText::new(text).color(color).small(), color, Margin::symmetric(6, 2));
+                });
             });
         });
         ui.add_space(8.0);
@@ -200,13 +214,17 @@ impl App {
 
     /// Like DPI, a value that differs from the mouse is queued and putting the mouse's value back drops it.
     fn queue_power_edits(&mut self) {
-        let Some(device) = self.device_poll else { return };
-        if self.poll_rate == device {
-            unqueue(&mut self.ops, &Op::Poll(device));
-            return;
-        }
-        if queue(&mut self.ops, Op::Poll(self.poll_rate)) {
-            self.status = Ok(format!("QUEUED POLLING RATE > {} HZ", self.poll_rate));
+        let Some(m) = self.mice.get(self.current) else { return };
+        for (device, now, op) in [(self.device_poll, self.poll_rate, Op::Poll(self.poll_rate)), (self.device_idle, self.idle, Op::Idle(self.idle))] {
+            let Some(device) = device else { continue };
+            if now == device {
+                unqueue(&mut self.ops, &op);
+                continue;
+            }
+            let text = op.describe(&m.def);
+            if queue(&mut self.ops, op) {
+                self.status = Ok(format!("QUEUED {text}"));
+            }
         }
     }
 

@@ -48,13 +48,19 @@ impl App {
         self.load_power();
     }
 
-    /// Reads the polling rate from the OpenRazer daemon. A queued change stays in the editor.
+    /// Reads the polling rate, battery and sleep timeout from the OpenRazer
+    /// daemon. A queued change stays in its editor.
     pub(crate) fn load_power(&mut self) {
         let Some(m) = self.mice.get(self.current) else { return };
         self.power = power::find(&m.serial);
         self.device_poll = self.power.as_ref().and_then(Power::poll_rate);
+        self.device_idle = self.power.as_ref().and_then(Power::idle_time);
+        self.battery = self.power.as_ref().and_then(Power::battery);
         if !self.ops.iter().any(|o| matches!(o, Op::Poll(_))) {
             self.poll_rate = self.device_poll.unwrap_or(0);
+        }
+        if !self.ops.iter().any(|o| matches!(o, Op::Idle(_))) {
+            self.idle = self.device_idle.unwrap_or(0);
         }
     }
 
@@ -112,6 +118,8 @@ impl App {
             return;
         }
         self.last_daemon_check = Instant::now();
+        // the charge moves on its own, so it's read again every few seconds
+        self.battery = self.power.as_ref().and_then(Power::battery);
         let (Some(m), Some(light)) = (self.mice.get(self.current), &self.lighting) else { return };
         let online = rgb::daemon_sees(&m.serial);
         if online == light.uses_daemon() {
@@ -164,6 +172,10 @@ impl App {
                 },
                 Op::Poll(hz) => match &self.power {
                     Some(power) => power.set_poll_rate(*hz),
+                    None => Err(std::io::Error::other("no OpenRazer daemon")),
+                },
+                Op::Idle(s) => match &self.power {
+                    Some(power) => power.set_idle_time(*s),
                     None => Err(std::io::Error::other("no OpenRazer daemon")),
                 },
             };

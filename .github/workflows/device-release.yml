@@ -29,14 +29,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TITLE: ${{ github.event.pull_request.title }}
         run: |
-          old=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          new="${old%.*}.$(( ${old##*.} + 1 ))"
-          sed -i "s/^version = \"$old\"/version = \"$new\"/" Cargo.toml
-          sed -i "s/^pkgver=.*/pkgver=$new/" contrib/aur/*/PKGBUILD
-          cargo update --workspace
-          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
-            commit -qam "chore: release v$new"
-          git tag "v$new"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          scripts/release.sh patch --no-push
+          new=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
           git push origin main "v$new"
           # tags pushed with the workflow token don't start other workflows, a dispatch does
           gh workflow run release.yml --ref main -f tag="v$new"

@@ -82,7 +82,7 @@ Themes are different. `themes/*.css` are compiled in, and every `~/.config/opens
 
 Every package ships `devices/*.jsonc`. The `.deb`, the AUR packages, the AppImage and Homebrew install them to `share/opensynapse/devices`, and the tar.gz keeps them in `devices/` next to the binaries. Without them an installed app finds no mouse, so a new package has to install them too.
 
-A release means bumping the version in `Cargo.toml`, `Cargo.lock` and the three PKGBUILDs in `contrib/aur/`, committing that as `chore: release vX.Y.Z` and pushing a matching tag.
+To cut a release, run `scripts/release.sh patch` (or `minor`, or an exact `X.Y.Z`) on a clean `main`. It bumps `Cargo.toml`, `Cargo.lock` and the three PKGBUILDs, runs the tests, commits `chore: release vX.Y.Z`, tags it and pushes, and the tag starts `release.yml`.
 
 ## Conventions
 

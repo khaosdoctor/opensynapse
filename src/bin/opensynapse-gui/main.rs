@@ -155,8 +155,7 @@ impl Editor {
                 e.mods = *mods;
                 e.key = key_name(*usage).unwrap_or(format!("0x{usage:02x}"));
             }
-            Action::Mouse(b) => (e.kind, e.mouse) = (Kind::Mouse, *b),
-            Action::MouseTurbo { button, .. } => (e.kind, e.mouse) = (Kind::Mouse, *button),
+            Action::Mouse(b) | Action::MouseTurbo { button: b, .. } => (e.kind, e.mouse) = (Kind::Mouse, *b),
             Action::Dpi(_) | Action::DpiStage(_) => (e.kind, e.dpi) = (Kind::Dpi, a.clone()),
             Action::Profile(_) | Action::ProfileSet(_) => (e.kind, e.profile) = (Kind::Profile, a.clone()),
             Action::Hypershift => e.kind = Kind::Hypershift,
@@ -436,10 +435,20 @@ impl App {
     /// from what the button will do is queued (or dropped when it's back to
     /// the device value). Buttons that couldn't be read are left alone.
     fn queue_edits(&mut self) {
-        let (Ok(a), Some(now)) = (self.editor.build(), self.effective(self.selected)) else { return };
-        if a != now {
-            self.queue_button();
+        let (Ok(action), Some(now)) = (self.editor.build(), self.effective(self.selected)) else { return };
+        if action == now {
+            return;
         }
+        let index = self.selected;
+        let name = self.mice.get(self.current).map_or(String::new(), |m| m.def.buttons[index].name.to_uppercase());
+        let op = Op::Button { profile: self.profile, layer: self.layer, index, action: action.clone() };
+        if self.device_action(index) == Some(&action) {
+            unqueue(&mut self.ops, &op);
+            self.status = Ok(format!("{name} REVERTED > nothing to write"));
+            return;
+        }
+        queue(&mut self.ops, op);
+        self.status = Ok(format!("QUEUED {name} > {action}"));
     }
 
     /// After ops are removed from the queue, put the editors back on what
@@ -491,26 +500,6 @@ impl App {
             }
             queue(&mut self.ops, z.op());
         }
-    }
-
-    fn queue_button(&mut self) {
-        let action = match self.editor.build() {
-            Ok(a) => a,
-            Err(e) => {
-                self.status = Err(e);
-                return;
-            }
-        };
-        let index = self.selected;
-        let name = self.mice.get(self.current).map_or(String::new(), |m| m.def.buttons[index].name.to_uppercase());
-        let op = Op::Button { profile: self.profile, layer: self.layer, index, action: action.clone() };
-        if self.device_action(index) == Some(&action) {
-            unqueue(&mut self.ops, &op);
-            self.status = Ok(format!("{name} REVERTED > nothing to write"));
-            return;
-        }
-        queue(&mut self.ops, op);
-        self.status = Ok(format!("QUEUED {name} > {action}"));
     }
 
     /// Runs the queue in order and stops at the first failure, keeping what's left.
@@ -618,9 +607,8 @@ fn mouse_outline(body: egui::Rect) -> Vec<egui::Pos2> {
 fn short(a: &Action) -> String {
     match a {
         Action::Key { mods, usage } => {
-            let mut s: String = opensynapse::action::MODS[..4].iter().filter(|(_, b)| mods & b != 0).map(|(n, _)| format!("{}+", n[..1].to_uppercase())).collect();
-            s += &key_name(*usage).unwrap_or("?".into()).to_uppercase();
-            s
+            let held: String = opensynapse::action::MODS[..4].iter().filter(|(_, b)| mods & b != 0).map(|(n, _)| format!("{}+", n[..1].to_uppercase())).collect();
+            held + &key_name(*usage).unwrap_or("?".into()).to_uppercase()
         }
         Action::Mouse(b) => match b {
             1 => "LMB",
@@ -727,10 +715,6 @@ fn toggle_button(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::Respons
     tall(ui, chip_button(text, selected))
 }
 
-fn outline_button(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Response {
-    tall(ui, outline(text, color))
-}
-
 /// Every button that can share a row with another is this tall, so the row lines up.
 fn tall(ui: &mut egui::Ui, button: egui::Button) -> egui::Response {
     hover(ui.add(button.min_size(egui::vec2(0.0, 28.0))))
@@ -740,24 +724,28 @@ fn delete_button(ui: &mut egui::Ui) -> egui::Response {
     hover(ui.add(framed(RichText::new("X").color(t().error).strong(), t().bg, t().error).small())).on_hover_text("remove")
 }
 
-/// One button per choice, the current one highlighted.
+/// One button per choice, the current one highlighted unless `on` is false.
+/// True when a choice was clicked, even the one that was current already.
 fn pick<T: Clone + PartialEq>(
     ui: &mut egui::Ui,
     list: &[(&str, T)],
     current: &mut T,
+    on: bool,
     button: fn(&mut egui::Ui, &str, bool) -> egui::Response,
-) {
+) -> bool {
+    let mut clicked = false;
     for (label, v) in list {
-        if button(ui, label, current == v).clicked() {
-            *current = v.clone();
+        if button(ui, label, on && current == v).clicked() {
+            (*current, clicked) = (v.clone(), true);
         }
     }
+    clicked
 }
 
 fn tab_row<T: Clone + PartialEq>(ui: &mut egui::Ui, list: &[(&str, T)], current: &mut T) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 20.0;
-        pick(ui, list, current, tab);
+        pick(ui, list, current, true, tab);
     });
 }
 
@@ -805,7 +793,12 @@ impl eframe::App for App {
         });
 
         let bar = Frame::new().fill(t().panel).inner_margin(Margin { left: 12, right: 12, top: 12, bottom: 0 });
-        egui::Panel::top("tabs").frame(bar).show(ui, |ui| self.tabs(ui));
+        egui::Panel::top("tabs").frame(bar).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                pick(ui, &[("BUTTONS", View::Buttons), ("LIGHTING", View::Lighting)], &mut self.view, true, view_tab);
+            });
+        });
 
         let status = Frame::new().fill(t().bg).inner_margin(Margin::symmetric(12, 6));
         let (text, color) = match &self.status {
@@ -961,7 +954,7 @@ impl App {
         self.zone_base = self.zone_ui.clone();
         // the first time we see this mouse its lighting becomes the original RESET goes back to
         let Some(path) = self.lighting_original().filter(|p| !p.exists()) else { return };
-        if let Err(e) = rgb::save_zones(&path, &self.lighting_now()) {
+        if let Err(e) = device::save_json(&path, &self.lighting_now()) {
             self.status = Err(format!("could not save the original lighting: {e}"));
         }
     }
@@ -1057,11 +1050,11 @@ impl ZoneUi {
             ui.label(RichText::new(format!("#{r:02x}{g:02x}{b:02x}")).color(Color32::from_rgb(r, g, b)));
         }
         if self.fx == Fx::Wave {
-            pick(ui, &[("◄ LEFT", false), ("RIGHT ►", true)], &mut self.reverse, chip);
+            pick(ui, &[("◄ LEFT", false), ("RIGHT ►", true)], &mut self.reverse, true, chip);
         }
         if self.fx == Fx::Reactive {
             note(ui, "FADE");
-            pick(ui, &[("FAST", 1), ("MEDIUM", 2), ("SLOW", 3)], &mut self.speed, chip);
+            pick(ui, &[("FAST", 1), ("MEDIUM", 2), ("SLOW", 3)], &mut self.speed, true, chip);
         }
         if matches!(self.fx, Fx::Spectrum | Fx::Off) {
             note(ui, "no options");
@@ -1112,13 +1105,6 @@ impl App {
             self.connect();
         }
         ui.add_space(18.0);
-    }
-
-    fn tabs(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 4.0;
-            pick(ui, &[("BUTTONS", View::Buttons), ("LIGHTING", View::Lighting)], &mut self.view, view_tab);
-        });
     }
 
     /// The column left of the mouse drawing, with the profile and layer pickers and the profile file actions.
@@ -1269,7 +1255,7 @@ impl App {
     /// the status line, with `verb` saying why.
     fn queue_file(&mut self, path: &std::path::Path, verb: &str) -> Result<String, String> {
         let m = self.mice.get(self.current).ok_or("no mouse")?;
-        let file = profile::load(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let file: profile::ProfileFile = device::load_json(path).map_err(|e| format!("{}: {e}", path.display()))?;
         let plan = profile::plan(m, self.profile, &file).map_err(|e| e.to_string())?;
         let n = plan.len();
         for (layer, index, action) in plan {
@@ -1602,7 +1588,7 @@ impl App {
     /// Queues the original lighting snapshot.
     fn reset_lighting(&mut self) {
         let Some(path) = self.lighting_original() else { return };
-        let saved = match rgb::load_zones(&path) {
+        let saved: Vec<rgb::ZoneState> = match device::load_json(&path) {
             Ok(s) => s,
             Err(e) => {
                 self.status = Err(format!("{}: {e}", path.display()));
@@ -1620,7 +1606,7 @@ impl App {
 
     fn set_lighting_default(&mut self) {
         let Some(path) = self.lighting_original() else { return };
-        self.status = rgb::save_zones(&path, &self.lighting_now()).map(|_| format!("LIGHTING IS THE NEW ORIGINAL > {}", path.display())).map_err(|e| e.to_string());
+        self.status = device::save_json(&path,&self.lighting_now()).map(|_| format!("LIGHTING IS THE NEW ORIGINAL > {}", path.display())).map_err(|e| e.to_string());
     }
 
     fn factory_lighting(&mut self) {
@@ -1659,7 +1645,7 @@ impl App {
                     }
                 }
             }
-            Kind::Media => picked = pick_value(ui, MEDIA_KEYS, &mut e.media, on),
+            Kind::Media => picked = pick(ui, MEDIA_KEYS, &mut e.media, on, chip),
             Kind::Hypershift => {
                 picked = chip(ui, "USE AS HYPERSHIFT", on).clicked();
                 note(
@@ -1668,8 +1654,8 @@ impl App {
                      (switch LAYER at the top to edit it). Let go and they go back to normal.",
                 );
             }
-            Kind::Dpi => picked = pick_value(ui, DPI_ACTIONS, &mut e.dpi, on),
-            Kind::Profile => picked = pick_value(ui, PROFILE_ACTIONS, &mut e.profile, on),
+            Kind::Dpi => picked = pick(ui, DPI_ACTIONS, &mut e.dpi, on, chip),
+            Kind::Profile => picked = pick(ui, PROFILE_ACTIONS, &mut e.profile, on, chip),
             Kind::Disabled => picked = chip(ui, "TURN OFF", on).clicked(),
             Kind::Raw => {
                 ui.add(TextEdit::singleline(&mut e.raw).hint_text("hex bytes").desired_width(200.0));
@@ -1684,76 +1670,65 @@ impl App {
     }
 }
 
-/// Like `pick`, but nothing shows as selected unless `on`. True when a value was clicked.
-fn pick_value<T: Clone + PartialEq>(ui: &mut egui::Ui, list: &[(&str, T)], current: &mut T, on: bool) -> bool {
-    let mut clicked = false;
-    for (label, v) in list {
-        if chip(ui, label, on && current == v).clicked() {
-            (*current, clicked) = (v.clone(), true);
-        }
-    }
-    clicked
-}
-
 /// KEY tab: modifiers, the key box and the special key groups.
 fn key_fields(ui: &mut egui::Ui, e: &mut Editor, on: bool) {
-        // one column per group, a group that doesn't fit goes to the next row
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing.x = 28.0;
+    // one column per group, a group that doesn't fit goes to the next row
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 28.0;
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
+            note(ui, "COMMON KEYS");
+            egui::Grid::new("mods").spacing([6.0, 6.0]).show(ui, |ui| {
+                for (i, (label, bit)) in opensynapse::action::MODS[..4].iter().enumerate() {
+                    if chip(ui, &label.to_uppercase(), on && e.mods & bit != 0).clicked() {
+                        e.mods ^= bit;
+                    }
+                    if i % 2 == 1 {
+                        ui.end_row();
+                    }
+                }
+            });
+            // an empty box just means no key picked yet
+            // checked as a key even while the button is still another type
+            let as_key = Editor { kind: Kind::Key, ..e.clone() };
+            let err = as_key.build().err().filter(|_| !e.key.trim().is_empty());
+            let color = match err {
+                Some(_) => t().accent2,
+                None => t().warn,
+            };
+            let edit = TextEdit::singleline(&mut e.key).hint_text("a, 1, ctrl+z, f13").desired_width(140.0);
+            ui.add(edit.text_color(color));
+            if let Some(err) = err {
+                ui.label(RichText::new(err).color(t().accent2).small());
+            }
+        });
+        for (group, cols, keys) in SPECIAL_KEYS {
+            // egui only wraps single widgets, so we measure the group. A chip is its text
+            // plus padding and the widest key sets the column width
+            let widest = keys.iter().map(|k| k.len()).max().unwrap_or(0) as f32;
+            let font = egui::TextStyle::Button.resolve(ui.style());
+            let char_w = ui.fonts_mut(|f| f.glyph_width(&font, 'M'));
+            let spacing = ui.spacing().item_spacing.x;
+            let width = *cols as f32 * (widest * char_w + 32.0) + spacing;
+            // available_width() in a wrapping layout is the whole row, so measure from the cursor
+            if ui.max_rect().right() - ui.cursor().min.x < width {
+                ui.end_row();
+            }
             ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
-                note(ui, "COMMON KEYS");
-                egui::Grid::new("mods").spacing([6.0, 6.0]).show(ui, |ui| {
-                    for (i, (label, bit)) in opensynapse::action::MODS[..4].iter().enumerate() {
-                        if chip(ui, &label.to_uppercase(), on && e.mods & bit != 0).clicked() {
-                            e.mods ^= bit;
+                note(ui, *group);
+                egui::Grid::new(group).spacing([6.0, 6.0]).show(ui, |ui| {
+                    for (i, k) in keys.iter().enumerate() {
+                        if chip(ui, &k.to_uppercase(), on && e.key == *k).clicked() {
+                            e.key = k.to_string();
                         }
-                        if i % 2 == 1 {
+                        if (i + 1) % cols == 0 {
                             ui.end_row();
                         }
                     }
                 });
-                // an empty box just means no key picked yet
-                // checked as a key even while the button is still another type
-                let as_key = Editor { kind: Kind::Key, ..e.clone() };
-                let err = as_key.build().err().filter(|_| !e.key.trim().is_empty());
-                let color = match err {
-                    Some(_) => t().accent2,
-                    None => t().warn,
-                };
-                let edit = TextEdit::singleline(&mut e.key).hint_text("a, 1, ctrl+z, f13").desired_width(140.0);
-                ui.add(edit.text_color(color));
-                if let Some(err) = err {
-                    ui.label(RichText::new(err).color(t().accent2).small());
-                }
             });
-            for (group, cols, keys) in SPECIAL_KEYS {
-                // egui only wraps single widgets, so we measure the group. A chip is its text
-                // plus padding and the widest key sets the column width
-                let widest = keys.iter().map(|k| k.len()).max().unwrap_or(0) as f32;
-                let font = egui::TextStyle::Button.resolve(ui.style());
-                let char_w = ui.fonts_mut(|f| f.glyph_width(&font, 'M'));
-                let spacing = ui.spacing().item_spacing.x;
-                let width = *cols as f32 * (widest * char_w + 32.0) + spacing;
-                // available_width() in a wrapping layout is the whole row, so measure from the cursor
-                if ui.max_rect().right() - ui.cursor().min.x < width {
-                    ui.end_row();
-                }
-                ui.vertical(|ui| {
-                    note(ui, *group);
-                    egui::Grid::new(group).spacing([6.0, 6.0]).show(ui, |ui| {
-                        for (i, k) in keys.iter().enumerate() {
-                            if chip(ui, &k.to_uppercase(), on && e.key == *k).clicked() {
-                                e.key = k.to_string();
-                            }
-                            if (i + 1) % cols == 0 {
-                                ui.end_row();
-                            }
-                        }
-                    });
-                });
-            }
-        });
+        }
+    });
 }
 
 /// Darkens the lighting tab and says why it's off. Drawn on its own layer
@@ -1871,7 +1846,7 @@ impl eframe::App for Launcher {
             ));
             ui.add_space(10.0);
             ui.horizontal(|ui| {
-                if outline_button(ui, "QUIT", t().muted).clicked() {
+                if tall(ui, outline("QUIT", t().muted)).clicked() {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
                 if tall(ui, neon("CLOSE IT AND OPEN HERE", t().accent2)).clicked() {

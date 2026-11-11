@@ -221,9 +221,8 @@ pub fn hex_bytes(s: &str) -> Option<Vec<u8>> {
 
 /// `ctrl+shift+a` style text for a modifier mask and a key.
 fn key_text(mods: u8, usage: u8) -> String {
-    let mut s: String = MODS.iter().filter(|(_, bit)| mods & bit != 0).map(|(name, _)| format!("{name}+")).collect();
-    s += &key_name(usage).unwrap_or(format!("0x{usage:02x}"));
-    s
+    let held: String = MODS.iter().filter(|(_, bit)| mods & bit != 0).map(|(name, _)| format!("{name}+")).collect();
+    held + &key_name(usage).unwrap_or(format!("0x{usage:02x}"))
 }
 
 fn parse_key(text: &str) -> Option<(u8, u8)> {

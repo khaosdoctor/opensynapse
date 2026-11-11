@@ -125,10 +125,6 @@ struct Settings {
 
 static SETTINGS: RwLock<Settings> = RwLock::new(Settings { mode: Mode::System, theme: String::new(), font: None });
 
-fn settings() -> Settings {
-    read(&SETTINGS).clone()
-}
-
 struct ThemeFile {
     id: String,
     css: String,
@@ -178,10 +174,7 @@ fn scan() -> Vec<ThemeFile> {
 }
 
 pub fn start(ctx: &egui::Context) {
-    let saved = config("settings.json")
-        .and_then(|f| fs::read_to_string(f).ok())
-        .and_then(|s| serde_json::from_str::<Settings>(&s).ok());
-    if let Some(s) = saved {
+    if let Some(s) = config("settings.json").and_then(|f| device::load_json(&f).ok()) {
         *write(&SETTINGS) = s;
     }
     *write(&THEMES) = scan();
@@ -190,17 +183,16 @@ pub fn start(ctx: &egui::Context) {
 }
 
 fn save(ctx: &egui::Context, s: Settings) {
-    let json = serde_json::to_string_pretty(&s).unwrap_or_default();
-    *write(&SETTINGS) = s;
+    *write(&SETTINGS) = s.clone();
     apply(ctx);
     let Some(file) = config("settings.json") else { return };
-    if let Err(e) = device::write(&file, json) {
+    if let Err(e) = device::save_json(&file, &s) {
         eprintln!("could not save settings to {}: {e}", file.display());
     }
 }
 
 pub fn settings_ui(ui: &mut egui::Ui) {
-    let s = settings();
+    let s = read(&SETTINGS).clone();
     super::heading(ui, "MODE");
     ui.horizontal(|ui| {
         for (m, label, tip) in [
@@ -230,11 +222,11 @@ pub fn settings_ui(ui: &mut egui::Ui) {
     });
     let dir = config("themes").map(|d| d.display().to_string()).unwrap_or_default();
     ui.horizontal(|ui| {
-        if super::outline_button(ui, "RELOAD", t().accent).on_hover_text("read the themes folder and theme.css again").clicked() {
+        if super::tall(ui, super::outline("RELOAD", t().accent)).on_hover_text("read the themes folder and theme.css again").clicked() {
             *write(&THEMES) = scan();
             apply(ui.ctx());
         }
-        ui.label(RichText::new(format!("add .css themes to {dir}")).color(t().muted).small());
+        super::note(ui, format!("add .css themes to {dir}"));
     });
 
     ui.add_space(16.0);
@@ -392,7 +384,7 @@ struct Style {
 }
 
 pub fn apply(ctx: &egui::Context) {
-    let s = settings();
+    let s = read(&SETTINGS).clone();
     let user_css = config("theme.css").and_then(|f| fs::read_to_string(f).ok());
     // the settings page wins over theme.css, which wins over the desktop
     let light = match s.mode {

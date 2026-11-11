@@ -118,7 +118,3 @@ pub fn ensure_defaults(mouse: &Mouse) -> io::Result<usize> {
 pub fn export(mouse: &Mouse, profile: u8, path: &Path) -> io::Result<()> {
     device::save_json(path, &read(mouse, profile)?)
 }
-
-pub fn load(path: &Path) -> io::Result<ProfileFile> {
-    device::load_json(path)
-}

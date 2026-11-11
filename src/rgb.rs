@@ -9,7 +9,7 @@
 use crate::device;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::{fs, io};
 use zbus::Message;
 use zbus::blocking::Connection;
@@ -83,14 +83,6 @@ pub fn led_id(zone: &str) -> Option<u8> {
         "left" => Some(0x11),
         _ => None,
     }
-}
-
-pub fn save_zones(path: &Path, zones: &[ZoneState]) -> io::Result<()> {
-    device::save_json(path, &zones)
-}
-
-pub fn load_zones(path: &Path) -> io::Result<Vec<ZoneState>> {
-    device::load_json(path)
 }
 
 pub struct Lighting {
@@ -243,13 +235,13 @@ pub fn parse_color(s: &str) -> Option<[u8; 3]> {
 fn effect_from(name: &str, colors: &[u8], speed: Option<u8>, wave_dir: Option<i32>) -> Effect {
     let color = [colors.first(), colors.get(1), colors.get(2)].map(|c| c.copied().unwrap_or(0));
     match name {
-        "static" => Effect::Static(color),
         "breathSingle" => Effect::Breath(color),
         "breathRandom" => Effect::BreathRandom,
         "spectrum" => Effect::Spectrum,
         "wave" => Effect::Wave(wave_dir == Some(2)),
         "reactive" => Effect::Reactive { speed: speed.unwrap_or(2), color },
         "none" => Effect::Off,
+        // "static", and names we have no effect for
         _ => Effect::Static(color),
     }
 }

@@ -220,7 +220,7 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
             println!("saved profile {} to {path}", o.profile);
         }
         ["import", path] => {
-            let file = profile::load(Path::new(path))?;
+            let file = device::load_json(Path::new(path))?;
             let n = profile::apply(mouse, o.profile, &file)?;
             println!("wrote {n} buttons + DPI to profile {}", o.profile);
         }

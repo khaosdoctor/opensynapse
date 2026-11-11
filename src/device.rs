@@ -177,9 +177,8 @@ pub fn detect() -> io::Result<Vec<Mouse>> {
             let hint = if denied { " > install udev/70-opensynapse.rules (see README)" } else { "" };
             io::Error::new(e.kind(), format!("{}: {e}{hint}", path.display()))
         })?;
-        let mut mouse = Mouse { def, hid, serial: String::new() };
-        mouse.serial = mouse.read_serial().unwrap_or_default();
-        found.push(mouse);
+        let serial = Mouse::read_serial(&hid).unwrap_or_default();
+        found.push(Mouse { def, hid, serial });
     }
     Ok(found)
 }
@@ -206,8 +205,8 @@ impl Mouse {
     }
 
     /// Factory serial, fixed per physical unit (survives replugs and renames).
-    fn read_serial(&self) -> io::Result<String> {
-        let r = self.hid.command(0x00, 0x82, 0x16, &[])?;
+    fn read_serial(hid: &Hid) -> io::Result<String> {
+        let r = hid.command(0x00, 0x82, 0x16, &[])?;
         // ends up in file names and D-Bus paths, so nothing like "../"
         Ok(String::from_utf8_lossy(&r[8..8 + 0x16]).chars().filter(char::is_ascii_alphanumeric).collect())
     }

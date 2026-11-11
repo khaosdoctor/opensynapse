@@ -116,12 +116,11 @@ const MEDIA: &[(&str, u16)] = &[
 pub fn key_name(usage: u8) -> Option<String> {
     let named = match usage {
         0x04..=0x1d => return Some(((b'a' + usage - 0x04) as char).to_string()),
-        0x1e..=0x26 => return Some((usage - 0x1d).to_string()),
-        0x27 => "0",
+        // digits go 1..9 then 0
+        0x1e..=0x27 => return Some(((usage - 0x1d) % 10).to_string()),
+        0x59..=0x62 => return Some(format!("num{}", (usage - 0x58) % 10)),
         0x3a..=0x45 => return Some(format!("f{}", usage - 0x39)),
         0x68..=0x73 => return Some(format!("f{}", usage - 0x68 + 13)),
-        0x59..=0x61 => return Some(format!("num{}", usage - 0x58)),
-        0x62 => "num0",
         0x53 => "numlock",
         0x54 => "numslash",
         0x55 => "numasterisk",
@@ -268,11 +267,12 @@ impl FromStr for Action {
 
     fn from_str(s: &str) -> Result<Self, String> {
         let bad = || format!("can't parse action '{s}'");
+        let button = |b: &str| lookup(MOUSE, b).or_else(|| parse_u8(b));
         let (kind, rest) = s.split_once(':').unwrap_or((s, ""));
         match kind {
             "disabled" => Ok(Action::Disabled),
             "hypershift" => Ok(Action::Hypershift),
-            "mouse" => lookup(MOUSE, rest).or_else(|| parse_u8(rest)).map(Action::Mouse).ok_or_else(bad),
+            "mouse" => button(rest).map(Action::Mouse).ok_or_else(bad),
             "key" => parse_key(rest).map(|(mods, usage)| Action::Key { mods, usage }).ok_or_else(bad),
             "keyturbo" => {
                 let (key, ms) = rest.rsplit_once(':').ok_or_else(bad)?;
@@ -295,8 +295,7 @@ impl FromStr for Action {
                 .ok_or_else(bad),
             "turbo" => {
                 let (btn, ms) = rest.split_once(':').ok_or_else(bad)?;
-                let button = lookup(MOUSE, btn).or_else(|| parse_u8(btn)).ok_or_else(bad)?;
-                Ok(Action::MouseTurbo { button, interval: ms.parse().map_err(|_| bad())? })
+                Ok(Action::MouseTurbo { button: button(btn).ok_or_else(bad)?, interval: ms.parse().map_err(|_| bad())? })
             }
             "raw" if !rest.is_empty() => hex_bytes(rest).map(Action::Raw).ok_or_else(bad),
             _ => Err(bad()),

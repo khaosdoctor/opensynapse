@@ -40,7 +40,7 @@ impl Pressed {
     /// inside the mouse and never show up as input.
     pub fn triggers(&self, action: &Action) -> bool {
         match action {
-            Action::Key { usage: 0, mods } => (0..8).any(|i| mods & (1 << i) != 0 && self.key_down(0xe0 + i)),
+            Action::Key { usage: 0, mods } => mod_keys(*mods).any(|k| self.key_down(k)),
             Action::Key { usage, .. } | Action::KeyTurbo { usage, .. } => self.key_down(*usage),
             Action::Mouse(b) | Action::MouseTurbo { button: b, .. } => self.mouse_down(*b),
             _ => false,
@@ -67,10 +67,15 @@ impl Pressed {
             _ => return false,
         };
         let mut held: HashSet<u8> = keys.iter().copied().filter(|&k| k > 3).collect();
-        held.extend((0..8).filter(|i| mods & (1 << i) != 0).map(|i| 0xe0 + i));
+        held.extend(mod_keys(mods));
         let old = self.keys.insert(interface, held.clone());
         old.as_ref() != Some(&held)
     }
+}
+
+/// The modifier key usages (0xe0 left ctrl ... 0xe7 right meta) set in a modifier mask.
+fn mod_keys(mods: u8) -> impl Iterator<Item = u8> {
+    (0..8).filter(move |i| mods & (1 << i) != 0).map(|i| 0xe0 + i)
 }
 
 /// Starts one reader thread per hidraw node of the device. `on_change` runs after

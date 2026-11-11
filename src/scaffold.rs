@@ -4,6 +4,9 @@
 
 use crate::hid::{self, Hid};
 use std::io;
+use std::path::PathBuf;
+use std::thread::sleep;
+use std::time::Duration;
 
 const RAZER: u16 = 0x1532;
 /// Transaction ids used across Razer mice (OpenRazer, OpenRGB), newest first.
@@ -33,20 +36,40 @@ fn guess_name(id: u8) -> String {
     name.to_string()
 }
 
-/// Finds the interface and transaction id the mouse answers on by trying
-/// every interface with every known transaction id, with reads only.
+/// The current hidraw node of one interface. A probe on the wrong interface
+/// can make the mouse reset and come back under new hidraw numbers, so this
+/// waits up to 3s for the interface to show up again.
+fn node(pid: u16, iface: u8) -> Option<PathBuf> {
+    for _ in 0..30 {
+        let found = hid::find_all(RAZER, pid).into_iter().find(|(n, _)| *n == iface);
+        if let Some((_, path)) = found {
+            return Some(path);
+        }
+        sleep(Duration::from_millis(100));
+    }
+    None
+}
+
+/// Finds the interface and transaction id the mouse answers on, with reads
+/// only. Only the interfaces whose descriptor has the Razer 90-byte feature
+/// report are tried, since sending to the others can reset some mice; when
+/// no descriptor shows it, every interface is tried in order.
 fn connect(pid: u16) -> io::Result<(Hid, u8, u8)> {
-    let mut ifaces = hid::find_all(RAZER, pid);
-    if ifaces.is_empty() {
+    let all = hid::find_all(RAZER, pid);
+    if all.is_empty() {
         return Err(io::Error::other(format!("no hidraw node for 1532:{pid:04x}, is it plugged in?")));
     }
-    ifaces.sort_by_key(|(n, _)| *n);
+    let any_control = all.iter().any(|(_, p)| hid::has_control_report(p));
+    let mut ifaces: Vec<u8> =
+        all.iter().filter(|(_, p)| !any_control || hid::has_control_report(p)).map(|(n, _)| *n).collect();
+    ifaces.sort();
     let mut last_err = io::Error::other("the mouse didn't answer on any interface");
-    for (iface, path) in &ifaces {
+    for iface in ifaces {
         for tid in TIDS {
+            let Some(path) = node(pid, iface) else { break };
             // firmware version: a read every Razer mouse answers
-            match Hid::open(path, tid) {
-                Ok(hid) if hid.command(0x00, 0x81, 0x02, &[]).is_ok() => return Ok((hid, *iface, tid)),
+            match Hid::open(&path, tid) {
+                Ok(hid) if hid.command(0x00, 0x81, 0x02, &[]).is_ok() => return Ok((hid, iface, tid)),
                 Ok(_) => {}
                 Err(e) => last_err = e,
             }

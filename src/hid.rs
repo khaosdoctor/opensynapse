@@ -110,3 +110,56 @@ pub fn find_all(vid: u16, pid: u16) -> Vec<(u8, PathBuf)> {
     }
     found
 }
+
+/// Whether a hidraw node's report descriptor declares the 90-byte feature
+/// report Razer mice take commands on. False when sysfs can't be read.
+pub fn has_control_report(node: &Path) -> bool {
+    let Some(name) = node.file_name() else { return false };
+    let path = Path::new("/sys/class/hidraw").join(name).join("device/report_descriptor");
+    fs::read(path).is_ok_and(|d| descriptor_has_control_report(&d))
+}
+
+/// Walks the HID items, tracking Report Size and Report Count, and looks for
+/// a Feature item that is REPORT_LEN bytes long.
+fn descriptor_has_control_report(desc: &[u8]) -> bool {
+    let mut size = 0u32;
+    let mut count = 0u32;
+    let mut i = 0;
+    while i < desc.len() {
+        let prefix = desc[i];
+        // long item: 0xfe, data size, tag, data
+        if prefix == 0xfe {
+            i += 3 + desc.get(i + 1).copied().unwrap_or(0) as usize;
+            continue;
+        }
+        let len = [0, 1, 2, 4][(prefix & 0x03) as usize];
+        let data = desc.get(i + 1..i + 1 + len).unwrap_or(&[]);
+        let value = data.iter().rev().fold(0u32, |v, b| (v << 8) | *b as u32);
+        match prefix & 0xfc {
+            0x74 => size = value,
+            0x94 => count = value,
+            0xb0 if size * count == REPORT_LEN as u32 * 8 => return true,
+            _ => {}
+        }
+        i += 1 + len;
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_razer_control_report() {
+        // tail of a Naga Left Handed interface 0 descriptor: size 8, count 0x5a, feature
+        let naga = [0x06, 0x00, 0xff, 0x09, 0x02, 0x15, 0x00, 0x25, 0x01, 0x75, 0x08, 0x95, 0x5a, 0xb1, 0x01, 0xc0];
+        // a keyboard interface: no feature report at all
+        let keyboard = [0x05, 0x01, 0x09, 0x06, 0xa1, 0x01, 0x75, 0x01, 0x95, 0x08, 0x81, 0x02, 0xc0];
+        // a 16-bit feature report that isn't the Razer one
+        let other = [0x75, 0x10, 0x95, 0x01, 0xb1, 0x03];
+        assert!(descriptor_has_control_report(&naga));
+        assert!(!descriptor_has_control_report(&keyboard));
+        assert!(!descriptor_has_control_report(&other));
+    }
+}

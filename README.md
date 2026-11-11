@@ -66,7 +66,7 @@ With Homebrew on Linux (then install the udev rule as `brew` tells you):
 brew install khaosdoctor/tap/opensynapse
 ```
 
-Every [release](https://github.com/khaosdoctor/opensynapse/releases) also has a `.deb`, an AppImage (GUI only) and a tar.gz with both binaries, for x86_64 and arm64. The `.deb` installs the udev rule; with the other two, install it as shown at the end of this section.
+Every [release](https://github.com/khaosdoctor/opensynapse/releases) also has a `.deb`, an AppImage (GUI only, named `OpenSynapse-<version>-<arch>.AppImage`) and a tar.gz with both binaries, for x86_64 and arm64. The `.deb` installs the udev rule; with the other two, install it as shown at the end of this section.
 
 To build it yourself, you need [Rust](https://rustup.rs) and a Linux machine. Then:
 
@@ -110,7 +110,7 @@ The lighting tab needs the OpenRazer daemon running, the badge at the top says *
 
 ***SYSTEM*** follows your desktop's light or dark setting and switches when you change it, or you can pick ***LIGHT*** or ***DARK*** yourself. Every theme has both versions and the mode picks which one you see. OpenSynapse is the default, and Adwaita and Breeze come along so it looks at home on GNOME or KDE. Synapse looks like Razer's own app, and Catppuccin, Kanagawa and Dracula are also there. The font list has every font on your computer, and ***THEME DEFAULT*** uses whatever the theme asks for. We save all of that in `~/.config/opensynapse/settings.json`.
 
-Themes are CSS files, and you can find the built-in ones in [`themes/`](themes). To make your own, copy one of them to `~/.config/opensynapse/themes/<name>.css` and it shows up as a button on the settings page after you hit ***RELOAD***. If you name it like a built-in theme, yours replaces it. Only custom properties are read, and anything outside a `prefers-color-scheme` block counts for both modes:
+Themes are CSS files, and you can find the built-in ones in [`themes/`](themes). ***NEW THEME*** on the settings page asks for a name, copies the default theme to `~/.config/opensynapse/themes/<name>.css` and opens it in your default editor. You can also copy any of the built-in ones there yourself, and it shows up as a button on the settings page after you hit ***RELOAD***. If you name it like a built-in theme, yours replaces it. Only custom properties are read, and anything outside a `prefers-color-scheme` block counts for both modes:
 
 ```css
 :root {
@@ -127,7 +127,9 @@ Themes are CSS files, and you can find the built-in ones in [`themes/`](themes).
 
 If your desktop doesn't report a light or dark preference, which happens a lot on tiling window managers like Sway or Hyprland, ***SYSTEM*** stays dark. You can pick ***LIGHT*** on the settings page, or put `color-scheme: light;` in `theme.css` and ***SYSTEM*** uses that instead of asking the desktop.
 
-Only one GUI runs at a time, since two of them would fight over the same mouse. If you open it again while it's running, the second one just quits.
+Only one GUI runs at a time, since two of them would fight over the same mouse. If you open it again while it's running, the second one shows an "already running" dialog. ***QUIT*** closes it, and ***CLOSE IT AND OPEN HERE*** closes the first window, which loses anything still pending there.
+
+The status bar at the bottom has links to the GitHub repository, a bug report that already has your version in it, and the website.
 
 ### With the CLI
 
@@ -160,6 +162,7 @@ opensynapse watch                        # prints buttons as you press them
 opensynapse rgb all static ff00aa        # lighting, needs OpenRazer
 opensynapse rgb scroll brightness 128
 opensynapse init                         # start a device file for an unsupported mouse
+opensynapse probe                        # read-only raw probe of your mouse, finds it on its own
 opensynapse protocol                     # protocol file for your mouse, see PROTOCOL.md
 opensynapse protocol send                # share it as a GitHub issue
 ```
@@ -170,7 +173,7 @@ Every package installs shell completions for bash, zsh and fish, which also comp
 
 ## Adding your mouse
 
-OpenSynapse works by reading a JSON file from `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` with your mouse's USB ids and the list of its buttons. Every package also installs one for each mouse in [`devices/`](devices), and yours in `~/.config` wins over those. If your mouse isn't there, you can just write your own and it works right away, you don't need to wait for me or upload anything.
+OpenSynapse works by reading a JSON file with your mouse's USB ids and the list of its buttons, when it starts. Yours goes in `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc`. Every package also installs one for each mouse in [`devices/`](devices), and yours in `~/.config` wins over those. If your mouse isn't there, you can just write your own and it works right away, you don't need to wait for me or upload anything.
 
 You don't even have to write it by hand. Run `opensynapse init` with the mouse plugged in, it asks the mouse what it has without changing anything on it, and writes most of the file for you. Fix the `// TODO` lines, mostly naming the buttons, and that's it, the GUI and the CLI pick it up on their own.
 

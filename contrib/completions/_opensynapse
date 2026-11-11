@@ -53,6 +53,8 @@ _opensynapse() {
         '--profile[profile slot]:profile:(0 1 2 3 4 5)' \
         '--layer[button layer]:layer:(normal hypershift)' \
         '--device[mouse PID, like 008d]:pid:' \
+        '--args[hex args for probe, like 004000]:hex:' \
+        '--tid[transaction id for probe, like 0x3f]:tid:' \
         '1:command:->command' \
         '*::argument:->args'
 
@@ -60,7 +62,7 @@ _opensynapse() {
         command) _describe -t commands command commands ;;
         args)
             if [[ $PREFIX == -* ]]; then
-                compadd -- --profile --layer --device --active --force --dry-run --yes
+                compadd -- --profile --layer --device --active --args --tid --force --dry-run --yes
                 return
             fi
             case $words[1] in

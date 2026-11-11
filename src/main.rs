@@ -17,7 +17,8 @@ commands:
   init [pid] [file.jsonc]      start a device file for a mouse that doesn't have one (read-only)
   probe [/dev/hidrawN] [class ...] [--args HEX] [--tid HEX]
                                send every read command of each class (default 0x00-0x0f)
-                               and print the ones that answer (read-only, tid defaults to 0x1f)
+                               and print the ones that answer (read-only). Without a node it
+                               finds the mouse and its tid, with one the tid defaults to 0x1f
   list                         connected mice and their buttons
   dump                         every button's action
   get <button>                 one button's action

@@ -23,11 +23,11 @@ _opensynapse() {
         --profile) COMPREPLY=($(compgen -W "0 1 2 3 4 5" -- "$cur")); return ;;
         --layer) COMPREPLY=($(compgen -W "normal hypershift" -- "$cur")); return ;;
         --active) COMPREPLY=($(compgen -W "1 2 3 4 5" -- "$cur")); return ;;
-        --device) return ;;
+        --device | --args | --tid) return ;;
     esac
 
     if [[ $cur == -* ]]; then
-        COMPREPLY=($(compgen -W "--profile --layer --device --active --force --dry-run --yes" -- "$cur"))
+        COMPREPLY=($(compgen -W "--profile --layer --device --active --args --tid --force --dry-run --yes" -- "$cur"))
         return
     fi
 
@@ -35,7 +35,7 @@ _opensynapse() {
     local i cmd="" args=()
     for ((i = 1; i < cword; i++)); do
         case ${words[i]} in
-            --profile | --layer | --device | --active) ((i++)) ;;
+            --profile | --layer | --device | --active | --args | --tid) ((i++)) ;;
             -*) ;;
             *) if [[ -z $cmd ]]; then cmd=${words[i]}; else args+=("${words[i]}"); fi ;;
         esac

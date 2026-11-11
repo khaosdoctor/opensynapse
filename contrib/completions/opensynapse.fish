@@ -19,7 +19,7 @@ function __opensynapse_args
             continue
         end
         switch $w
-            case --profile --layer --device --active
+            case --profile --layer --device --active --args --tid
                 set skip 1
             case '-*'
             case '*'
@@ -60,7 +60,9 @@ complete -c opensynapse -l profile -x -a '0 1 2 3 4 5' -d 'profile slot'
 complete -c opensynapse -l layer -x -a 'normal hypershift' -d 'button layer'
 complete -c opensynapse -l device -x -d 'mouse PID, like 008d'
 complete -c opensynapse -l active -x -a '1 2 3 4 5' -d 'active DPI stage'
-complete -c opensynapse -l force -d 'overwrite an existing file'
+complete -c opensynapse -l args -x -d 'hex args for probe, like 004000'
+complete -c opensynapse -l tid -x -d 'transaction id for probe, like 0x3f'
+complete -c opensynapse -l force-d 'overwrite an existing file'
 complete -c opensynapse -l dry-run -d 'print the issue instead of opening it'
 complete -c opensynapse -l yes -d 'skip the confirmation'
 

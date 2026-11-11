@@ -21,26 +21,28 @@ The mouse talks through a 90-byte HID feature report, usually on USB interface 0
 
 | Offset | Field |
 |---|---|
-| 0 | status: `02` ok, `01` busy, `03` fail, `05` unsupported |
+| 0 | status: `00` when you send, `02` ok, `01` busy, `03` fail, `05` unsupported |
 | 1 | transaction id (`0x1f` on newer mice, older ones use `0xff` or `0x3f`) |
+| 2..4 | unused |
 | 5 | data size |
 | 6 | command class |
 | 7 | command id, bit `0x80` set means it's a read |
 | 8..87 | arguments |
 | 88 | XOR of bytes 2 to 87 |
+| 89 | unused |
 
-You send the report with `HIDIOCSFEATURE` and keep reading it back with `HIDIOCGFEATURE` until the status stops being busy. `opensynapse probe` already does all of this.
+You send the report with `HIDIOCSFEATURE` and keep reading it back with `HIDIOCGFEATURE` until the status stops being busy. opensynapse treats any status other than `01` and `02` as a rejected command. On Linux, hidraw wants one extra report id byte of `00` in front of the buffer, so you send 91 bytes. `opensynapse probe` already does all of this. [devices/protocols/README.md](devices/protocols/README.md#creating-a-report) has a worked example of the bytes.
 
 ## Finding things out
 
 Always start with reads. A read has the `0x80` bit set on the command id, and it doesn't change anything on the mouse, so you can try as many as you want.
 
-`ls -l /sys/class/hidraw/ | grep -i 1532:<pid>` shows which node is which: use the one whose path has `:1.0` (interface 0), or the interface `opensynapse init` printed.
+You only need a hidraw node when more than one Razer device is plugged in. `ls -l /sys/class/hidraw/ | grep -i 1532:<pid>` shows which node is which, use the one whose path has `:1.0` (interface 0), or the interface `opensynapse init` printed.
 
 1. **Find the class.** `opensynapse probe` tries every read command in classes `0x00` to `0x0f` and prints the ones that answer. With one Razer mouse plugged in it finds the right hidraw node and transaction id itself, like `init`, and prints which one it used. With more than one it lists them and you pass the node, like `opensynapse probe /dev/hidraw10`. It refuses to send anything that isn't a read, and it leaves the serial number out of its output. On the Naga the keymap is class `0x02`, DPI is `0x04` and serial/firmware are `0x00`, which seems to be common on newer Razer mice. When you pass a node, the probe sends transaction id `0x1f`. If the `firmware:` line doesn't say `status=ok`, pass the `transaction_id` in your device file with `--tid` (`opensynapse init` prints it), or try `--tid 0x3f` and `--tid 0xff` if you don't have one.
 2. **Look at what comes back with empty arguments.** Some reads answer right away (the Naga's `0x02/0x84` lists every button id), others need arguments.
-3. **Retry with arguments.** Some reads only show up once you pass arguments, usually a profile, a button and a layer: `opensynapse probe /dev/hidrawN 0x02 --args 004000` sends profile 0 (the live one, what `opensynapse dump` shows), button `0x40` (use a button id from the `0x84` list instead of `40`), layer 0 to every read in class `0x02`, and the `id 0x8c` line is that button's action.
-4. **Decode the answer against what you know.** If a thumb button sends `1` today and the reply ends in `1e`, that's the HID usage for `1`, so you found the key byte.
+3. **Retry with arguments.** Some reads only show up once you pass arguments, usually a profile, a button and a layer: `opensynapse probe 0x02 --args 004000` sends profile 0 (the live one, what `opensynapse dump` shows), button `0x40` (use a button id from the `0x84` list instead of `40`), layer 0 to every read in class `0x02`, and the `id 0x8c` line is that button's action.
+4. **Decode the answer against what you know.** If a thumb button sends `1` today and the reply ends in `1e`, that's the HID usage for `1`, so you found the key byte. [devices/protocols/README.md](devices/protocols/README.md#manual-reading) walks through this on a real reply.
 
 Only then try a write, with `opensynapse set` once you have a device file, and only on one button: `set` reads it back and errors if it didn't stick, then press the button and set it back to what it was.
 
@@ -54,7 +56,7 @@ Once your device file works (`opensynapse dump` shows the right buttons), you do
 opensynapse protocol
 ```
 
-That writes `devices/protocols/<slug>.md` (like `razer-naga-left-handed-2020.md`, see [the slug](CONTRIBUTING.md#adding-a-mouse), or `./<slug>.md` when you're not in the repo root), with everything it can know on its own: the USB ids, firmware, interface, transaction id, a table with every button id and what it does on each layer, and the DPI. It only reads from the mouse. Everything only you can know is marked `TODO`, fill those in.
+That writes `devices/protocols/<slug>.md` (like `razer-naga-left-handed-2020.md`, see [the slug](CONTRIBUTING.md#adding-a-mouse), or `./<slug>.md` when you're not in the repo root), with everything it can know on its own: the USB ids, firmware, interface, transaction id, a table with every button id and what it does on each layer, and the current DPI and stages. It only reads from the mouse. If the file already exists it stops, edit that file or pass `--force` to start over. Everything only you can know is marked `TODO`, fill those in. The generated file has the sections of the [template](#template) except the keymap commands, add those if you found them.
 
 When it's done, send it:
 
@@ -62,7 +64,7 @@ When it's done, send it:
 opensynapse protocol send
 ```
 
-That opens a GitHub issue on this repo with your protocol file and your device file, using the [GitHub CLI](https://cli.github.com/) as your user (it asks before posting, `--dry-run` shows you what it would send). If you don't have `gh`, it prints a link to open the issue by hand. If you'd rather open a PR, see [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-mouse).
+That opens a GitHub issue on this repo with your protocol file and your device file, using the [GitHub CLI](https://cli.github.com/) as your user (it asks before posting, `--dry-run` shows you what it would send). `--yes` skips the question. If you don't have `gh`, it prints a link to open the issue by hand. When a maintainer labels the issue, a bot opens the PR that adds your mouse. If you'd rather open a PR yourself, see [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-mouse). [devices/protocols/README.md](devices/protocols/README.md) shows what to do with a finished file.
 
 ## Template
 
@@ -80,8 +82,8 @@ How you found it: probing on Linux, a USB capture of Synapse, etc.
 - [Transport](#transport)
 - [Keymap commands](#keymap-commands)
 - [Button ids](#button-ids)
+- [DPI](#dpi)
 - [Action encoding](#action-encoding)
-- [DPI and other commands](#dpi-and-other-commands)
 - [Unknowns](#unknowns)
 
 ## Transport
@@ -99,12 +101,14 @@ Interface, transaction id, anything that's different from the common frame in PR
 | Id | Button |
 |---|---|
 
+## DPI
+
+The current DPI and stages, and anything that's different from the Naga's DPI commands.
+
 ## Action encoding
 
 | Type | Bytes | Meaning |
 |---|---|---|
-
-## DPI and other commands
 
 ## Unknowns
 
@@ -142,8 +146,9 @@ Rules:
   Unknowns.
 
 Steps:
-1. Find the /dev/hidraw node for the interface in my device file
-   (`ls -l /sys/class/hidraw/`).
+1. `opensynapse probe` finds the mouse itself when only one Razer device is
+   plugged in. If there are more, find the /dev/hidraw node for the interface
+   in my device file (`ls -l /sys/class/hidraw/`) and pass it to probe.
 2. Run `opensynapse probe` over classes 0x00 to 0x0f and note which reads answer.
 3. Read the button list (0x02/0x84), then run `opensynapse probe` on class 0x02
    with --args <profile><button><layer> and read the id 0x8c line for what

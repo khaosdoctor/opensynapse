@@ -15,7 +15,7 @@ usage: opensynapse <command> [--profile N] [--layer NAME] [--device PID]
 
 commands:
   init [pid] [file.jsonc]      start a device file for a mouse that doesn't have one (read-only)
-  probe /dev/hidrawN [class ...] [--args HEX] [--tid HEX]
+  probe [/dev/hidrawN] [class ...] [--args HEX] [--tid HEX]
                                send every read command of each class (default 0x00-0x0f)
                                and print the ones that answer (read-only, tid defaults to 0x1f)
   list                         connected mice and their buttons
@@ -268,13 +268,13 @@ fn init(args: &[&str], force: bool) -> Result<(), Box<dyn Error>> {
 /// Sends every read command (id 0x80 to 0xff) of each class to a hidraw node and
 /// prints the ones that answer, for mice without a device file yet.
 fn probe(args: &[&str]) -> Result<(), Box<dyn Error>> {
-    let Some((path, rest)) = args.split_first() else {
-        return Err("usage: opensynapse probe /dev/hidrawN [class ...] [--args HEX] [--tid HEX]".into());
+    let (path, rest) = match args.split_first() {
+        Some((p, rest)) if p.starts_with('/') => (Some(*p), rest),
+        _ => (None, args),
     };
     let mut classes: Vec<u8> = Vec::new();
     let mut cmd_args: Vec<u8> = Vec::new();
-    // the transaction id most newer Razer mice take
-    let mut tid = 0x1f;
+    let mut tid = None;
     let mut it = rest.iter();
     while let Some(a) = it.next() {
         match *a {
@@ -284,7 +284,7 @@ fn probe(args: &[&str]) -> Result<(), Box<dyn Error>> {
             }
             "--tid" => {
                 let hex = it.next().ok_or("--tid needs a transaction id, like 0x3f")?;
-                tid = u8::from_str_radix(hex.trim_start_matches("0x"), 16).map_err(|_| format!("bad --tid '{hex}', use hex like 0x3f"))?;
+                tid = Some(u8::from_str_radix(hex.trim_start_matches("0x"), 16).map_err(|_| format!("bad --tid '{hex}', use hex like 0x3f"))?);
             }
             c => classes.push(parse_byte(c).ok_or(format!("bad class '{c}', use hex like 0x02"))?),
         }
@@ -297,7 +297,11 @@ fn probe(args: &[&str]) -> Result<(), Box<dyn Error>> {
         classes = (0x00..0x10).collect();
     }
 
-    let hid = hid::Hid::open(Path::new(path), tid).map_err(|e| format!("{path}: {e}"))?;
+    let hid = match path {
+        // the transaction id most newer Razer mice take
+        Some(path) => hid::Hid::open(Path::new(path), tid.unwrap_or(0x1f)).map_err(|e| format!("{path}: {e}"))?,
+        None => find_probe_target(tid)?,
+    };
     let get = |class: u8, id: u8, args: &[u8]| {
         // only GET commands, the ones with bit 0x80 set, so probing can't change the mouse
         if id & 0x80 == 0 {
@@ -322,6 +326,28 @@ fn probe(args: &[&str]) -> Result<(), Box<dyn Error>> {
         }
     }
     Ok(())
+}
+
+/// With no path we find the control interface and transaction id the way `init`
+/// does, but only when there's one Razer device, we don't guess between mice.
+fn find_probe_target(tid: Option<u8>) -> Result<hid::Hid, Box<dyn Error>> {
+    let devices = hid::razer_devices();
+    let [(pid, name)] = devices.as_slice() else {
+        if devices.is_empty() {
+            return Err("no Razer mouse found, is it plugged in?".into());
+        }
+        let mut list = String::new();
+        for (pid, name) in &devices {
+            let nodes: Vec<String> = hid::find_all(0x1532, *pid).iter().map(|(_, p)| p.display().to_string()).collect();
+            list += &format!("\n  1532:{pid:04x} {name}: {}", nodes.join(" "));
+        }
+        return Err(format!("more than one Razer device, pass the hidraw node to probe:{list}").into());
+    };
+    let (hid, iface, found_tid) = scaffold::connect(*pid)?;
+    let path = hid::find(0x1532, *pid, iface).ok_or("the mouse went away")?;
+    println!("using {} ({name}, 1532:{pid:04x}, interface {iface}, tid 0x{found_tid:02x})", path.display());
+    let Some(tid) = tid else { return Ok(hid) };
+    Ok(hid::Hid::open(&path, tid)?)
 }
 
 /// A byte as hex with 0x (0x02) or decimal (2), like Python's int(x, 0).

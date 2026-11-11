@@ -57,7 +57,7 @@ fn open(pid: u16, iface: u8, tid: u8) -> io::Result<Hid> {
 /// reads. Sending to the wrong interface can reset some mice, so we only try
 /// the ones whose descriptor has the 90-byte Razer report. When none of them
 /// has it we try every interface in order.
-fn connect(pid: u16) -> io::Result<(Hid, u8, u8)> {
+pub fn connect(pid: u16) -> io::Result<(Hid, u8, u8)> {
     let all = hid::find_all(RAZER, pid);
     if all.is_empty() {
         return Err(io::Error::other(format!("no hidraw node for 1532:{pid:04x}, is it plugged in?")));

@@ -61,9 +61,13 @@ fn new_theme_dialog(ctx: &egui::Context) {
                 return;
             }
             match create_theme(&name) {
-                Ok(()) => {
+                Ok(file) => {
                     *write(&THEMES) = scan();
                     close = true;
+                    // straight into whatever editor the desktop uses for .css
+                    if let Err(e) = std::process::Command::new("xdg-open").arg(&file).spawn() {
+                        eprintln!("could not open {}: {e}", file.display());
+                    }
                 }
                 Err(e) => failed = Some(e),
             }
@@ -74,7 +78,7 @@ fn new_theme_dialog(ctx: &egui::Context) {
 
 /// Copies the default theme to themes/<name>.css. The name becomes the file name
 /// and the button, so we keep it to letters, digits, - and _.
-fn create_theme(name: &str) -> Result<(), String> {
+fn create_theme(name: &str) -> Result<PathBuf, String> {
     let name = name.trim().to_lowercase();
     if name.is_empty() {
         return Err("give the theme a name".into());
@@ -86,7 +90,8 @@ fn create_theme(name: &str) -> Result<(), String> {
     if file.exists() {
         return Err(format!("{} already exists", file.display()));
     }
-    device::write(&file, BUILTIN[0].1).map_err(|e| format!("could not write {}: {e}", file.display()))
+    device::write(&file, BUILTIN[0].1).map_err(|e| format!("could not write {}: {e}", file.display()))?;
+    Ok(file)
 }
 
 pub(super) fn config(name: &str) -> Option<PathBuf> {

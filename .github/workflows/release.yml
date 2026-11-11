@@ -47,6 +47,8 @@ jobs:
         with:
           ref: ${{ env.TAG }}
           persist-credentials: false
+          # git-cliff needs the tags and commits since the last release
+          fetch-depth: 0
 
       # A tag that doesn't match Cargo.toml would publish a package whose
       # binary reports a different version, so stop before releasing anything.
@@ -124,13 +126,21 @@ jobs:
           chmod +x appimagetool
           ARCH=${{ matrix.arch }} APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool "$a" "OpenSynapse-${TAG#v}-${{ matrix.arch }}.AppImage"
 
+      # we push to main without PRs, so GitHub's generated notes would be empty.
+      # git-cliff groups the conventional commits since the last tag instead
+      - uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        with:
+          args: --latest --strip header
+        env:
+          OUTPUT: notes.md
+
       - name: attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           # both architectures race to create the release, the loser just uploads
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --generate-notes || true
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --notes-file notes.md || true
           gh release upload "$TAG" --clobber opensynapse-*.tar.gz opensynapse_*.deb OpenSynapse-*.AppImage
 
   aur:

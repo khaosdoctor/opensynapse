@@ -13,6 +13,7 @@
 //! are ignored, so anything outside a `prefers-color-scheme` block counts for
 //! both modes.
 
+use crate::shared::widgets;
 use eframe::egui::{self, Color32, CornerRadius, FontData, FontFamily, FontId, RichText, Stroke, Theme};
 use opensynapse::device;
 use serde::{Deserialize, Serialize};
@@ -193,21 +194,21 @@ fn save(ctx: &egui::Context, s: Settings) {
 
 pub fn settings_ui(ui: &mut egui::Ui) {
     let s = read(&SETTINGS).clone();
-    super::heading(ui, "MODE");
+    widgets::heading(ui, "MODE");
     ui.horizontal(|ui| {
         for (m, label, tip) in [
             (Mode::System, "SYSTEM", "follow the desktop's light or dark setting"),
             (Mode::Light, "LIGHT", "always light"),
             (Mode::Dark, "DARK", "always dark"),
         ] {
-            if super::toggle_button(ui, label, s.mode == m).on_hover_text(tip).clicked() && s.mode != m {
+            if widgets::toggle_button(ui, label, s.mode == m).on_hover_text(tip).clicked() && s.mode != m {
                 save(ui.ctx(), Settings { mode: m, ..s.clone() });
             }
         }
     });
 
     ui.add_space(16.0);
-    super::heading(ui, "THEME");
+    widgets::heading(ui, "THEME");
     let ids: Vec<(String, String)> = read(&THEMES)
         .iter()
         .map(|th| (th.id.clone(), th.path.as_ref().map_or("built in".into(), |p| p.display().to_string())))
@@ -215,22 +216,22 @@ pub fn settings_ui(ui: &mut egui::Ui) {
     let current = theme_css(&s.theme).0;
     ui.horizontal_wrapped(|ui| {
         for (id, from) in ids {
-            if super::toggle_button(ui, &id.to_uppercase(), id == current).on_hover_text(from).clicked() && id != current {
+            if widgets::toggle_button(ui, &id.to_uppercase(), id == current).on_hover_text(from).clicked() && id != current {
                 save(ui.ctx(), Settings { theme: id, ..s.clone() });
             }
         }
     });
     let dir = config("themes").map(|d| d.display().to_string()).unwrap_or_default();
     ui.horizontal(|ui| {
-        if super::tall(ui, super::outline("RELOAD", t().accent)).on_hover_text("read the themes folder and theme.css again").clicked() {
+        if widgets::tall(ui, widgets::outline("RELOAD", t().accent)).on_hover_text("read the themes folder and theme.css again").clicked() {
             *write(&THEMES) = scan();
             apply(ui.ctx());
         }
-        super::note(ui, format!("add .css themes to {dir}"));
+        widgets::note(ui, format!("add .css themes to {dir}"));
     });
 
     ui.add_space(16.0);
-    super::heading(ui, "FONT");
+    widgets::heading(ui, "FONT");
     if read(&FONTS).is_empty() {
         *write(&FONTS) = system_fonts();
     }

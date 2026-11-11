@@ -103,14 +103,22 @@ jobs:
           dpkg-deb --root-owner-group --build "$r" "opensynapse_${TAG#v}_${{ matrix.deb }}.deb"
 
       # The AppImage runs the GUI. The udev rule can't come with it, so users
-      # install that by hand like a cargo install.
+      # install that by hand like a cargo install. winit dlopens xkbcommon, which
+      # isn't on every system, so it ships inside and AppRun points the loader at it.
       - name: AppImage
         run: |
           a=AppDir
           install -Dm755 -t "$a/usr/bin" target/release/opensynapse target/release/opensynapse-gui
           cp assets/opensynapse.desktop assets/icon.svg "$a/"
           mv "$a/icon.svg" "$a/opensynapse.svg"
-          ln -s usr/bin/opensynapse-gui "$a/AppRun"
+          sudo apt-get install -y --no-install-recommends libxkbcommon0 libxkbcommon-x11-0 libxcb-xkb1
+          lib=/usr/lib/$(uname -m)-linux-gnu
+          install -Dm644 -t "$a/usr/lib" "$lib/libxkbcommon.so.0" "$lib/libxkbcommon-x11.so.0" "$lib/libxcb-xkb.so.1"
+          printf '%s\n' '#!/bin/sh' \
+            'here="$(dirname "$(readlink -f "$0")")"' \
+            'export LD_LIBRARY_PATH="$here/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"' \
+            'exec "$here/usr/bin/opensynapse-gui" "$@"' > "$a/AppRun"
+          chmod +x "$a/AppRun"
           curl -sSfLo appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-${{ matrix.arch }}.AppImage
           echo "${{ matrix.appimagetool }}  appimagetool" | sha256sum -c
           chmod +x appimagetool

@@ -37,7 +37,7 @@ Everything here ends up as bytes on a real device, and a wrong write can leave a
 | `src/generators/protocol.rs` | writes `devices/protocols/<slug>.md` for `opensynapse protocol` |
 | `src/main.rs` | the CLI, including `probe` for raw read-only probing of a hidraw node |
 | `src/bin/opensynapse-gui/` | the GUI, see below |
-| `src/bin/device-from-issue.rs` | turns an issue from `protocol send` into `devices/<slug>.jsonc` and its protocol file for `add-device.yml`. The packages only ship `opensynapse` and `opensynapse-gui` |
+| `examples/device-from-issue.rs` | turns an issue from `protocol send` into `devices/<slug>.jsonc` and its protocol file for `add-device.yml`. It's an example so `cargo install` and the packages never ship it |
 | `devices/*.jsonc` | one file per supported mouse, `devices/protocols/*.md` documents what was found |
 | `themes/*.css` | built-in GUI themes, `opensynapse.css` lists every property |
 | `udev/` | the rule that lets your user open the mouse without root |

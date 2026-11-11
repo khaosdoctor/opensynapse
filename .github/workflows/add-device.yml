@@ -24,7 +24,7 @@ jobs:
       # the issue body is untrusted, it only goes through device-from-issue as data,
       # which checks the device file with the app's own parser before writing it
       - id: files
-        run: cargo run --locked --release --bin device-from-issue -- "$GITHUB_EVENT_PATH" >> "$GITHUB_OUTPUT"
+        run: cargo run --locked --release --example device-from-issue -- "$GITHUB_EVENT_PATH" >> "$GITHUB_OUTPUT"
 
       - name: check the device file parses
         run: cargo test --locked

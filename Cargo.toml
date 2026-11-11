@@ -9,6 +9,11 @@ license = "GPL-2.0-or-later"
 name = "opensynapse-gui"
 required-features = ["gui"]
 
+# only add-device.yml runs it, as an example so `cargo install` doesn't put it on people's PATH
+[[example]]
+name = "device-from-issue"
+test = true
+
 [dependencies]
 eframe = { version = "0.37.0", optional = true }
 libc = "0.2.191"

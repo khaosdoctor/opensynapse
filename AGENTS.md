@@ -77,7 +77,7 @@ The GUI is split by job, and every file stays under 500 lines:
 | `shared/widgets.rs` | every styled widget. Views ask it for a button or a panel and never pick colors themselves |
 | `theme/` | palette, the CSS parser, settings.json and the theme list, light/dark detection through xdg-desktop-portal |
 
-If something is used by one module it lives there, once two modules use it, it moves to `shared/`.
+If something is used by one module it stays in that module, once two modules use it, it moves to `shared/`.
 
 ## How devices and themes load
 

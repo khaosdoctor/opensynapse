@@ -1,6 +1,11 @@
 # Writing a protocol file
 
-Every mouse in opensynapse has two files: the device file in [`devices/`](devices/) that the app reads, and a protocol file in [`devices/protocols/`](devices/protocols/) with the same name, where you write down what you found out about the mouse and how. The app never reads the protocol file, it's for the next person (or agent) who needs to know why the device file looks the way it does, or who has a similar mouse and wants a head start.
+To read and write from a mouse we need a protocol, in OpenSynapse this protocol is defined in two files:
+
+- The device file in [`devices/`](devices/) that the app reads, which `opensynapse init` starts for you. It has the USB ids, the interface, the transaction id, the profiles and layers, the max DPI and every button id with its name. This file is used by the app to know how to talk to the mouse.
+- There's a protocol file in [`devices/protocols/`](devices/protocols/) with the same name, where you write down what you found out about the mouse and how. The app never reads the protocol file, it's for the next person (or agent) who needs to know why the device file looks like that, or who has a similar mouse and wants a head start building something else.
+
+> The protocol markdown file is purely so we could share the information with other people. One of my goals with this project is to also categorize and document protocols for other Razer mice, so that if someone wants to add support for a new mouse, they can do it without having to reverse engineer the protocol themselves. The protocol file is also useful for debugging and understanding how the device works.
 
 If you're adding a mouse, write one. The [Naga Left-Handed 2020 file](devices/protocols/razer-naga-left-handed-2020.md) is a complete example.
 
@@ -31,9 +36,32 @@ The mouse talks through a 90-byte HID feature report, usually on USB interface 0
 | 88 | XOR of bytes 2 to 87 |
 | 89 | unused |
 
-You send the report with `HIDIOCSFEATURE` and keep reading it back with `HIDIOCGFEATURE` until the status stops being busy. opensynapse treats any status other than `01` and `02` as a rejected command. On Linux, hidraw wants one extra report id byte of `00` in front of the buffer, so you send 91 bytes. `opensynapse probe` already does all of this. [devices/protocols/README.md](devices/protocols/README.md#creating-a-report) has a worked example of the bytes.
+The same layout as a diagram, each square is one bit:
+
+```mermaid
+---
+title: Razer 90-byte feature report
+config:
+  packet:
+    bitsPerRow: 64
+---
+packet-beta
+0-7: "status"
+8-15: "transaction id"
+16-39: "unused"
+40-47: "data size"
+48-55: "class"
+56-63: "command id"
+64-703: "arguments, 80 bytes"
+704-711: "XOR of bytes 2 to 87"
+712-719: "unused"
+```
+
+You send the report with `HIDIOCSFEATURE` and keep reading it back with `HIDIOCGFEATURE` until the status stops being busy. OpenSynapse treats any status other than `01` and `02` as a rejected command. On Linux, hidraw wants one extra report id byte of `00` in front of the buffer, so you send 91 bytes. `opensynapse probe` already does all of this. [devices/protocols/README.md](devices/protocols/README.md#creating-a-report) has a worked example of the bytes.
 
 ## Finding things out
+
+This is where you work out what goes in your protocol file. You'll find which command class and ids your mouse answers on, what arguments each one takes, which id is which button and how an action is written in bytes. That's what fills the command, button and action tables, like the ones in the [Naga file](devices/protocols/razer-naga-left-handed-2020.md).
 
 Always start with reads. A read has the `0x80` bit set on the command id, and it doesn't change anything on the mouse, so you can try as many as you want.
 

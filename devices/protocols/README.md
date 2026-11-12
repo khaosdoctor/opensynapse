@@ -1,13 +1,15 @@
 # Protocol files
 
-Each file here is what we found out about one mouse by talking to it. It lists the transport, the commands, the button ids and how a button's action is encoded in bytes. The app doesn't read these files, they're for you, so you can check what a mouse does, try things by hand, or build something of your own on top of it.
+Each file here is what people found out about one mouse by sending it commands. It lists the transport, the commands, the button ids and how a button's action is encoded in bytes. The app doesn't read these files, it's mainly for other people like me who want to add support for a new mouse without having to reverse engineer the protocol themselves. The protocol file is also useful for debugging and understanding how the device works.
+
+> Expand the list below if you add yours
 
 | Mouse | Protocol | Device file |
 |---|---|---|
 | Razer Naga Left-Handed Edition 2020 | [razer-naga-left-handed-2020.md](razer-naga-left-handed-2020.md) | [../razer-naga-left-handed-2020.jsonc](../razer-naga-left-handed-2020.jsonc) |
 | Razer Naga X | [razer-naga-x.md](razer-naga-x.md) | [../razer-naga-x.jsonc](../razer-naga-x.jsonc) |
 
-The part that's the same on every Razer mouse, the 90-byte report and its checksum, is in [PROTOCOL.md](../../PROTOCOL.md#whats-the-same-on-every-razer-mouse). How to write a new file is in [PROTOCOL.md](../../PROTOCOL.md#finding-things-out) too.
+The part that's the same on every Razer mouse is in [PROTOCOL.md](../../PROTOCOL.md#whats-the-same-on-every-razer-mouse). How to write a new file is in [PROTOCOL.md](../../PROTOCOL.md#finding-things-out) too.
 
 ## Contents
 
@@ -19,13 +21,13 @@ The part that's the same on every Razer mouse, the 90-byte report and its checks
 
 ## Manual reading
 
-Every read is safe, it can't change anything on the mouse. The Naga file says the keymap is class `0x02` and that `0x8c` reads one button with the args `[profile, button, layer]`. So to read thumb1 (`0x40`) on the live profile `0` and the normal layer `0`:
+To start it out we read stuff, it's safe, it can't change anything on the mouse. The Naga file, for example, has the keymap which says the class is `0x02` and that `0x8c` reads one button with the args `[profile, button, layer]`. So, to read thumb1 (`0x40`) on the live profile `0` and the normal layer `0` we would run:
 
 ```sh
 opensynapse probe 0x02 --args 004000
 ```
 
-With one Razer mouse plugged in, `probe` finds the right hidraw node by itself. On a Naga Left-Handed this prints, among the other reads of the class:
+With one Razer mouse plugged in, `probe` finds the right hidraw node by itself. In the Naga LE, this prints, among the other reads of the class:
 
 ```text
 using /dev/hidraw10 (Razer Naga Left Handed Edition, 1532:008d, interface 0, tid 0x1f)
@@ -33,22 +35,37 @@ firmware: status=ok v1.0
 class 0x02 id 0x8c size= 10 data=0040000202001e
 ```
 
-The reply starts by echoing the args, `00 40 00`, and the rest is the action, `02 02 00 1e`. The action encoding table in the Naga file says `02` is a keyboard key, `02` more bytes follow, `00` means no modifier and `1e` is the HID usage for `1`. So thumb1 types `1`, which is what `opensynapse get thumb1` shows:
+The reply starts by echoing the args, `00 40 00`, and the rest is the action, `02 02 00 1e`. To decode this we need the encoding table.
+
+The action encoding table in the Naga file says `02` is a keyboard key. So this is a keyboard key action (if we press it, it will press a key on the keyboard), then `02` means there are 2 more bytes to be read (`00` and `1e`). `00` means no modifier (so, a simple key press, no `ctrl` or similar) and `1e` is the HID usage for `1`. So, pressing `thumb1` types `1`, which is what `opensynapse get thumb1` shows:
 
 ```sh
 opensynapse get thumb1
 # key:1
 ```
 
+So, the bytes are defined:
+
+```text
+02 02 00 1e
+^  ^  ^  ^
+|  |  |  +-- the key, 1 in this case
+|  |  +----- the modifier, 00 for none
+|  +-------- number of bytes after this
++----------- the type, 02 for keyboard key
+```
+
+> You can figure out these actions by reading the [PROTOCOL.md](../../PROTOCOL.md#finding-things-out) section, or by reading the [Naga Left-Handed 2020 file](razer-naga-left-handed-2020.md) which has the full table. But the actions are not 100% certain to be the same on every mouse, so if you want to be sure, read the button and see what it does. It's really a trial and error process, this is why it's called **reverse** engineering
+
 ## Explanation on the bytes
 
-Every action in a protocol file has a matching action you can pass to `opensynapse set`:
+Every action in a protocol file has a matching action you can pass to `opensynapse set`, up to now, these are some examples that we have discovered:
 
 | Bytes | Action |
 |---|---|
 | `02 02 00 1e` | `key:1` |
 | `02 02 01 06` | `key:ctrl+c`, `01` is the ctrl bit and `06` is `c` |
-| `01 01 04` | `mouse:back` |
+| `01 01 04` | `mouse:back`, the second `01` says there's only one more byte after it, the `04` |
 | `0a 02 00 cd` | `media:playpause` |
 | `06 01 01` | `dpi:up` |
 | `07 01 04` | `profile:next-wrap` |
@@ -68,16 +85,16 @@ A write changes the mouse, so do it on one button and keep a way back:
 
 ```sh
 opensynapse export before.json         # everything on the live profile, all layers
-opensynapse set thumb1 key:f13         # set reads it back and fails if it didn't stick
+opensynapse set thumb1 key:f13         # setting something also reads it back and errors out if it wasn't persisted
 opensynapse get thumb1                 # key:f13
 timeout 20 opensynapse watch           # press thumb1, check it really sends F13
-opensynapse import before.json         # put everything back
+opensynapse import before.json         # writes the backup back
 ```
 
-Profile `0` is the live one and is lost when you unplug the mouse, so it's the safe one to try things on. Pass `--profile 1` to write the profile the mouse keeps.
+Profile `0` is the live one and is lost when you unplug the mouse (verified on the Naga), so it's the safe one to try things on. In any case, back things up before trying them out. Pass `--profile 1` to write the profile the mouse keeps.
 
 > [!WARNING]
-> A write that reads back fine doesn't prove anything. The Naga stores almost any byte you send without checking it, so only pressing the button tells you the encoding really works.
+> Writing and reading it back without errors doesn't prove anything. The Naga stores almost any byte you send without checking it, which means it stores invalid ones too... So the only real test is to actually press the button.
 
 ## Using it from Rust
 
@@ -88,7 +105,7 @@ The CLI and the GUI are built on a library you can use too. Add it to your `Carg
 opensynapse = { git = "https://github.com/khaosdoctor/opensynapse" }
 ```
 
-Then send the same read as above. `command` takes the class, the command id, the data size from the protocol file and the args, and returns the whole 90-byte reply:
+Then send the same read as above. `command` takes the class, the command id, the data size from the protocol file and the args. It returns the whole 90-byte response:
 
 ```rust
 use opensynapse::action::Action;
@@ -113,7 +130,7 @@ fn main() -> std::io::Result<()> {
 
 ## Creating a report
 
-If you're not using Rust, here's the read above as the 90 bytes you send with the `HIDIOCSFEATURE` ioctl on the hidraw node:
+If you're not using Rust, there's this table which is the read above as the 90 bytes you send with the `HIDIOCSFEATURE` ioctl on the hidraw node:
 
 | Byte | Value | Field |
 |---|---|---|

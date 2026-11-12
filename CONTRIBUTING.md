@@ -2,6 +2,8 @@
 
 I only have one Razer mouse, so every other model depends on someone who owns it sending a device file. If you have a Razer mouse that isn't in [`devices/`](devices/), please add it, it's mostly writing a JSONC file and testing it on your own mouse.
 
+Please send the protocol file along with it too. One of the goals of this project is to document these protocols, mouse by mouse, so nobody has to reverse engineer the same thing twice, and the [protocol files](devices/protocols/) are where we keep them. Even if you couldn't make your mouse work, what you found out is still super useful.
+
 Bug fixes and features are welcome too, open an issue first if it's something big so we can talk about it.
 
 If you're working on lighting, the polling rate, the battery or presets, you don't need a mouse that supports them. `scripts/fake-devices.sh` gives you OpenRazer's fake devices in a shell, and [Testing without a mouse](AGENTS.md#testing-without-a-mouse) explains what works there.

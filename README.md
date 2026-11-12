@@ -28,6 +28,8 @@ Razer doesn't ship Synapse for Linux, to change the keybinds we can use keyd and
 
 This is the reverse engineered version of the Synapse protocol handling. It maps out how the mouse stores its keymap (the details are in [`devices/protocols/`](devices/protocols/razer-naga-left-handed-2020.md)). It talks to the mouse directly, so the mapping is saved on the mouse itself and works in any computer, this is a single Rust binary either so you can probably build for whatever OS you have.
 
+One of the goals here is also to document these protocols, mouse by mouse, so nobody has to reverse engineer the same thing twice. If you want to build your own tool, or add a mouse to something else, the [protocol files](devices/protocols/) have what we found and how to use it, with commands and code examples.
+
 Right now you can:
 
 - Remap any button to a key (with modifiers), a mouse button, a media key, DPI up/down or a DPI stage, switching profiles, Hypershift or disable it.

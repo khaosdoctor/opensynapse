@@ -93,10 +93,10 @@ impl App {
         let rect = egui::Rect::from_min_size(egui::pos2(left, top), egui::vec2(w, w / 1.6));
         let at = |x: f32, y: f32| rect.min + egui::vec2(rect.width() * x / 100.0, rect.height() * y / 100.0);
         let p = ui.painter_at(rect);
-        // yellow outline while editing the Hypershift (or any non-default) layer
+        // Hypershift-colored outline while editing the Hypershift (or any non-default) layer
         let outline = match self.layer {
             0 => t().accent2,
-            _ => t().warn,
+            _ => t().hypershift,
         };
 
         let marker = |i: usize| {

@@ -37,7 +37,7 @@ Only custom properties are read. Anything outside a `prefers-color-scheme` block
 }
 ```
 
-[`themes/opensynapse.css`](../themes/opensynapse.css) lists every property.
+[`themes/opensynapse.css`](../themes/opensynapse.css) lists every property. `--hypershift` is the color of the Hypershift layer, and a theme that leaves it out uses its `--warn`.
 
 ## Small changes
 

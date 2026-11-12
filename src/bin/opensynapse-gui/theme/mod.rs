@@ -62,6 +62,22 @@ pub fn t() -> Palette {
     *read(&CURRENT)
 }
 
+/// Runs `f` with both accents set to --hypershift, so the mouse and the editor tell
+/// the Hypershift layer apart from the normal one at a glance.
+pub fn tinted<R>(on: bool, f: impl FnOnce() -> R) -> R {
+    if !on {
+        return f();
+    }
+    let saved = t();
+    {
+        let mut p = write(&CURRENT);
+        (p.accent, p.accent2) = (p.hypershift, p.hypershift);
+    }
+    let r = f();
+    *write(&CURRENT) = saved;
+    r
+}
+
 /// Phosphor icons, look the codepoints up on https://phosphoricons.com
 pub fn icon(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name("icons".into()))
@@ -96,6 +112,7 @@ pub fn apply(ctx: &egui::Context) {
     }
     let mut p = style.p;
     p.pane = style.pane.unwrap_or(p.bg.lerp_to_gamma(p.panel, 0.5));
+    p.hypershift = style.hypershift.unwrap_or(p.warn);
     *write(&CURRENT) = p;
     RADIUS.store(style.radius, Ordering::Relaxed);
     let radius = radius();

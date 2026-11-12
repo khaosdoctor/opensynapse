@@ -7,6 +7,8 @@ pub(super) struct Style {
     pub(super) font: String,
     /// None until a theme sets --pane, then apply works it out from bg and panel
     pub(super) pane: Option<Color32>,
+    /// None until a theme sets --hypershift, then apply uses --warn
+    pub(super) hypershift: Option<Color32>,
 }
 
 /// `color-scheme: light` or `dark` in theme.css, for desktops that don't
@@ -69,6 +71,10 @@ fn set(style: &mut Style, decl: &str) {
         }
         "--pane" => {
             style.pane = color().or(style.pane);
+            return;
+        }
+        "--hypershift" => {
+            style.hypershift = color().or(style.hypershift);
             return;
         }
         "--bg" => &mut p.bg,
@@ -157,7 +163,7 @@ mod tests {
         let unset = Color32::from_rgb(0x12, 0x34, 0x56);
         for (id, css) in BUILTIN {
             for light in [false, true] {
-                let mut style = Style { p: uniform(unset), radius: 0, font: String::new(), pane: None };
+                let mut style = Style { p: uniform(unset), radius: 0, font: String::new(), pane: None, hypershift: None };
                 parse(css, light, &mut style);
                 let p = style.p;
                 let colors = [
@@ -166,6 +172,7 @@ mod tests {
                 ];
                 let missing = colors.iter().filter(|c| **c == unset).count();
                 assert_eq!(missing, 0, "{id} (light: {light}) leaves {missing} colors unset");
+                assert!(style.hypershift.is_some_and(|h| h != p.accent && h != p.accent2), "{id} (light: {light}) has no distinct --hypershift");
                 assert!(!style.font.is_empty(), "{id} has no --font");
             }
         }
@@ -189,7 +196,7 @@ mod tests {
         ];
         for css in broken {
             let s = parsed(css, false);
-            assert!(s.p == dark.p && s.radius == dark.radius && s.pane == dark.pane, "{css}");
+            assert!(s.p == dark.p && s.radius == dark.radius && s.pane == dark.pane && s.hypershift == dark.hypershift, "{css}");
         }
         assert_eq!(forced_scheme(":root { color-scheme: Light }"), None);
         assert_eq!(forced_scheme("color-scheme"), None);

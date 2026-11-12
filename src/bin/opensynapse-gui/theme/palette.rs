@@ -22,6 +22,8 @@ pub struct Palette {
     pub accent: Color32,
     pub accent2: Color32,
     pub warn: Color32,
+    /// what the Hypershift layer is drawn in, apart from `warn` because in some themes warn looks like an accent
+    pub hypershift: Color32,
     pub muted: Color32,
     pub error: Color32,
     pub ok: Color32,
@@ -35,14 +37,16 @@ pub struct Palette {
 pub(super) const fn uniform(c: Color32) -> Palette {
     Palette {
         bg: c, panel: c, card: c, pane: c, deep: c, button: c, border: c, text: c, strong: c,
-        on_accent: c, accent: c, accent2: c, warn: c, muted: c, error: c, ok: c, off: c, hover: c,
+        on_accent: c, accent: c, accent2: c, warn: c, hypershift: c, muted: c, error: c, ok: c, off: c, hover: c,
     }
 }
 
 /// Every theme goes on top of themes/opensynapse.css, so a theme file can skip properties.
 pub(super) fn base(light: bool) -> Style {
-    let mut style = Style { p: uniform(Color32::BLACK), radius: 0, font: String::new(), pane: None };
+    let mut style = Style { p: uniform(Color32::BLACK), radius: 0, font: String::new(), pane: None, hypershift: None };
     parse(BUILTIN[0].1, light, &mut style);
+    // the default theme's yellow must not stand in for a theme that leaves --hypershift out, that one falls back to its own --warn
+    style.hypershift = None;
     style
 }
 

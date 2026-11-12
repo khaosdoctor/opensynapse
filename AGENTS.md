@@ -38,6 +38,8 @@ The first run downloads the OpenRazer release that matches your `openrazer-daemo
 
 The script sets `OPENSYNAPSE_OPENRAZER_TEST` to the fake devices' folder. Debug builds then list only those devices, read lighting from that folder instead of `/sys/bus/hid/drivers`, keep presets and other config inside it, and send nothing over hidraw. Release builds don't have any of this. Buttons and DPI need hidraw, so on a fake device they fail with "fake OpenRazer devices have no hidraw node". Test those on a real mouse.
 
+Debug builds also read `OPENSYNAPSE_NO_PROFILES`. When it is set, the GUI treats the mouse as if it didn't answer the profile commands, so you can try the presets on a mouse that has onboard profiles.
+
 ## Where things are
 
 | Path | What's in it |
@@ -46,7 +48,7 @@ The script sets `OPENSYNAPSE_OPENRAZER_TEST` to the fake devices' folder. Debug 
 | `src/hid.rs` | the 90-byte Razer feature report over hidraw, and finding the right interface |
 | `src/action.rs` | what a button does and how it's encoded on the wire |
 | `src/device.rs` | device files, the config folder, the JSON helpers everything else uses, and the commands for buttons, DPI and stored profiles |
-| `src/profile.rs` | profile export/import files and profile names, which only exist on this computer |
+| `src/profile.rs` | profile export/import files, profile names, which only exist on this computer, and the paths of the presets and the active preset |
 | `src/input.rs` | which buttons are held right now, for `watch` and the GUI highlights |
 | `src/rgb.rs` | lighting through the OpenRazer driver and daemon, we don't reverse engineer lighting |
 | `src/power.rs` | polling rate, battery and sleep timeout through the OpenRazer daemon |
@@ -72,6 +74,7 @@ The GUI is split by job, and every file stays under 500 lines:
 | `lib/remapper.rs` | the REMAP editor, action types and key lists |
 | `lib/lighting.rs` | the lighting tab, with the polling rate, battery and sleep timeout |
 | `lib/presets.rs` | the preset list, SAVE AS and DELETE on the lighting tab |
+| `lib/profile_presets.rs` | profiles as presets saved on this computer, for mice that don't answer the profile commands |
 | `lib/instance_lock.rs` | the lock file and the "already running" dialog |
 | `gui/` | layout, the mouse drawing, the sidebar and the dialogs |
 | `shared/widgets.rs` | every styled widget. Views ask it for a button or a panel and never pick colors themselves |

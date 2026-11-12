@@ -1,26 +1,28 @@
 //! The two left columns, device and DPI on the far left and the profile column next to the mouse.
 
-use crate::shared::widgets::{badge, delete_button, heading, neon, note, outline, sized, tall, toggle_button};
-use crate::state::{App, Confirm, Op, View, queue};
+use crate::shared::widgets::{delete_button, heading, neon, note, outline, sized, tall};
+use crate::state::{App, Confirm, Op, queue};
 use crate::theme::t;
 use eframe::egui::text::{LayoutJob, TextFormat};
-use eframe::egui::{self, Align, ComboBox, DragValue, Layout, Margin, RichText};
+use eframe::egui::{self, Align, ComboBox, DragValue, Layout, RichText};
 
 impl App {
     pub(crate) fn device_box(&mut self, ui: &mut egui::Ui) {
+        // eframe already decodes the PNG for the window icon, so the logo needs no image loader
+        let logo = self.logo.get_or_insert_with(|| {
+            let icon = eframe::icon_data::from_png_bytes(include_bytes!("../../../../assets/icon.png")).unwrap_or_default();
+            let image = egui::ColorImage::from_rgba_unmultiplied([icon.width as usize, icon.height as usize], &icon.rgba);
+            ui.ctx().load_texture("logo", image, egui::TextureOptions::LINEAR)
+        });
+        ui.vertical_centered(|ui| ui.add(egui::Image::new(&*logo).fit_to_exact_size(egui::vec2(72.0, 72.0))));
+        // egui can't center a row, so it's pushed in by half of what's left
+        let width = |text: &str| ui.painter().layout_no_wrap(text.into(), egui::FontId::proportional(22.0), t().text).size().x;
+        let row = width("OPEN") + width("SYNAPSE") + ui.spacing().item_spacing.x;
+        let indent = ((ui.available_width() - row) / 2.0).max(0.0);
         ui.horizontal(|ui| {
+            ui.add_space(indent);
             ui.label(RichText::new("OPEN").color(t().accent).size(22.0).strong());
             ui.label(RichText::new("SYNAPSE").color(t().accent2).size(22.0).strong());
-        });
-        let version = RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).color(t().warn).small();
-        ui.horizontal(|ui| {
-            badge(ui, version, t().warn, Margin::symmetric(5, 1));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let on = self.view == View::Settings;
-                if toggle_button(ui, "SETTINGS", on).clicked() {
-                    self.view = if on { View::Buttons } else { View::Settings };
-                }
-            });
         });
         ui.add_space(14.0);
 

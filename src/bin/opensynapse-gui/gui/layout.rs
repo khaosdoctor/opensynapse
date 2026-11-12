@@ -1,11 +1,11 @@
-//! Where each panel goes in the window. The panels draw themselves.
+//! Where each panel goes in the window.
 
 use crate::shared::widgets::{backdrop, icon_button, modal, panel, pick, view_tab};
 use crate::state::{App, View};
 use crate::theme::{self, t};
 use eframe::egui::{self, Align, Layout, Margin, RichText};
 
-/// The remap editor at the bottom never grows; the mouse view gets the rest.
+/// The remap editor at the bottom never grows, the mouse view gets the rest.
 const EDITOR_HEIGHT: f32 = 344.0;
 const SIDEBAR_WIDTH: f32 = 250.0;
 
@@ -46,6 +46,9 @@ impl eframe::App for App {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 pick(ui, &[("BUTTONS", View::Buttons), ("LIGHTING", View::Lighting)], &mut self.view, true, view_tab);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    pick(ui, &[("SETTINGS", View::Settings)], &mut self.view, true, view_tab);
+                });
             });
         });
 
@@ -58,7 +61,9 @@ impl eframe::App for App {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(text).color(color));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    // right to left, so the website ends up last
+                    let version = RichText::new(concat!("v", env!("CARGO_PKG_VERSION"))).color(t().muted).small();
+                    ui.label(version);
+                    // right to left, so the website ends up last before the version
                     for (icon, tip, url) in LINKS.iter().rev() {
                         if !icon_button(ui, icon, tip).clicked() {
                             continue;

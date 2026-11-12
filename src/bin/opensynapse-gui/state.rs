@@ -1,5 +1,5 @@
 //! What the GUI holds between frames, and the queue of changes waiting for
-//! WRITE TO DEVICE. Nothing in here talks to the mouse.
+//! WRITE TO DEVICE.
 
 use crate::lib::lighting::ZoneUi;
 use crate::lib::remapper::{Editor, Kind};
@@ -29,6 +29,8 @@ pub(crate) struct App {
     pub(crate) renaming: Option<String>,
     /// Some when the mouse doesn't answer the profile commands, so profiles are presets on this computer
     pub(crate) profile_presets: Option<crate::lib::profile_presets::Presets>,
+    /// loaded on the first frame, it needs the egui context
+    pub(crate) logo: Option<egui::TextureHandle>,
     pub(crate) layer: u8,
     pub(crate) actions: Vec<Option<Action>>,
     pub(crate) selected: usize,
@@ -75,14 +77,22 @@ pub(crate) struct App {
     pub(crate) battery: Option<Battery>,
     /// folder picked for profile files, None = the default config folder
     pub(crate) dir: Option<PathBuf>,
-    /// (vid, pid) of a mouse that was unplugged; we keep polling until it comes back
+    /// (vid, pid) of an unplugged mouse, polled until it comes back
     pub(crate) disconnected: Option<(u16, u16)>,
     pub(crate) last_daemon_check: Instant,
 }
 
 impl App {
     pub(crate) fn new(ctx: egui::Context) -> Self {
-        let mut app = App {
+        let mut app = Self::blank(ctx);
+        app.connect();
+        app.scan_presets();
+        app
+    }
+
+    /// An App with no mouse, so the tests can build one without touching hidraw.
+    fn blank(ctx: egui::Context) -> Self {
+        App {
             ctx,
             pressed: None,
             flash: None,
@@ -115,6 +125,7 @@ impl App {
             names: BTreeMap::new(),
             renaming: None,
             profile_presets: None,
+            logo: None,
             layer: 0,
             actions: Vec::new(),
             selected: 0,
@@ -125,10 +136,7 @@ impl App {
             active: 1,
             path: PathBuf::new(), // set per device/profile by update_path
             last_poll: Instant::now(),
-        };
-        app.connect();
-        app.scan_presets();
-        app
+        }
     }
 
     /// The path field follows the selected device, profile and folder.
@@ -362,6 +370,7 @@ pub(crate) enum View {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lib::profile_presets::Presets;
 
     fn button(index: usize, action: Action) -> Op {
         Op::Button { profile: 0, layer: 0, index, action }
@@ -417,5 +426,142 @@ mod tests {
         unqueue(&mut ops, &light("scroll", 10));
         unqueue(&mut ops, &Op::Button { profile: 1, layer: 0, index: 1, action: Action::Disabled });
         assert!(ops == [button(1, Action::Disabled)]);
+    }
+
+    fn app_with(profiles: &[u8]) -> App {
+        let mut app = App::blank(egui::Context::default());
+        let mut mouse = opensynapse::device::offline_mouse();
+        mouse.def.profiles = profiles.to_vec();
+        app.mice.push(mouse);
+        app
+    }
+
+    fn onboard(ids: &[u8], active: u8) -> Option<Profiles> {
+        Some(Profiles { max: 5, ids: ids.to_vec(), active })
+    }
+
+    fn rename(profile: u8, name: &str) -> Op {
+        Op::Rename { profile, name: name.into() }
+    }
+
+    #[test]
+    fn profile_list_applies_queued_creates_and_deletes_to_the_mouse() {
+        let mut app = app_with(&[0, 1, 2]);
+        app.onboard = onboard(&[1, 3], 1);
+        assert_eq!(app.profile_list(), [1, 3]);
+        app.ops = vec![Op::CreateProfile(2), Op::DeleteProfile(1)];
+        assert_eq!(app.profile_list(), [2, 3]);
+        // creating one that exists doesn't repeat it, and the list stays sorted
+        app.ops = vec![Op::CreateProfile(3), Op::CreateProfile(5), Op::CreateProfile(2)];
+        assert_eq!(app.profile_list(), [1, 2, 3, 5]);
+        // later ops win, so a delete then a create brings it back
+        app.ops = vec![Op::DeleteProfile(1), Op::CreateProfile(1)];
+        assert_eq!(app.profile_list(), [1, 3]);
+        // ops that aren't about profiles change nothing
+        app.ops = vec![Op::Poll(500), Op::SetActive(3), rename(1, "x")];
+        assert_eq!(app.profile_list(), [1, 3]);
+    }
+
+    #[test]
+    fn profile_list_uses_the_presets_when_the_mouse_has_no_profiles() {
+        let mut app = app_with(&[0, 1]);
+        app.profile_presets = Some(Presets { ids: vec![1, 2], active: 1 });
+        app.ops = vec![Op::CreateProfile(4), Op::DeleteProfile(2)];
+        assert_eq!(app.profile_list(), [1, 4]);
+        // what the mouse reports wins when it answers
+        app.onboard = onboard(&[1], 1);
+        assert_eq!(app.profile_list(), [1, 4]);
+        app.ops.clear();
+        assert_eq!(app.profile_list(), [1]);
+    }
+
+    #[test]
+    fn profile_list_falls_back_to_the_device_file_without_p0() {
+        let mut app = app_with(&[0, 1, 2]);
+        assert_eq!(app.profile_list(), [1, 2]);
+        // queued ops only apply to a list we know, the fallback stays as the file has it
+        app.ops = vec![Op::CreateProfile(7)];
+        assert_eq!(app.profile_list(), [1, 2]);
+        // P0 stays when it's the only profile
+        assert_eq!(app_with(&[0]).profile_list(), [0]);
+        // no mouse at all
+        assert_eq!(App::blank(egui::Context::default()).profile_list(), [0]);
+    }
+
+    #[test]
+    fn profile_name_follows_the_queue() {
+        let mut app = app_with(&[0, 1]);
+        app.names = BTreeMap::from([(1, "Work".into()), (2, "  ".into())]);
+        assert_eq!(app.profile_name(1).as_deref(), Some("Work"));
+        assert_eq!(app.profile_name(3), None);
+        // a name that's only spaces is no name
+        assert_eq!(app.profile_name(2), None);
+
+        app.ops = vec![rename(1, "Game")];
+        assert_eq!(app.profile_name(1).as_deref(), Some("Game"));
+        app.ops = vec![rename(1, "")];
+        assert_eq!(app.profile_name(1), None);
+        app.ops = vec![rename(3, "New")];
+        assert_eq!(app.profile_name(3).as_deref(), Some("New"));
+        // a rename for another profile doesn't touch this one
+        assert_eq!(app.profile_name(1).as_deref(), Some("Work"));
+
+        // DELETE forgets the saved name, so a NEW PROFILE with that number starts blank
+        app.ops = vec![Op::DeleteProfile(1)];
+        assert_eq!(app.profile_name(1), None);
+        app.ops = vec![Op::DeleteProfile(1), Op::CreateProfile(1)];
+        assert_eq!(app.profile_name(1), None);
+        // a rename queued after the delete applies again, one before it is dropped
+        app.ops = vec![Op::DeleteProfile(1), rename(1, "Fresh")];
+        assert_eq!(app.profile_name(1).as_deref(), Some("Fresh"));
+        app.ops = vec![rename(1, "Old"), Op::DeleteProfile(1)];
+        assert_eq!(app.profile_name(1), None);
+    }
+
+    #[test]
+    fn active_profile_is_the_mouses_else_the_presets() {
+        let mut app = app_with(&[0, 1]);
+        assert_eq!(app.active_profile(), None);
+        app.profile_presets = Some(Presets { ids: vec![1, 2], active: 2 });
+        assert_eq!(app.active_profile(), Some(2));
+        app.onboard = onboard(&[1, 3], 3);
+        assert_eq!(app.active_profile(), Some(3));
+    }
+
+    #[test]
+    fn profile_ops_replace_the_op_with_the_same_target() {
+        let mut ops = Vec::new();
+        queue(&mut ops, Op::CreateProfile(2));
+        queue(&mut ops, Op::DeleteProfile(2));
+        queue(&mut ops, Op::CreateProfile(3));
+        // create and delete of one number are different targets, so both stay
+        assert!(ops == [Op::CreateProfile(2), Op::DeleteProfile(2), Op::CreateProfile(3)]);
+        assert!(!queue(&mut ops, Op::CreateProfile(3)));
+
+        queue(&mut ops, Op::SetActive(1));
+        queue(&mut ops, Op::SetActive(3));
+        queue(&mut ops, rename(2, "a"));
+        queue(&mut ops, rename(3, "b"));
+        queue(&mut ops, rename(2, "c"));
+        assert!(ops == [Op::CreateProfile(2), Op::DeleteProfile(2), Op::CreateProfile(3), Op::SetActive(3), rename(3, "b"), rename(2, "c")]);
+
+        // unqueue drops by target whatever the value, and leaves other kinds alone
+        unqueue(&mut ops, &Op::SetActive(9));
+        unqueue(&mut ops, &Op::CreateProfile(2));
+        unqueue(&mut ops, &rename(3, "whatever"));
+        unqueue(&mut ops, &Op::DeleteProfile(8));
+        assert!(ops == [Op::DeleteProfile(2), Op::CreateProfile(3), rename(2, "c")]);
+    }
+
+    #[test]
+    fn profile_ops_describe_themselves() {
+        let def = &opensynapse::device::offline_mouse().def;
+        assert_eq!(Op::CreateProfile(2).describe(def), "NEW PROFILE P2");
+        assert_eq!(Op::DeleteProfile(2).describe(def), "DELETE PROFILE P2");
+        assert_eq!(Op::SetActive(3).describe(def), "SET ACTIVE > P3");
+        assert_eq!(rename(1, "Work").describe(def), "RENAME P1 > Work");
+        assert_eq!(rename(1, "").describe(def), "P1 > NO NAME");
+        assert_eq!(rename(1, "  ").describe(def), "P1 > NO NAME");
+        assert_eq!(button(1, Action::Disabled).describe(def), format!("P0 NORMAL THUMB1 > {}", Action::Disabled));
     }
 }

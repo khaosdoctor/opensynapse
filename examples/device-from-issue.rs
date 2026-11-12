@@ -119,4 +119,27 @@ mod tests {
         assert!(err.contains("doesn't parse") && err.contains("pid"), "{err}");
         assert!(parse_body("## Device file (`devices/../evil.jsonc`)\n```jsonc\n{}\n```").is_err());
     }
+
+    /// The other side of the contract with `protocol send`: what it posts parses back to the same files.
+    // fake OpenRazer devices are the only way to get a Mouse outside the library, and they only exist in debug builds
+    #[cfg(debug_assertions)]
+    #[test]
+    fn parses_what_protocol_send_posts() {
+        use opensynapse::generators::protocol::{generate, issue};
+        let dir = std::env::temp_dir().join(format!("opensynapse-issue-test-{}", std::process::id()));
+        let naga = dir.join("0003:1532:008D.0001");
+        std::fs::create_dir_all(&naga).unwrap();
+        std::fs::write(naga.join("device_type"), "Razer Naga Left-Handed 2020\n").unwrap();
+        let mice = opensynapse::fake::mice(&dir);
+        std::fs::remove_dir_all(&dir).unwrap();
+        let mouse = mice.first().expect("the naga from devices/");
+        let protocol = generate(mouse);
+        let (title, body) = issue(&protocol, mouse);
+        assert!(title.starts_with("New Device: "), "{title}");
+        let parsed = parse_body(&body).unwrap();
+        assert_eq!(parsed.slug, mouse.def.file);
+        assert_eq!(parsed.name, mouse.def.name);
+        assert_eq!(parsed.device, format!("{}\n", mouse.def.source.trim_end()));
+        assert_eq!(parsed.protocol, format!("{}\n", protocol.trim_end()));
+    }
 }

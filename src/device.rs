@@ -338,8 +338,82 @@ impl Mouse {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// A mouse whose hidraw node is /dev/null, so every command fails before
+    /// reaching a device. Only the checks that run before sending can pass.
+    pub(crate) fn offline_mouse() -> Mouse {
+        let src = r#"{ "name": "Razer Test Mouse", "vid": "0x1532", "pid": "0x0001", "interface": 0, "transaction_id": "0x1f",
+            "profiles": [0, 1], "layers": ["normal", "hypershift"], "dpi_max": 20000,
+            "buttons": [{ "id": "0x01", "name": "left" }, { "id": "0x40", "name": "thumb1" }] }"#;
+        let def = DeviceDef { file: "razer-test-mouse".into(), ..parse(src).unwrap() };
+        Mouse { def, hid: Hid::open(Path::new("/dev/null"), 0x1f).unwrap(), serial: "TEST".into() }
+    }
+
+    fn error(r: io::Result<()>) -> String {
+        r.expect_err("/dev/null can't take a command").to_string()
+    }
+
+    const DPI_RULE: &str = "DPI must be 100..=20000";
+    const STAGE_RULE: &str = "need 1-5 stages and an active stage in range";
+    const TOO_LONG: &str = "action too long";
+
+    #[test]
+    fn checks_values_before_sending() {
+        let m = offline_mouse();
+        for (x, y) in [(99, 800), (800, 0), (20001, 800), (u16::MAX, u16::MAX)] {
+            assert_eq!(error(m.set_dpi(x, y)), DPI_RULE, "{x}x{y}");
+        }
+        // the limits themselves pass the check and only fail on /dev/null
+        for (x, y) in [(100, 100), (20000, 20000)] {
+            assert_ne!(error(m.set_dpi(x, y)), DPI_RULE, "{x}x{y}");
+        }
+        let stages = |active: u8, stages: &[u16]| error(m.set_dpi_stages(&DpiStages { active, stages: stages.to_vec() }));
+        assert_eq!(stages(1, &[]), STAGE_RULE);
+        assert_eq!(stages(0, &[800]), STAGE_RULE);
+        assert_eq!(stages(2, &[800]), STAGE_RULE);
+        assert_eq!(stages(1, &[800; 6]), STAGE_RULE);
+        assert_eq!(stages(1, &[800, 99]), DPI_RULE);
+        let five = stages(5, &[100, 400, 800, 1600, 20000]);
+        assert!(five != STAGE_RULE && five != DPI_RULE, "{five}");
+        // profile, button and layer take 3 of the 10 argument bytes
+        assert_eq!(error(m.set_button(0, 0x01, 0, &Action::Raw(vec![0x0b; 8]))), TOO_LONG);
+        assert_ne!(error(m.set_button(0, 0x01, 0, &Action::Raw(vec![0x0b; 7]))), TOO_LONG);
+    }
+
+    #[test]
+    fn names_are_exact() {
+        let def = offline_mouse().def;
+        assert_eq!(def.button("thumb1").map(|b| b.id), Some(0x40));
+        assert!(def.button("THUMB1").is_none());
+        assert!(def.button("").is_none());
+        assert_eq!(def.layer("hypershift"), Some(1));
+        assert_eq!(def.layer("Normal"), None);
+    }
+
+    #[test]
+    fn rejects_broken_device_files() {
+        let good = r#"{ "name": "M", "vid": "0x1532", "pid": "0x0001", "interface": 0, "transaction_id": "0x1f",
+            "profiles": [0], "layers": ["normal"], "dpi_max": 100, "buttons": [] }"#;
+        assert!(parse(good).is_ok());
+        let broken = [
+            String::new(),
+            "   ".into(),
+            "{".into(),
+            "// only a comment".into(),
+            format!("/* block comments aren't supported */ {good}"),
+            good.replace("\"0x1532\"", "\"0xzz\""),
+            good.replace("\"0x1532\"", "\"0x10000\""),
+            good.replace("\"0x1f\"", "\"0x100\""),
+            good.replace("\"pid\": \"0x0001\",", ""),
+            good.replace("[] }", "[], }"),
+            good.replace("[] }", r#"[{ "id": "0x01" }] }"#),
+        ];
+        for src in &broken {
+            assert!(parse(src).is_err(), "{src}");
+        }
+    }
 
     /// Catches a broken device file before it ships in a release,
     /// including the ones device-from-issue adds from issues.

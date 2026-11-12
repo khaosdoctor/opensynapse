@@ -66,4 +66,13 @@ mod tests {
         assert_eq!(ids("0003:1532:007B.0001"), Some((0x1532, 0x007b)));
         assert_eq!(ids("config"), None);
     }
+
+    #[test]
+    fn skips_folders_that_arent_usb_devices() {
+        assert_eq!(ids("0003:1532:007b"), Some((0x1532, 0x007b)));
+        // bus 0005 is bluetooth
+        for name in ["", "0003:", "0003:1532", "0003:zzzz:007B.0001", "0005:1532:007B.0001", "0003:1532:10000.0001"] {
+            assert_eq!(ids(name), None, "{name}");
+        }
+    }
 }

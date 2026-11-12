@@ -303,4 +303,22 @@ mod tests {
         assert_eq!(Effect::from_reply(&[0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0xff, 0x00]), Effect::Static([0, 255, 0]));
         assert_eq!(Effect::from_reply(&[0x00, 0x04, 0x02, 0x00, 0x00, 0x00]), Effect::BreathRandom);
     }
+
+    #[test]
+    fn unknown_zones_colors_and_effects() {
+        assert_eq!(led_id("logo"), Some(0x04));
+        for zone in ["Logo", "", "underglow"] {
+            assert_eq!(led_id(zone), None, "{zone}");
+        }
+        for bad in ["", "#", "ff00", "ff00aa00", "gg0000", " ff00aa", "é0000"] {
+            assert_eq!(parse_color(bad), None, "{bad}");
+        }
+        assert_eq!(effect_from("starlight", &[1], None, None), Effect::Static([1, 0, 0]));
+        assert_eq!(effect_from("reactive", &[], None, None), Effect::Reactive { speed: 2, color: [0, 0, 0] });
+        assert_eq!(effect_from("wave", &[], None, Some(2)), Effect::Wave(true));
+        // a reply shorter than expected reads as zeros
+        assert_eq!(Effect::from_reply(&[]), Effect::Off);
+        assert_eq!(Effect::from_reply(&[0x00, 0x01, 0x05, 0x00, 0x03, 0x01, 9, 8, 7]), Effect::Reactive { speed: 3, color: [9, 8, 7] });
+        assert_eq!(Effect::Reactive { speed: 0, color: [1, 2, 3] }.file_and_data(), ("reactive", vec![1, 1, 2, 3]));
+    }
 }

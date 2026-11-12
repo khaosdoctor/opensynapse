@@ -330,3 +330,30 @@ fn offline_overlay(ui: &egui::Ui, area: egui::Rect) {
         t().strong,
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Zone edits are queued as differences from the mouse, so loading a zone must give its effect back.
+    #[test]
+    fn zone_editor_gives_the_effect_back() {
+        let effects = [
+            Effect::Off,
+            Effect::Static([1, 2, 3]),
+            Effect::Breath([4, 5, 6]),
+            Effect::BreathRandom,
+            Effect::Spectrum,
+            Effect::Wave(false),
+            Effect::Wave(true),
+            Effect::Reactive { speed: 3, color: [7, 8, 9] },
+        ];
+        for e in effects {
+            let state = ZoneUi::from_effect("logo", e, 128).state();
+            assert_eq!((state.zone.as_str(), state.effect, state.brightness), ("logo", e, 128));
+        }
+        // the rates the GUI offers are the ones the library accepts
+        let rates: Vec<u16> = POLL.iter().map(|(_, hz)| *hz).collect();
+        assert_eq!(rates, power::POLL_RATES);
+    }
+}

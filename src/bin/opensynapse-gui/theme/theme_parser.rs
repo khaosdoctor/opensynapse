@@ -170,4 +170,39 @@ mod tests {
             }
         }
     }
+
+    /// A user's theme file can be anything, a broken one keeps the defaults instead of panicking.
+    #[test]
+    fn malformed_css_keeps_the_defaults() {
+        let dark = base(false);
+        let broken = [
+            "",
+            "{",
+            "}}}",
+            ":root { --accent: }",
+            ":root { --accent: red; --radius: 300px; --radius: wide; --pane: nope }",
+            ":root { --accent #fff }",
+            ":root { : ; ;; --: #fff }",
+            ":root { --accent: #010203",
+            "/* never closed :root { --accent: #010203; }",
+            ":root { --ACCENT: #010203; }",
+        ];
+        for css in broken {
+            let s = parsed(css, false);
+            assert!(s.p == dark.p && s.radius == dark.radius && s.pane == dark.pane, "{css}");
+        }
+        assert_eq!(forced_scheme(":root { color-scheme: Light }"), None);
+        assert_eq!(forced_scheme("color-scheme"), None);
+    }
+
+    #[test]
+    fn builtin_theme_ids_are_unique_file_names() {
+        for (i, (id, _)) in BUILTIN.iter().enumerate() {
+            // user files are matched by lowercased file name, so a built-in id has to be one
+            assert_eq!(opensynapse::device::check_name(id).as_deref(), Ok(*id));
+            for (other, _) in &BUILTIN[..i] {
+                assert_ne!(other, id, "{id} is listed twice");
+            }
+        }
+    }
 }

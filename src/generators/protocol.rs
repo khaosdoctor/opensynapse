@@ -78,3 +78,28 @@ pub fn issue(protocol: &str, mouse: &Mouse) -> (String, String) {
     );
     (title, body)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::device::tests::offline_mouse;
+
+    /// add-device.yml looks for the title, examples/device-from-issue.rs for the heading.
+    #[test]
+    fn issue_has_the_title_and_heading_the_workflow_reads() {
+        let (title, body) = issue("# Razer Test Mouse keymap protocol\n", &offline_mouse());
+        assert_eq!(title, "New Device: Razer Test Mouse (1532:0001)");
+        assert!(body.starts_with("# Razer Test Mouse keymap protocol\n"), "{body}");
+        assert!(body.contains("\n## Device file (`devices/razer-test-mouse.jsonc`)\n\n```jsonc\n{ \"name\""), "{body}");
+    }
+
+    #[test]
+    fn generate_marks_what_it_couldnt_read() {
+        let text = generate(&offline_mouse());
+        assert!(text.starts_with("# Razer Test Mouse keymap protocol\n"), "{text}");
+        assert!(text.contains("USB `1532:0001`, firmware unknown."), "{text}");
+        assert!(text.contains("| Id | Button | normal | hypershift |"), "{text}");
+        assert!(text.contains("| `0x40` | thumb1 | ? | ? |"), "{text}");
+        assert!(text.contains("Current DPI ?, stages ?, max 20000"), "{text}");
+    }
+}

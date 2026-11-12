@@ -118,3 +118,51 @@ pub fn ensure_defaults(mouse: &Mouse) -> io::Result<usize> {
 pub fn export(mouse: &Mouse, profile: u8, path: &Path) -> io::Result<()> {
     device::save_json(path, &read(mouse, profile)?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::device::tests::offline_mouse;
+    use serde_json::json;
+
+    fn file(layers: serde_json::Value) -> ProfileFile {
+        ProfileFile {
+            device: "Razer Test Mouse".into(),
+            vid: 0x1532,
+            pid: 0x0001,
+            firmware: String::new(),
+            profile: 0,
+            dpi: 800,
+            dpi_stages: vec![800],
+            active_stage: 1,
+            layers: serde_json::from_value(layers).unwrap(),
+        }
+    }
+
+    fn plan_error(f: &ProfileFile) -> String {
+        plan(&offline_mouse(), 0, f).unwrap_err().to_string()
+    }
+
+    /// A file plan can't apply fails before any button is read, so a typo writes nothing.
+    #[test]
+    fn plan_refuses_files_it_cant_apply() {
+        let other = ProfileFile { pid: 0x0002, ..file(json!({})) };
+        assert_eq!(plan_error(&other), "profile is for Razer Test Mouse (1532:0002)");
+        assert_eq!(plan_error(&file(json!({ "Normal": {} }))), "unknown layer 'Normal'");
+        assert_eq!(plan_error(&file(json!({ "normal": { "thumb13": "disabled" } }))), "unknown button 'thumb13'");
+        assert_eq!(plan_error(&file(json!({ "normal": { "THUMB1": "disabled" } }))), "unknown button 'THUMB1'");
+        assert_eq!(plan_error(&file(json!({ "normal": { "thumb1": "key:nosuchkey" } }))), "can't parse action 'key:nosuchkey'");
+        assert_eq!(plan_error(&file(json!({ "normal": { "thumb1": "" } }))), "can't parse action ''");
+        assert!(plan(&offline_mouse(), 0, &file(json!({ "normal": {} }))).unwrap().is_empty());
+        // a valid file reads the button to compare, which /dev/null can't answer
+        let valid = plan_error(&file(json!({ "hypershift": { "thumb1": "key:a" } })));
+        assert!(!valid.starts_with("unknown") && !valid.starts_with("can't parse"), "{valid}");
+    }
+
+    #[test]
+    fn files_from_before_firmware_and_profile_load() {
+        let old = r#"{ "device": "M", "vid": 5426, "pid": 1, "dpi": 800, "dpi_stages": [800], "active_stage": 1, "layers": {} }"#;
+        let f: ProfileFile = serde_json::from_str(old).unwrap();
+        assert_eq!((f.firmware.as_str(), f.profile), ("", 0));
+    }
+}

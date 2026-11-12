@@ -98,3 +98,69 @@ pub fn listen(vid: u16, pid: u16, on_change: impl Fn() + Send + Sync + 'static) 
     }
     state
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn modifier_masks_become_key_usages() {
+        let cases: &[(u8, &[u8])] = &[
+            (0x00, &[]),
+            (0x01, &[0xe0]),
+            (0x03, &[0xe0, 0xe1]),
+            (0x80, &[0xe7]),
+            (0xff, &[0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7]),
+        ];
+        for (mods, keys) in cases {
+            assert_eq!(mod_keys(*mods).collect::<Vec<u8>>(), keys.to_vec(), "{mods:#04x}");
+        }
+    }
+
+    #[test]
+    fn mouse_reports() {
+        let mut p = Pressed::default();
+        // too short to hold the wheel byte
+        assert!(!p.apply(0, &[0x01, 0, 0]));
+        assert!(!p.triggers(&Action::Mouse(1)));
+        assert!(p.apply(0, &[0x01, 0, 0, 0]));
+        assert!(p.triggers(&Action::Mouse(1)));
+        assert!(p.triggers(&Action::MouseTurbo { button: 1, interval: 20 }));
+        assert!(!p.triggers(&Action::Mouse(2)));
+        assert!(!p.apply(0, &[0x01, 0, 0, 0]), "the same report again changes nothing");
+        // bits above forward aren't buttons
+        assert!(p.apply(0, &[0xe0, 0, 0, 0]));
+        assert!(!p.triggers(&Action::Mouse(1)));
+        assert!(p.apply(0, &[0, 0, 0, 0xff]));
+        assert!(p.triggers(&Action::Mouse(10)));
+        assert!(!p.triggers(&Action::Mouse(9)));
+        // DPI and profile buttons are handled inside the mouse
+        assert!(!p.triggers(&Action::Dpi(1)));
+        assert!(!p.triggers(&Action::Mouse(0)));
+    }
+
+    #[test]
+    fn keyboard_reports() {
+        let mut p = Pressed::default();
+        // 8 bytes without a report id: ctrl + a
+        assert!(p.apply(1, &[0x01, 0, 0x04, 0, 0, 0, 0, 0]));
+        assert!(p.triggers(&Action::Key { mods: 0, usage: 0x04 }));
+        // a modifier on its own lights up when it's held
+        assert!(p.triggers(&Action::Key { mods: 0x01, usage: 0 }));
+        assert!(!p.triggers(&Action::Key { mods: 0x02, usage: 0 }));
+        // 16 bytes with report id 1, on another interface: shift + 1
+        let mut long = [0u8; 16];
+        (long[0], long[1], long[2]) = (0x01, 0x02, 0x1e);
+        assert!(p.apply(2, &long));
+        assert!(p.triggers(&Action::KeyTurbo { mods: 0, usage: 0x1e, interval: 50 }));
+        assert!(p.triggers(&Action::Key { mods: 0x02, usage: 0 }));
+        // other lengths aren't keyboard reports
+        assert!(!p.apply(1, &[]));
+        assert!(!p.apply(1, &[0; 7]));
+        assert!(!p.apply(1, &[0x01; 16][..15]));
+        // 1-3 are roll-over and error codes, not keys
+        assert!(p.apply(1, &[0, 0, 0x01, 0x02, 0x03, 0, 0, 0]));
+        assert!(!p.triggers(&Action::Key { mods: 0, usage: 0x04 }));
+        assert!(!p.key_down(0x01));
+    }
+}

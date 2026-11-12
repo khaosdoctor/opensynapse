@@ -43,6 +43,7 @@ impl App {
         };
         self.selected = 0;
         self.ops.clear(); // queued ops belong to the previous device
+        self.onboard = None; // the previous device's answer says nothing about this one
         self.load_profiles();
         // P0 only mirrors the active profile, so the GUI opens on the active one
         let list = self.profile_list();
@@ -55,7 +56,12 @@ impl App {
 
     pub(crate) fn load_profiles(&mut self) {
         let Some(m) = self.mice.get(self.current) else { return };
-        self.onboard = m.profiles().ok();
+        // a mouse that answered once has stored profiles, a later failed read doesn't make it lose them
+        match m.profiles() {
+            Ok(on) => self.onboard = Some(on),
+            Err(_) if self.onboard.is_some() => {}
+            Err(_) => self.onboard = None,
+        }
         // only this mouse is at hand, so presets can be tried on it as if it had no stored profiles
         #[cfg(debug_assertions)]
         if std::env::var_os("OPENSYNAPSE_NO_PROFILES").is_some() {
@@ -130,7 +136,7 @@ impl App {
             *on = p;
         }
         let (Ok((dpi, _)), Ok(s)) = (m.dpi(), m.dpi_stages()) else {
-            // a failed read is often just a busy mouse; gone from sysfs means unplugged
+            // a failed read is often just a busy mouse, gone from sysfs means unplugged
             if hid::find_all(m.def.vid, m.def.pid).is_empty() {
                 self.disconnected = Some((m.def.vid, m.def.pid));
                 self.status = Err(format!("{} DISCONNECTED", m.def.name.to_uppercase()));

@@ -57,7 +57,7 @@ pub struct DeviceDef {
     pub layers: Vec<String>,
     pub dpi_max: u16,
     pub buttons: Vec<Button>,
-    /// File name without .jsonc; the protocol file uses the same name.
+    /// File name without .jsonc, the protocol file uses the same name.
     #[serde(skip)]
     pub file: String,
     /// The JSON text this was parsed from, for `protocol send`.
@@ -71,7 +71,7 @@ pub struct Button {
     pub id: u8,
     pub name: String,
     /// Optional [x, y] in percent of the mouse view. The mouse body is drawn at
-    /// x 30..70, y 2..74; buttons left of x 30 or right of x 70 get a side plate. Devices where no button has `at` get a plain grid.
+    /// x 30..70, y 2..74, buttons left of x 30 or right of x 70 get a side plate. Devices where no button has `at` get a plain grid.
     pub at: Option<[f32; 2]>,
 }
 
@@ -240,6 +240,23 @@ pub struct Profiles {
     pub active: u8,
 }
 
+/// (max, ids) from a profile list reply, which holds [max, id, id, ...] from byte 8.
+/// The size byte counts max too.
+fn parse_profile_list(r: &[u8]) -> (u8, Vec<u8>) {
+    (r[8], r[9..(8 + r[5] as usize).clamp(9, r.len())].to_vec())
+}
+
+/// A mouse whose hidraw node is /dev/null, for tests in this crate and the GUI's.
+/// Every command fails before reaching a device.
+#[doc(hidden)]
+pub fn offline_mouse() -> Mouse {
+    let src = r#"{ "name": "Razer Test Mouse", "vid": "0x1532", "pid": "0x0001", "interface": 0, "transaction_id": "0x1f",
+        "profiles": [0, 1], "layers": ["normal", "hypershift"], "dpi_max": 20000,
+        "buttons": [{ "id": "0x01", "name": "left" }, { "id": "0x40", "name": "thumb1" }] }"#;
+    let def = DeviceDef { file: "razer-test-mouse".into(), ..parse(src).unwrap() };
+    Mouse { def, hid: Hid::open(Path::new("/dev/null"), 0x1f).unwrap(), serial: "TEST".into() }
+}
+
 /// Every connected mouse that has a definition.
 pub fn detect() -> io::Result<Vec<Mouse>> {
     #[cfg(debug_assertions)]
@@ -329,12 +346,25 @@ impl Mouse {
         Ok(())
     }
 
+    /// Tried a few times, one failed read would make a mouse with stored profiles look like it has none.
     pub fn profiles(&self) -> io::Result<Profiles> {
+        let mut last = self.read_profiles();
+        for _ in 0..3 {
+            if last.is_ok() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            last = self.read_profiles();
+        }
+        last
+    }
+
+    fn read_profiles(&self) -> io::Result<Profiles> {
         // [max, id, id, ...], the size byte counts max too
         let r = self.hid.command(CLASS_PROFILE, 0x81, 0x50, &[])?;
-        let ids = r[9..(8 + r[5] as usize).clamp(9, r.len())].to_vec();
+        let (max, ids) = parse_profile_list(&r);
         let active = self.hid.command(CLASS_PROFILE, 0x84, 0x01, &[])?[8];
-        Ok(Profiles { max: r[8], ids, active })
+        Ok(Profiles { max, ids, active })
     }
 
     pub fn create_profile(&self, profile: u8) -> io::Result<()> {
@@ -375,11 +405,31 @@ pub(crate) mod tests {
     /// A mouse whose hidraw node is /dev/null, so every command fails before
     /// reaching a device. Only the checks that run before sending can pass.
     pub(crate) fn offline_mouse() -> Mouse {
-        let src = r#"{ "name": "Razer Test Mouse", "vid": "0x1532", "pid": "0x0001", "interface": 0, "transaction_id": "0x1f",
-            "profiles": [0, 1], "layers": ["normal", "hypershift"], "dpi_max": 20000,
-            "buttons": [{ "id": "0x01", "name": "left" }, { "id": "0x40", "name": "thumb1" }] }"#;
-        let def = DeviceDef { file: "razer-test-mouse".into(), ..parse(src).unwrap() };
-        Mouse { def, hid: Hid::open(Path::new("/dev/null"), 0x1f).unwrap(), serial: "TEST".into() }
+        super::offline_mouse()
+    }
+
+    /// The size byte counts the max byte, so `05 01 02` is max 5 with profiles 1 and 2.
+    #[test]
+    fn profile_list_reply_is_max_then_ids() {
+        let reply = |data: &[u8]| {
+            let mut r = [0u8; 90];
+            r[5] = data.len() as u8;
+            r[8..8 + data.len()].copy_from_slice(data);
+            r
+        };
+        assert_eq!(parse_profile_list(&reply(&[5, 1])), (5, vec![1]));
+        assert_eq!(parse_profile_list(&reply(&[5, 1, 2])), (5, vec![1, 2]));
+        assert_eq!(parse_profile_list(&reply(&[5])), (5, vec![]));
+        assert_eq!(parse_profile_list(&reply(&[])), (0, vec![]));
+        // a size byte past the end of the report can't read out of bounds
+        let mut long = reply(&[5, 1]);
+        long[5] = 255;
+        assert_eq!(parse_profile_list(&long).1.len(), 81);
+    }
+
+    #[test]
+    fn profiles_error_on_a_mouse_that_does_not_answer() {
+        assert!(offline_mouse().profiles().is_err());
     }
 
     fn error(r: io::Result<()>) -> String {

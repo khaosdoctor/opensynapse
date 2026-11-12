@@ -1,6 +1,6 @@
 # Theming
 
-What you pick on the settings page is saved in `~/.config/opensynapse/settings.json`.
+What you pick on the settings tab is saved in `~/.config/opensynapse/settings.json`, along with the ***Show raw bytes in the log*** checkbox from its debug section. The log panel at the bottom of the sidebar uses a black background and the theme's accent color for timestamps.
 
 ## Mode
 

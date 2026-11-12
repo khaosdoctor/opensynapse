@@ -4,7 +4,7 @@ I only have one Razer mouse, so every other model depends on someone who owns it
 
 Please send the [protocol file](devices/protocols/) along with it too.
 
-Bug fixes and features are welcome too, open an issue first if it's something big so we can talk about it.
+Bug fixes and features are welcome too, open an issue first if it's something big so we can talk about it. For a bug in the GUI, attach the debug log, see [the debug log](README.md#the-debug-log).
 
 To work on lighting, the polling rate, the battery or presets without a mouse that supports them, see [Testing without a mouse](AGENTS.md#testing-without-a-mouse).
 

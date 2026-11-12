@@ -45,7 +45,8 @@ Debug builds also read `OPENSYNAPSE_NO_PROFILES`. When it is set, the GUI treats
 | Path | What's in it |
 |---|---|
 | `src/lib.rs` | the library the CLI and GUI share |
-| `src/hid.rs` | the 90-byte Razer feature report over hidraw, and finding the right interface |
+| `src/hid.rs` | the 90-byte Razer feature report over hidraw, finding the right interface, and the trace hook (`hid::trace`) that reports every command and reply, with a read only reported when its answer changes |
+| `src/trace.rs` | turns a traced command into words using the device file's button and layer names, and returns `None` for commands nobody has decoded so they show as raw bytes |
 | `src/action.rs` | what a button does and how it's encoded on the wire |
 | `src/device.rs` | device files, the config folder, the JSON helpers everything else uses, and the commands for buttons, DPI and stored profiles |
 | `src/profile.rs` | profile export/import files, profile names, which only exist on this computer, and the paths of the presets and the active preset |
@@ -75,6 +76,7 @@ The GUI is split by job, and every file stays under 500 lines:
 | `lib/lighting.rs` | the lighting tab, with the polling rate, battery and sleep timeout |
 | `lib/presets.rs` | the preset list, SAVE AS and DELETE on the lighting tab |
 | `lib/profile_presets.rs` | profiles as presets saved on this computer, for mice that don't answer the profile commands |
+| `lib/debug.rs` | the session debug log, written to the journal, to `$XDG_STATE_HOME/opensynapse/debug.log` and to the LOG panel in the sidebar |
 | `lib/instance_lock.rs` | the lock file and the "already running" dialog |
 | `gui/` | layout, the mouse drawing, the sidebar and the dialogs |
 | `shared/widgets.rs` | every styled widget. Views ask it for a button or a panel and never pick colors themselves |
@@ -93,7 +95,9 @@ Device files are read when the app starts, nothing about a mouse is compiled in.
 
 A file's slug, the name its protocol file uses, is its file name without `.jsonc`. User files are all called `buttons.jsonc`, so theirs comes from the `name` field. Adding a mouse means adding `devices/<slug>.jsonc` and nothing else.
 
-Themes are different. `themes/*.css` are compiled in, and every `~/.config/opensynapse/themes/<name>.css` becomes a button on the settings page, replacing a built-in theme with the same name. Only CSS custom properties are read, see the header of `themes/opensynapse.css`. `~/.config/opensynapse/theme.css` overrides single properties on top of any theme, and `settings.json` keeps the mode, theme and font.
+Themes are different. `themes/*.css` are compiled in, and every `~/.config/opensynapse/themes/<name>.css` becomes a button on the settings page, replacing a built-in theme with the same name. Only CSS custom properties are read, see the header of `themes/opensynapse.css`. `~/.config/opensynapse/theme.css` overrides single properties on top of any theme, and `settings.json` keeps the mode, theme, font and whether the log shows raw bytes (`raw_bytes`).
+
+The GUI's debug log is the place to look when something goes wrong. It goes to `$XDG_STATE_HOME/opensynapse/debug.log` (emptied on every start, deleted on a clean exit) and to the journal, `journalctl -t opensynapse-gui -f`. Anything new that talks to the mouse already shows up through `hid::trace`, and writes that skip hidraw call `hid::note`. To translate a new command, add it to `src/trace.rs` with a test.
 
 ## Releases and CI
 

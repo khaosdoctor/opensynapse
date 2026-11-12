@@ -2,11 +2,11 @@
 
 I only have one Razer mouse, so every other model depends on someone who owns it sending a device file. If you have a Razer mouse that isn't in [`devices/`](devices/), please add it, it's mostly writing a JSONC file and testing it on your own mouse.
 
-Please send the protocol file along with it too. One of the goals of this project is to document these protocols, mouse by mouse, so nobody has to reverse engineer the same thing twice, and the [protocol files](devices/protocols/) are where we keep them. Even if you couldn't make your mouse work, what you found out is still super useful.
+Please send the [protocol file](devices/protocols/) along with it too.
 
 Bug fixes and features are welcome too, open an issue first if it's something big so we can talk about it.
 
-If you're working on lighting, the polling rate, the battery or presets, you don't need a mouse that supports them. `scripts/fake-devices.sh` gives you OpenRazer's fake devices in a shell, and [Testing without a mouse](AGENTS.md#testing-without-a-mouse) explains what works there.
+To work on lighting, the polling rate, the battery or presets without a mouse that supports them, see [Testing without a mouse](AGENTS.md#testing-without-a-mouse).
 
 ## Contents
 
@@ -17,39 +17,39 @@ If you're working on lighting, the polling rate, the battery or presets, you don
 
 A mouse is a single JSONC file (JSON with `//` comments), like [the Naga one](devices/razer-naga-left-handed-2020.jsonc). `vid`, `pid`, `transaction_id` and button ids are hex strings (`"0x40"`) so they match what the mouse and the protocol files say.
 
-1. **Start the file.** With the mouse plugged in, and opensynapse and its udev rule installed as in the README's [Install](README.md#install) section, run:
+1. **Start the file.** With the mouse plugged in, and opensynapse and its udev rule [installed](README.md#install), run this.
 
    ```sh
    opensynapse init
    ```
 
-   It finds a Razer mouse that has no device file yet and writes `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` (like `1532-008d`). It only reads from the mouse, so it can't change anything. Common buttons get a name, the rest are called `btn-0xNN`, and everything you need to check has a `// TODO` next to it. If you have other Razer devices plugged in, pass the part after the colon in lsusb's `ID 1532:xxxx` (`opensynapse init 008d`). If the file already exists, `init` stops and asks for `--force`, edit the file instead. If it says permission denied, the udev rule isn't installed yet, or you need to unplug and replug the mouse after installing it.
+   It writes `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc` (like `1532-008d`) and only reads from the mouse. If you have other Razer devices plugged in, pass the part after the colon in lsusb's `ID 1532:xxxx`, like `opensynapse init 008d`. If the file already exists, edit it instead of passing `--force`. Permission denied means the udev rule is missing or the mouse wasn't replugged after installing it.
 
-2. **Name the buttons.** `opensynapse dump` shows what each button does today (a key, a mouse button, DPI up...), which is usually enough to know which one it is. `opensynapse watch` prints a button's name when you press it. Only buttons that send a key, a left/right/middle/back/forward click or a wheel scroll show up (not tilt, DPI, profile, media, hypershift or disabled), and buttons with the same action show up together, so use `dump` for those. Rename them in the file, and fix the `name`, the `dpi_max` (the top DPI on your mouse's Razer product page) and any other `TODO`.
+2. **Name the buttons.** `opensynapse dump` shows what each button does today, which is usually enough to know which one it is. `opensynapse watch` only shows buttons that send a key, a left/right/middle/back/forward click or a wheel scroll, and buttons with the same action show up together, so use `dump` for the rest. Rename them in the file, and fix the `name`, the `dpi_max` (the top DPI on your mouse's Razer product page) and any other `TODO`.
 
-   If `init` can't talk to your mouse, copy the Naga file to `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc`, set `name`, `pid`, `interface`, `transaction_id`, `profiles`, `layers` and `dpi_max` to your mouse's, delete the "Verified on hardware" line at the top, and replace the buttons with the ids you find with `opensynapse probe` (read-only, it finds the mouse itself when it's the only Razer device plugged in), see [PROTOCOL.md](PROTOCOL.md#finding-things-out) and the examples in [devices/protocols/](devices/protocols/README.md).
+   If `init` can't talk to your mouse, copy the Naga file to `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc`, set `name`, `pid`, `interface`, `transaction_id`, `profiles`, `layers` and `dpi_max` to your mouse's, delete the "Verified on hardware" line at the top, and replace the buttons with the ids you find with `opensynapse probe`, which is read-only. See [PROTOCOL.md](PROTOCOL.md#finding-things-out) and the examples in [devices/protocols/](devices/protocols/README.md).
 
-3. **Test it.** Run `opensynapse list` and `opensynapse dump`. If they print `skipping device definition`, the error gives the line of a JSON typo (usually a missing comma or quote), fix it there and don't rerun init. If those look right, remap one side or thumb button (not left or right click), check it does what you set, and set it back:
+3. **Test it.** Run `opensynapse list` and `opensynapse dump`. If they print `skipping device definition`, the error gives the line of a JSON typo, fix it there and don't rerun init. Then remap one side or thumb button (not left or right click), check it does what you set, and set it back.
 
    ```sh
-   opensynapse export before.json   # backup, `opensynapse import before.json` puts it back
+   opensynapse export before.json   # `opensynapse import before.json` restores it
    opensynapse set <button> key:z
    opensynapse set <button> <whatever dump showed before>
    ```
 
-4. **Optionally, add `"at": [x, y]` to the buttons** so they show up on the drawn mouse in the GUI, the header of [the Naga file](devices/razer-naga-left-handed-2020.jsonc) explains the coordinates. If you skip it you get a grid, which is fine.
+4. **Optionally, add `"at": [x, y]` to the buttons** so they show up on the drawn mouse in the GUI, the header of [the Naga file](devices/razer-naga-left-handed-2020.jsonc) explains the coordinates. Without it you get a grid.
 
-5. **Write the protocol file.** `opensynapse protocol`, run from the repo root, writes `devices/protocols/<slug>.md` (the `"name"` field in lowercase with dashes, so `Razer Naga Pro (Wired)` is `razer-naga-pro-wired`). It needs the device file from the earlier steps and reads from the mouse, it never writes to it. You only need to fill in the TODOs. The [PROTOCOL.md](PROTOCOL.md) explains what goes in it and has [a prompt so an agent fills it in for you](PROTOCOL.md#using-an-agent), if you can, add one because it would greatly help to understand the protocols for each mouse, but it's an optional nice to have. The [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example.
+5. **Write the protocol file.** `opensynapse protocol`, run from the repo root, writes `devices/protocols/<slug>.md`. The slug is the `"name"` field in lowercase with dashes, so `Razer Naga Pro (Wired)` is `razer-naga-pro-wired`. It only reads from the mouse. Fill in the TODOs. [PROTOCOL.md](PROTOCOL.md) explains what goes in it and has [a prompt so an agent fills it in for you](PROTOCOL.md#using-an-agent). The [Naga one](devices/protocols/razer-naga-left-handed-2020.md) is a full example.
 
 > If you couldn't make your mouse work, copy the template from PROTOCOL.md, fill in what you found and paste it into a new issue, it's still super useful.
 
-Then send it. The quickest way is `opensynapse protocol send`, which opens an issue here with your protocol and device files. You don't need to do anything else after that. The issue is titled `New Device: <your mouse>`, so a bot labels it `add-device` right away and opens the PR that adds your mouse. As soon as I've reviewed and merged that PR, a patch release goes out with it, so it reaches the AUR and the other packages within the hour. If you prefer a PR yourself, copy `buttons.jsonc` into `devices/` as `<slug>.jsonc`, replace init's two header lines and the `// TODO` notes with a first line like the Naga file's (`// Verified on hardware, firmware vX.Y. See protocols/<slug>.md.`), and open it with both files. Start the PR title with `New Device:`, like `New Device: Razer Naga X`, and a bot labels it so a release goes out when it's merged. That's all the code needs, the app reads `devices/*.jsonc` when it starts. To check it, move the file in `~/.config` away, because it wins over the one in `devices/`, and run `cargo run -- list` from the repo. Your mouse should still be there.
+Then send it. `opensynapse protocol send` opens an issue here with your protocol and device files, titled `New Device: <your mouse>`. A bot opens the PR that adds your mouse, and once I merge it a patch release goes out.
+
+If you prefer a PR yourself, copy `buttons.jsonc` into `devices/` as `<slug>.jsonc`, replace init's two header lines and the `// TODO` notes with a first line like the Naga file's (`// Verified on hardware, firmware vX.Y. See protocols/<slug>.md.`), and open it with both files. Start the PR title with `New Device:` so a release goes out when it's merged. To check it, move the file in `~/.config` away, because it wins over the one in `devices/`, and run `cargo run -- list` from the repo.
 
 ## Using an agent
 
-I did the whole reverse engineering for the Naga with Claude Code because, well... I haven't learned to read syscodes yet. 
-
-It works really well for this kind of work because it can run the probe, read the answers and try things faster than you would. If you want to do the same for your mouse, open your agent of choice in this repo with the mouse plugged in and paste this:
+I did the whole reverse engineering for the Naga with Claude Code. To do the same for your mouse, open your agent in this repo with the mouse plugged in and paste this.
 
 ```text
 I want to add support for my Razer mouse to opensynapse, the repo you're in.

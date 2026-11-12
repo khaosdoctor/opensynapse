@@ -178,6 +178,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn hypershift_is_unset_until_a_theme_sets_it() {
+        // base() drops the default theme's value, so the caller falls back to the theme's own --warn
+        assert_eq!(base(false).hypershift, None);
+        assert_eq!(parsed(":root { --warn: #010203; }", false).hypershift, None);
+        let set = parsed(":root { --hypershift: #112233; }", false);
+        assert_eq!(set.hypershift, Some(Color32::from_rgb(0x11, 0x22, 0x33)));
+        // a value that doesn't parse leaves the earlier one
+        let mut style = set;
+        parse(":root { --hypershift: nope; }", false, &mut style);
+        assert_eq!(style.hypershift, Some(Color32::from_rgb(0x11, 0x22, 0x33)));
+    }
+
     /// A user's theme file can be anything, a broken one keeps the defaults instead of panicking.
     #[test]
     fn malformed_css_keeps_the_defaults() {

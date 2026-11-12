@@ -107,3 +107,81 @@ pub(crate) fn apply(m: &Mouse, slot: u8, op: &Op, active: &mut u8) -> Option<io:
     };
     Some(r)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file(button: &str, action: &str) -> ProfileFile {
+        ProfileFile {
+            device: "Razer Test Mouse".into(),
+            vid: 0x1532,
+            pid: 0x0001,
+            firmware: String::new(),
+            profile: 0,
+            dpi: 800,
+            dpi_stages: vec![800],
+            active_stage: 1,
+            layers: [("normal".to_string(), [(button.to_string(), action.to_string())].into())].into(),
+        }
+    }
+
+    fn run(m: &Mouse, slot: u8, op: &Op, active: &mut u8) -> io::Result<()> {
+        apply(m, slot, op, active).expect("a preset op")
+    }
+
+    /// One test, since it sets XDG_CONFIG_HOME and parallel tests would share it.
+    #[test]
+    fn presets_that_are_not_active_only_touch_files() {
+        let tmp = std::env::temp_dir().join(format!("opensynapse-presets-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        // SAFETY: this is the only test in this binary that reads or sets it
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", &tmp) };
+        let m = device::offline_mouse();
+        let mut active = 1;
+        assert_eq!(original(&m, 2), Some(tmp.join("opensynapse/devices/1532-0001/TEST-preset-2.original.json")));
+
+        // a button edit on another preset is saved in its file and never sent
+        save(&m, 1, &file("left", "disabled")).unwrap();
+        save(&m, 2, &file("left", "disabled")).unwrap();
+        let edit = Op::Button { profile: 2, layer: 1, index: 1, action: Action::Mouse(1) };
+        run(&m, 0, &edit, &mut active).unwrap();
+        let saved = load(&m, 2).unwrap();
+        assert_eq!(saved.layers["hypershift"]["thumb1"], Action::Mouse(1).to_string());
+        assert_eq!(saved.layers["normal"]["left"], "disabled");
+        assert_eq!(load(&m, 1).unwrap().layers.len(), 1);
+
+        // NEW copies the active preset, as the file and as the original
+        run(&m, 0, &Op::CreateProfile(3), &mut active).unwrap();
+        assert_eq!(load(&m, 3).unwrap().layers.len(), 1);
+        let copied: ProfileFile = device::load_json(&original(&m, 3).unwrap()).unwrap();
+        assert_eq!(copied.layers["normal"]["left"], "disabled");
+        assert_eq!(profile::presets(&m), [1, 2, 3]);
+
+        // DELETE removes the file, the original and the name, and a second one is no error
+        profile::rename(&m, 3, "Temp").unwrap();
+        run(&m, 0, &Op::DeleteProfile(3), &mut active).unwrap();
+        assert!(profile::preset_path(&m, 3).is_some_and(|p| !p.exists()));
+        assert!(original(&m, 3).is_some_and(|p| !p.exists()));
+        assert!(profile::names(&m).is_empty());
+        run(&m, 0, &Op::DeleteProfile(3), &mut active).unwrap();
+        assert_eq!(profile::presets(&m), [1, 2]);
+
+        // NEW from an active preset without a file fails and creates nothing
+        active = 9;
+        assert!(run(&m, 0, &Op::CreateProfile(4), &mut active).is_err());
+        assert_eq!(profile::presets(&m), [1, 2]);
+
+        // these need the mouse, and fail without changing which preset is active
+        active = 1;
+        assert!(run(&m, 0, &Op::SetActive(2), &mut active).is_err());
+        assert_eq!(active, 1);
+        assert_eq!(profile::active_preset(&m), None);
+        let live = Op::Button { profile: 1, layer: 0, index: 0, action: Action::Mouse(1) };
+        assert!(run(&m, 0, &live, &mut active).is_err());
+        // an op that works the same on presets and on the mouse isn't handled here
+        assert!(apply(&m, 0, &Op::Poll(500), &mut active).is_none());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+}

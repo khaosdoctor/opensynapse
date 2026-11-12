@@ -239,6 +239,60 @@ mod tests {
         assert!(!valid.starts_with("unknown") && !valid.starts_with("can't parse"), "{valid}");
     }
 
+    /// One test, since it sets XDG_CONFIG_HOME and parallel tests would share it.
+    #[test]
+    fn presets_names_and_forget_use_the_model_folder() {
+        let tmp = std::env::temp_dir().join(format!("opensynapse-profile-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        // SAFETY: the only other readers are device tests that look up devices/ and don't care which config folder they get
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", &tmp) };
+        let m = offline_mouse();
+        let dir = tmp.join("opensynapse/devices/1532-0001");
+
+        assert_eq!(preset_path(&m, 3), Some(dir.join("TEST-preset-3.json")));
+        // nothing saved yet
+        assert!(presets(&m).is_empty());
+        assert_eq!(active_preset(&m), None);
+        assert!(names(&m).is_empty());
+
+        // only <serial>-preset-<n>.json counts: not the snapshots, the active marker, other mice or other files
+        for name in ["TEST-preset-10.json", "TEST-preset-2.json", "TEST-preset-2.original.json", "TEST-preset-active.json", "TEST-preset-x.json", "TEST-preset-300.json", "OTHER-preset-5.json", "TEST-1.json"] {
+            device::write(&dir.join(name), "{}").unwrap();
+        }
+        assert_eq!(presets(&m), [2, 10]);
+
+        set_active_preset(&m, 10).unwrap();
+        assert_eq!(active_preset(&m), Some(10));
+        set_active_preset(&m, 2).unwrap();
+        assert_eq!(active_preset(&m), Some(2));
+
+        rename(&m, 1, "  Work  ").unwrap();
+        rename(&m, 2, "Game").unwrap();
+        assert_eq!(names(&m), BTreeMap::from([(1, "Work".to_string()), (2, "Game".to_string())]));
+        // an empty name removes it, and so does one that's only spaces
+        rename(&m, 1, "").unwrap();
+        rename(&m, 2, "   ").unwrap();
+        assert!(names(&m).is_empty());
+        // removing a name that isn't there is fine
+        rename(&m, 7, "").unwrap();
+
+        // forget removes the default file, the original and the name
+        let (default, original) = (default_path(&m, 1).unwrap(), original_path(&m, 1).unwrap());
+        assert_eq!(original, dir.join("TEST-1.original.json"));
+        device::write(&original, "{}").unwrap();
+        rename(&m, 1, "Work").unwrap();
+        rename(&m, 4, "Other").unwrap();
+        forget(&m, 1).unwrap();
+        assert!(!default.exists() && !original.exists());
+        assert_eq!(names(&m), BTreeMap::from([(4, "Other".to_string())]));
+        // nothing left to remove is not an error
+        forget(&m, 1).unwrap();
+        forget(&m, 9).unwrap();
+        assert_eq!(names(&m).len(), 1);
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
     #[test]
     fn files_from_before_firmware_and_profile_load() {
         let old = r#"{ "device": "M", "vid": 5426, "pid": 1, "dpi": 800, "dpi_stages": [800], "active_stage": 1, "layers": {} }"#;

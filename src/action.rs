@@ -282,6 +282,8 @@ impl FromStr for Action {
                 .or_else(|| u16::from_str_radix(rest.strip_prefix("0x")?, 16).ok())
                 .map(Action::Media)
                 .ok_or_else(bad),
+            // a DPI op without a name prints as `dpi:0x03`, so exported files can bring it back
+            "dpi" if rest.starts_with("0x") => parse_u8(rest).map(Action::Dpi).ok_or_else(bad),
             "dpi" => match rest.strip_prefix("stage") {
                 Some(n) => n.parse().map(Action::DpiStage).map_err(|_| bad()),
                 None => lookup(DPI, rest).map(Action::Dpi).ok_or_else(bad),
@@ -350,5 +352,140 @@ mod tests {
         assert_eq!(key_usage("leftshift"), Some(0xe1));
         assert_eq!(key_usage("printscreen"), Some(0x46));
         assert_eq!(key_usage("sysrq"), Some(0x46));
+    }
+
+    /// Every syntax in the CLI usage, with the bytes from the encodings table in
+    /// devices/protocols/razer-naga-left-handed-2020.md.
+    #[test]
+    fn cli_syntax_encodes_to_documented_bytes() {
+        let cases: &[(&str, &[u8])] = &[
+            ("disabled", &[0x00, 0x00]),
+            ("mouse:left", &[0x01, 0x01, 0x01]),
+            ("mouse:right", &[0x01, 0x01, 0x02]),
+            ("mouse:middle", &[0x01, 0x01, 0x03]),
+            ("mouse:back", &[0x01, 0x01, 0x04]),
+            ("mouse:forward", &[0x01, 0x01, 0x05]),
+            ("mouse:wheelup", &[0x01, 0x01, 0x09]),
+            ("mouse:wheeldown", &[0x01, 0x01, 0x0a]),
+            ("mouse:wheelleft", &[0x01, 0x01, 0x68]),
+            ("mouse:wheelright", &[0x01, 0x01, 0x69]),
+            ("key:a", &[0x02, 0x02, 0x00, 0x04]),
+            ("key:ctrl+shift+a", &[0x02, 0x02, 0x03, 0x04]),
+            ("key:meta+alt+0", &[0x02, 0x02, 0x0c, 0x27]),
+            ("key:rctrl+rshift+ralt+rmeta+f13", &[0x02, 0x02, 0xf0, 0x68]),
+            ("dpi:up", &[0x06, 0x01, 0x01]),
+            ("dpi:down", &[0x06, 0x01, 0x02]),
+            ("dpi:up-wrap", &[0x06, 0x01, 0x06]),
+            ("dpi:down-wrap", &[0x06, 0x01, 0x07]),
+            ("dpi:stage1", &[0x06, 0x02, 0x03, 0x01]),
+            ("dpi:stage5", &[0x06, 0x02, 0x03, 0x05]),
+            ("profile:next", &[0x07, 0x01, 0x01]),
+            ("profile:prev", &[0x07, 0x01, 0x02]),
+            ("profile:next-wrap", &[0x07, 0x01, 0x04]),
+            ("profile:prev-wrap", &[0x07, 0x01, 0x05]),
+            ("profile:2", &[0x07, 0x02, 0x03, 0x02]),
+            ("media:playpause", &[0x0a, 0x02, 0x00, 0xcd]),
+            ("media:play", &[0x0a, 0x02, 0x00, 0xb0]),
+            ("media:pause", &[0x0a, 0x02, 0x00, 0xb1]),
+            ("media:next", &[0x0a, 0x02, 0x00, 0xb5]),
+            ("media:prev", &[0x0a, 0x02, 0x00, 0xb6]),
+            ("media:stop", &[0x0a, 0x02, 0x00, 0xb7]),
+            ("media:mute", &[0x0a, 0x02, 0x00, 0xe2]),
+            ("media:volumeup", &[0x0a, 0x02, 0x00, 0xe9]),
+            ("media:volumedown", &[0x0a, 0x02, 0x00, 0xea]),
+            ("hypershift", &[0x0c, 0x01, 0x01]),
+            ("keyturbo:ctrl+1:30", &[0x0d, 0x04, 0x01, 0x1e, 0x00, 0x1e]),
+            ("turbo:left:50", &[0x0e, 0x03, 0x01, 0x00, 0x32]),
+            ("turbo:wheelright:1000", &[0x0e, 0x03, 0x69, 0x03, 0xe8]),
+            ("raw:0b0c0d", &[0x0b, 0x0c, 0x0d]),
+        ];
+        for (text, bytes) in cases {
+            let a: Action = text.parse().unwrap_or_else(|e| panic!("{text}: {e}"));
+            assert_eq!(a.encode(), bytes.to_vec(), "{text}");
+            assert_eq!(a.to_string().parse::<Action>(), Ok(a.clone()), "{text}");
+        }
+    }
+
+    /// Values without a name print as hex, which has to load back too, or an
+    /// exported profile can't be imported.
+    #[test]
+    fn display_parses_back_to_the_same_action() {
+        let actions = [
+            Action::Disabled,
+            Action::Mouse(0x07),
+            Action::Key { mods: 0, usage: 0 },
+            Action::Key { mods: 0xff, usage: 0x64 },
+            Action::KeyTurbo { mods: 0x22, usage: 0x59, interval: u16::MAX },
+            Action::Media(0),
+            Action::Media(0x1234),
+            Action::DpiStage(255),
+            Action::Profile(3),
+            Action::ProfileSet(0),
+            Action::ProfileSet(255),
+            Action::MouseTurbo { button: 0x42, interval: 0 },
+            Action::Hypershift,
+            Action::Raw(vec![0xff]),
+        ];
+        for a in actions {
+            assert_eq!(a.to_string().parse::<Action>(), Ok(a.clone()), "{a}");
+        }
+    }
+
+    #[test]
+    fn unnamed_dpi_op_round_trips() {
+        let a = Action::decode(&[0x06, 0x01, 0x03]);
+        assert_eq!(a.to_string().parse::<Action>(), Ok(a));
+    }
+
+    #[test]
+    fn rejects_bad_input() {
+        let bad = [
+            "", " ", "disabled ", "nope", "MOUSE:left",
+            "key:", "key:nosuchkey", "key:ctrl+", "key:hyper+a", "key: a",
+            "mouse:", "mouse:thumb", "mouse:256",
+            "media:", "media:loud", "media:0xzz",
+            "dpi:", "dpi:sideways", "dpi:stage", "dpi:stage256", "dpi:stage-1",
+            "profile:", "profile:last", "profile:256", "profile:0x100",
+            "turbo:left", "turbo:left:", "turbo:left:fast", "turbo:left:65536", "turbo:nope:50",
+            "keyturbo:a", "keyturbo:ctrl+1", "keyturbo:a:", "keyturbo::50",
+            "raw", "raw:", "raw:0", "raw:zz", "raw:0g",
+        ];
+        for text in bad {
+            assert!(text.parse::<Action>().is_err(), "'{text}' parsed");
+        }
+    }
+
+    #[test]
+    fn names_keyboard_usages() {
+        let cases = [
+            (0x04, "a"), (0x1d, "z"), (0x1e, "1"), (0x26, "9"), (0x27, "0"),
+            (0x59, "num1"), (0x61, "num9"), (0x62, "num0"), (0x63, "numdot"),
+            (0x3a, "f1"), (0x45, "f12"), (0x68, "f13"), (0x73, "f24"), (0xe7, "rightmeta"),
+        ];
+        for (usage, name) in cases {
+            assert_eq!(key_name(usage).as_deref(), Some(name), "{usage:#04x}");
+        }
+        for usage in [0x00, 0x03, 0x32, 0x64, 0x74, 0xe8, 0xff] {
+            assert_eq!(key_name(usage), None, "{usage:#04x}");
+        }
+        // a name that pointed at two usages would save one key and load another
+        for usage in 0..=255u8 {
+            if let Some(name) = key_name(usage) {
+                assert_eq!(key_usage(&name), Some(usage), "{name}");
+            }
+        }
+        assert_eq!(key_usage("NumEnter"), Some(0x58));
+        assert_eq!("key:A".parse::<Action>(), "key:a".parse::<Action>());
+    }
+
+    #[test]
+    fn decodes_short_and_padded_reads() {
+        assert_eq!(Action::decode(&[]), Action::Disabled);
+        assert_eq!(Action::decode(&[0x02]), Action::Key { mods: 0, usage: 0 });
+        assert_eq!(Action::decode(&[0x0a, 0x02, 0x00]), Action::Media(0));
+        assert_eq!(Action::decode(&[0x0b, 0x01, 0x05, 0x00, 0x00]), Action::Raw(vec![0x0b, 0x01, 0x05]));
+        assert_eq!(Action::decode(&[0x0c, 0x01, 0x02]), Action::Raw(vec![0x0c, 0x01, 0x02]));
+        assert_eq!(hex_bytes(""), Some(vec![]));
+        assert_eq!(hex_bytes("ABcd"), Some(vec![0xab, 0xcd]));
     }
 }

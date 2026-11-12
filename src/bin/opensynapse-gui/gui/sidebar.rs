@@ -81,7 +81,7 @@ impl App {
         let selected = self.profile_label(ui, self.profile);
         // a queued SET ACTIVE counts, so it can't be queued twice
         let queued = self.ops.iter().rev().find_map(|o| if let Op::SetActive(p) = o { Some(*p) } else { None });
-        let can_activate = self.active_profile().is_some() && queued.or(self.active_profile()) != Some(self.profile);
+        let can_activate = queued.or(self.active_profile()) != Some(self.profile);
         ComboBox::from_id_salt("profile")
             .selected_text(selected)
             .width(width)
@@ -101,8 +101,9 @@ impl App {
                 .on_hover_text("make the mouse use this profile")
                 .clicked();
         if activate {
-            queue(&mut self.ops, Op::SetActive(self.profile));
-            self.status = Ok(format!("QUEUED SET ACTIVE > P{}", self.profile));
+            let op = Op::SetActive(self.profile);
+            self.say_queued(&op);
+            queue(&mut self.ops, op);
         }
         changed |= self.profile_actions(ui, &list);
 
@@ -157,7 +158,7 @@ impl App {
         let free = (1..=max).find(|i| !list.contains(i));
         // the mouse can't drop the profile it's using, and a queued SET ACTIVE would make it that one
         let activating = self.ops.contains(&Op::SetActive(p));
-        let can_delete = self.active_profile().is_some() && list.len() > 1 && self.active_profile() != Some(p) && !activating;
+        let can_delete = list.len() > 1 && self.active_profile() != Some(p) && !activating;
         let size = [ui.available_width(), 22.0];
         let supported = self.active_profile().is_some();
         let new = supported && ui.add_enabled_ui(free.is_some(), |ui| sized(ui, size, outline("NEW PROFILE", t().accent))).inner.clicked();
@@ -169,8 +170,9 @@ impl App {
             self.renaming = Some(self.profile_name(p).unwrap_or_default());
         }
         if let (true, Some(n)) = (new, free) {
-            queue(&mut self.ops, Op::CreateProfile(n));
-            self.status = Ok(format!("QUEUED NEW PROFILE P{n}"));
+            let op = Op::CreateProfile(n);
+            self.say_queued(&op);
+            queue(&mut self.ops, op);
             self.profile = n;
             return true;
         }
@@ -184,10 +186,11 @@ impl App {
             Op::CreateProfile(x) => *x != p,
             _ => true,
         });
+        let op = Op::DeleteProfile(p);
+        self.say_queued(&op);
         if !created {
-            queue(&mut self.ops, Op::DeleteProfile(p));
+            queue(&mut self.ops, op);
         }
-        self.status = Ok(format!("QUEUED DELETE PROFILE P{p}"));
         self.profile = self.active_profile().unwrap_or(list[0]);
         true
     }
@@ -247,7 +250,7 @@ impl App {
     /// Follows the newest line, the panel around it keeps it a fixed height.
     pub(crate) fn log_panel(&mut self, ui: &mut egui::Ui) {
         heading(ui, "LOG");
-        egui::Frame::new().fill(egui::Color32::BLACK).inner_margin(6).show(ui, |ui| {
+        egui::Frame::new().fill(t().deep).inner_margin(6).show(ui, |ui| {
             egui::ScrollArea::vertical()
                 .stick_to_bottom(true)
                 .auto_shrink([false, false])
@@ -261,13 +264,13 @@ impl App {
                         job.append(&format!("[{}] :: ", line.time), 0.0, format(t().accent));
                         let color = match line.kind {
                             debug::Kind::Raw => t().muted,
-                            debug::Kind::Info => egui::Color32::from_gray(200),
+                            debug::Kind::Info => t().text,
                             debug::Kind::Warn => t().warn,
                             debug::Kind::Error => t().error,
                         };
                         job.append(&line.message, 0.0, format(color));
                         if let Some(bytes) = line.bytes.filter(|_| raw) {
-                            job.append(&format!("\n    {bytes}"), 0.0, format(egui::Color32::from_gray(110)));
+                            job.append(&format!("\n    {bytes}"), 0.0, format(t().muted.gamma_multiply(0.7)));
                         }
                         ui.add(egui::Label::new(job).wrap());
                     }

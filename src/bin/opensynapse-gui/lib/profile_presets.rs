@@ -22,18 +22,17 @@ pub(crate) fn original(m: &Mouse, n: u8) -> Option<PathBuf> {
 }
 
 fn load(m: &Mouse, n: u8) -> io::Result<ProfileFile> {
-    device::load_json(&profile::preset_path(m, n).ok_or_else(|| io::Error::other("no config folder"))?)
+    device::load_json(&profile::preset_path(m, n).ok_or_else(device::no_config)?)
 }
 
 fn save(m: &Mouse, n: u8, file: &ProfileFile) -> io::Result<()> {
-    device::save_json(&profile::preset_path(m, n).ok_or_else(|| io::Error::other("no config folder"))?, file)
+    device::save_json(&profile::preset_path(m, n).ok_or_else(device::no_config)?, file)
 }
 
 impl App {
     /// The mouse slot presets are written to: its first stored profile, or P0 on a mouse with only that.
     pub(crate) fn preset_slot(&self) -> u8 {
-        let profiles = self.mice.get(self.current).map_or(&[][..], |m| &m.def.profiles[..]);
-        profiles.iter().copied().find(|&p| p != 0).unwrap_or(0)
+        self.mice.get(self.current).and_then(|m| m.def.first_stored_profile()).unwrap_or(0)
     }
 
     /// The first time, what's on the mouse becomes preset 1. After that the
@@ -87,10 +86,7 @@ pub(crate) fn apply(m: &Mouse, slot: u8, op: &Op, active: &mut u8) -> Option<io:
         }),
         Op::DeleteProfile(n) => (|| {
             for path in [profile::preset_path(m, *n), original(m, *n)].into_iter().flatten() {
-                match std::fs::remove_file(&path) {
-                    Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
-                    _ => {}
-                }
+                device::remove(&path)?;
             }
             profile::rename(m, *n, "")
         })(),

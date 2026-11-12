@@ -1,10 +1,10 @@
 //! The confirm modal, the native file dialogs and the SETTINGS page.
 
 use crate::lib::debug;
-use crate::shared::widgets::{heading, modal, neon, note, outline, tall};
+use crate::shared::widgets::{heading, modal, neon, note, outline, path_label, tall};
 use crate::state::{App, Confirm, Op, queue, unqueue};
 use crate::theme::{self, t};
-use eframe::egui::{self, RichText};
+use eframe::egui;
 use opensynapse::{device, profile};
 
 impl App {
@@ -16,8 +16,7 @@ impl App {
             if tall(ui, neon("CHANGE FOLDER", t().warn)).on_hover_text("where EXPORT PROFILE saves profile files").clicked() {
                 self.pick_folder();
             }
-            let dir = self.path.parent().map(|d| d.display().to_string()).unwrap_or_default();
-            ui.add(egui::Label::new(RichText::new(&dir).color(t().muted)).truncate()).on_hover_text(&dir);
+            path_label(ui, &self.path.parent().map(|d| d.display().to_string()).unwrap_or_default());
         });
         ui.add_space(16.0);
         heading(ui, "DEBUG");
@@ -29,8 +28,7 @@ impl App {
                     self.status = Err(format!("could not open {}: {e}", path.display()));
                 }
             }
-            let shown = path.display().to_string();
-            ui.add(egui::Label::new(RichText::new(&shown).color(t().muted)).truncate()).on_hover_text(&shown);
+            path_label(ui, &path.display().to_string());
         });
         let mut raw = theme::raw_bytes();
         if ui.checkbox(&mut raw, "Show raw bytes in the log").on_hover_text("the bytes go under each translated command").changed() {

@@ -13,7 +13,7 @@ fn dir() -> Option<PathBuf> {
 
 pub fn path(name: &str) -> io::Result<PathBuf> {
     let name = device::check_name(name).map_err(io::Error::other)?;
-    Ok(dir().ok_or_else(|| io::Error::other("no config folder"))?.join(format!("{name}.json")))
+    Ok(dir().ok_or_else(device::no_config)?.join(format!("{name}.json")))
 }
 
 /// Every saved preset's name, sorted.

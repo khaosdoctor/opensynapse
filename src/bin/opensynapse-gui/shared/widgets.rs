@@ -123,6 +123,10 @@ pub(crate) fn note(ui: &mut egui::Ui, text: impl Into<String>) {
     ui.label(RichText::new(text).color(t().muted).small());
 }
 
+pub(crate) fn path_label(ui: &mut egui::Ui, text: &str) {
+    ui.add(egui::Label::new(RichText::new(text).color(t().muted)).truncate()).on_hover_text(text);
+}
+
 pub(crate) fn modal<R>(ctx: &egui::Context, id: &str, width: f32, title: &str, body: impl FnOnce(&mut egui::Ui) -> R) -> egui::ModalResponse<R> {
     egui::Modal::new(egui::Id::unique(id)).show(ctx, |ui| {
         ui.set_max_width(width);

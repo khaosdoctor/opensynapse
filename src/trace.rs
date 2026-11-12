@@ -3,12 +3,13 @@
 //! decoded yet get None and stay raw bytes.
 
 use crate::action::Action;
-use crate::device::DeviceDef;
+use crate::device::{CLASS_DPI, CLASS_INFO, CLASS_KEYMAP, CLASS_LIGHT, CLASS_PROFILE, DeviceDef};
 use crate::hid::Exchange;
 
 pub fn describe(def: &DeviceDef, e: &Exchange) -> Option<String> {
-    let arg = |i: usize| e.args.get(i).copied().unwrap_or(0);
-    let be = |b: &[u8], i: usize| u16::from_be_bytes([b.get(i).copied().unwrap_or(0), b.get(i + 1).copied().unwrap_or(0)]);
+    let at = |b: &[u8], i: usize| b.get(i).copied().unwrap_or(0);
+    let arg = |i: usize| at(e.args, i);
+    let be = |b: &[u8], i: usize| u16::from_be_bytes([at(b, i), at(b, i + 1)]);
     let button = |id: u8| def.buttons.iter().find(|b| b.id == id).map_or(format!("button {id:02x}"), |b| b.name.clone());
     let layer = |l: u8| def.layers.get(l as usize).cloned().unwrap_or(format!("layer {l}"));
     let target = || format!("P{} {} {}", arg(0), button(arg(1)), layer(arg(2)));
@@ -17,40 +18,40 @@ pub fn describe(def: &DeviceDef, e: &Exchange) -> Option<String> {
     };
 
     let request = match (e.class, e.id) {
-        (0x00, 0x81) => "get firmware".to_string(),
-        (0x00, 0x82) => "get serial".to_string(),
-        (0x02, 0x8c) => format!("get button {}", target()),
-        (0x02, 0x0c) => format!("set button {} > {}", target(), Action::decode(&e.args[3.min(e.args.len())..])),
-        (0x04, 0x85) => "get DPI".to_string(),
-        (0x04, 0x05) => format!("set DPI {} x {}", be(e.args, 1), be(e.args, 3)),
-        (0x04, 0x86) => "get DPI stages".to_string(),
-        (0x04, 0x06) => format!("set DPI stages {} active {}", stages(e.args, arg(2) as usize, 4), arg(1)),
-        (0x05, 0x80) => "get profile count".to_string(),
-        (0x05, 0x81) => "get profile list".to_string(),
-        (0x05, 0x84) => "get active profile".to_string(),
-        (0x05, 0x8a) => "get max profiles".to_string(),
-        (0x05, 0x02) => format!("create profile P{}", arg(0)),
-        (0x05, 0x03) => format!("delete profile P{}", arg(0)),
-        (0x05, 0x04) => format!("set active profile P{}", arg(0)),
-        (0x0f, 0x82) => format!("get LED {:02x} effect", arg(1)),
-        (0x0f, 0x84) => format!("get LED {:02x} brightness", arg(1)),
+        (CLASS_INFO, 0x81) => "get firmware".to_string(),
+        (CLASS_INFO, 0x82) => "get serial".to_string(),
+        (CLASS_KEYMAP, 0x8c) => format!("get button {}", target()),
+        (CLASS_KEYMAP, 0x0c) => format!("set button {} > {}", target(), Action::decode(&e.args[3.min(e.args.len())..])),
+        (CLASS_DPI, 0x85) => "get DPI".to_string(),
+        (CLASS_DPI, 0x05) => format!("set DPI {} x {}", be(e.args, 1), be(e.args, 3)),
+        (CLASS_DPI, 0x86) => "get DPI stages".to_string(),
+        (CLASS_DPI, 0x06) => format!("set DPI stages {} active {}", stages(e.args, arg(2) as usize, 4), arg(1)),
+        (CLASS_PROFILE, 0x80) => "get profile count".to_string(),
+        (CLASS_PROFILE, 0x81) => "get profile list".to_string(),
+        (CLASS_PROFILE, 0x84) => "get active profile".to_string(),
+        (CLASS_PROFILE, 0x8a) => "get max profiles".to_string(),
+        (CLASS_PROFILE, 0x02) => format!("create profile P{}", arg(0)),
+        (CLASS_PROFILE, 0x03) => format!("delete profile P{}", arg(0)),
+        (CLASS_PROFILE, 0x04) => format!("set active profile P{}", arg(0)),
+        (CLASS_LIGHT, 0x82) => format!("get LED {:02x} effect", arg(1)),
+        (CLASS_LIGHT, 0x84) => format!("get LED {:02x} brightness", arg(1)),
         _ => return None,
     };
     let Ok(data) = &e.reply else { return Some(request) };
     // writes only echo their arguments, so only reads have something to add
     let answer = match (e.class, e.id) {
-        (0x00, 0x81) => format!("v{}.{}", data.first().unwrap_or(&0), data.get(1).unwrap_or(&0)),
-        (0x00, 0x82) => String::from_utf8_lossy(data).trim_end_matches('\0').to_string(),
-        (0x02, 0x8c) => Action::decode(data.get(3..).unwrap_or_default()).to_string(),
-        (0x04, 0x85) => format!("{} x {}", be(data, 1), be(data, 3)),
-        (0x04, 0x86) => format!("{} active {}", stages(data, data.get(2).copied().unwrap_or(0) as usize, 4), data.get(1).unwrap_or(&0)),
-        (0x05, 0x80 | 0x84 | 0x8a) => data.first().unwrap_or(&0).to_string(),
-        (0x05, 0x81) => {
+        (CLASS_INFO, 0x81) => format!("v{}.{}", at(data, 0), at(data, 1)),
+        (CLASS_INFO, 0x82) => String::from_utf8_lossy(data).trim_end_matches('\0').to_string(),
+        (CLASS_KEYMAP, 0x8c) => Action::decode(data.get(3..).unwrap_or_default()).to_string(),
+        (CLASS_DPI, 0x85) => format!("{} x {}", be(data, 1), be(data, 3)),
+        (CLASS_DPI, 0x86) => format!("{} active {}", stages(data, at(data, 2) as usize, 4), at(data, 1)),
+        (CLASS_PROFILE, 0x80 | 0x84 | 0x8a) => at(data, 0).to_string(),
+        (CLASS_PROFILE, 0x81) => {
             let ids: Vec<String> = data.iter().skip(1).map(|p| format!("P{p}")).collect();
-            format!("max {}, {}", data.first().unwrap_or(&0), ids.join(" "))
+            format!("max {}, {}", at(data, 0), ids.join(" "))
         }
-        (0x0f, 0x82) => format!("{:?}", crate::rgb::Effect::from_reply(data)),
-        (0x0f, 0x84) => data.get(2).unwrap_or(&0).to_string(),
+        (CLASS_LIGHT, 0x82) => format!("{:?}", crate::rgb::Effect::from_reply(data)),
+        (CLASS_LIGHT, 0x84) => at(data, 2).to_string(),
         _ => return Some(request),
     };
     Some(format!("{request} = {answer}"))

@@ -60,10 +60,8 @@ impl App {
     pub(crate) fn load_profiles(&mut self) {
         let Some(m) = self.mice.get(self.current) else { return };
         // a mouse that answered once has stored profiles, a later failed read doesn't make it lose them
-        match m.profiles() {
-            Ok(on) => self.onboard = Some(on),
-            Err(_) if self.onboard.is_some() => {}
-            Err(_) => self.onboard = None,
+        if let Ok(on) = m.profiles() {
+            self.onboard = Some(on);
         }
         // only this mouse is at hand, so presets can be tried on it as if it had no stored profiles
         #[cfg(debug_assertions)]
@@ -85,12 +83,7 @@ impl App {
         self.device_poll = self.power.as_ref().and_then(Power::poll_rate);
         self.device_idle = self.power.as_ref().and_then(Power::idle_time);
         self.battery = self.power.as_ref().and_then(Power::battery);
-        if !self.ops.iter().any(|o| matches!(o, Op::Poll(_))) {
-            self.poll_rate = self.device_poll.unwrap_or(0);
-        }
-        if !self.ops.iter().any(|o| matches!(o, Op::Idle(_))) {
-            self.idle = self.device_idle.unwrap_or(0);
-        }
+        self.reset_power_edits();
     }
 
     pub(crate) fn reload(&mut self) {
@@ -255,16 +248,14 @@ impl App {
                     *base = done;
                 }
             }
-            match &r {
-                Ok(_) => debug::write(&format!("WROTE {}", op.describe(&m.def))),
-                Err(e) => debug::write(&format!("FAILED {}: {e}", op.describe(&m.def))),
-            }
             if let Err(e) = r {
+                debug::write(&format!("FAILED {}: {e}", op.describe(&m.def)));
                 let done = total - self.ops.len();
                 self.status = Err(format!("{done}/{total} APPLIED > {} FAILED: {e}", op.describe(&m.def)));
                 self.after_apply();
                 return;
             }
+            debug::write(&format!("WROTE {}", op.describe(&m.def)));
             self.ops.remove(0);
         }
         self.status = Ok(format!("{total} OPERATIONS APPLIED"));

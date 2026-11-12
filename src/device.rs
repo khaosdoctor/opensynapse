@@ -38,10 +38,11 @@ fn hex<'de, D: Deserializer<'de>, T: TryFrom<u64>>(d: D) -> Result<T, D::Error> 
 }
 
 const VARSTORE: u8 = 0x01;
-const CLASS_DPI: u8 = 0x04;
-const CLASS_KEYMAP: u8 = 0x02;
-const CLASS_LIGHT: u8 = 0x0f;
-const CLASS_PROFILE: u8 = 0x05;
+pub(crate) const CLASS_INFO: u8 = 0x00;
+pub(crate) const CLASS_DPI: u8 = 0x04;
+pub(crate) const CLASS_KEYMAP: u8 = 0x02;
+pub(crate) const CLASS_LIGHT: u8 = 0x0f;
+pub(crate) const CLASS_PROFILE: u8 = 0x05;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeviceDef {
@@ -82,6 +83,10 @@ impl DeviceDef {
 
     pub fn layer(&self, name: &str) -> Option<u8> {
         self.layers.iter().position(|l| l == name).map(|i| i as u8)
+    }
+
+    pub fn first_stored_profile(&self) -> Option<u8> {
+        self.profiles.iter().copied().find(|&p| p != 0)
     }
 }
 
@@ -210,6 +215,17 @@ pub fn write(path: &Path, contents: impl AsRef<[u8]>) -> io::Result<()> {
     fs::write(path, contents)
 }
 
+pub fn remove(path: &Path) -> io::Result<()> {
+    match fs::remove_file(path) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
+pub fn no_config() -> io::Error {
+    io::Error::other("no config folder")
+}
+
 pub fn save_json(path: &Path, value: &impl Serialize) -> io::Result<()> {
     write(path, serde_json::to_string_pretty(value).map_err(io::Error::other)?)
 }
@@ -298,13 +314,13 @@ impl Mouse {
 
     /// Factory serial, fixed per physical unit (survives replugs and renames).
     fn read_serial(hid: &Hid) -> io::Result<String> {
-        let r = hid.command(0x00, 0x82, 0x16, &[])?;
+        let r = hid.command(CLASS_INFO, 0x82, 0x16, &[])?;
         // ends up in file names and D-Bus paths, so nothing like "../"
         Ok(String::from_utf8_lossy(&r[8..8 + 0x16]).chars().filter(char::is_ascii_alphanumeric).collect())
     }
 
     pub fn firmware(&self) -> io::Result<String> {
-        let r = self.hid.command(0x00, 0x81, 0x02, &[])?;
+        let r = self.hid.command(CLASS_INFO, 0x81, 0x02, &[])?;
         Ok(format!("v{}.{}", r[8], r[9]))
     }
 
@@ -346,19 +362,16 @@ impl Mouse {
 
     /// Tried a few times, one failed read would make a mouse with stored profiles look like it has none.
     pub fn profiles(&self) -> io::Result<Profiles> {
-        let mut last = self.read_profiles();
         for _ in 0..3 {
-            if last.is_ok() {
-                break;
+            if let Ok(p) = self.read_profiles() {
+                return Ok(p);
             }
             std::thread::sleep(std::time::Duration::from_millis(30));
-            last = self.read_profiles();
         }
-        last
+        self.read_profiles()
     }
 
     fn read_profiles(&self) -> io::Result<Profiles> {
-        // [max, id, id, ...], the size byte counts max too
         let r = self.hid.command(CLASS_PROFILE, 0x81, 0x50, &[])?;
         let (max, ids) = parse_profile_list(&r);
         let active = self.hid.command(CLASS_PROFILE, 0x84, 0x01, &[])?[8];
@@ -399,12 +412,6 @@ impl Mouse {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-
-    /// A mouse whose hidraw node is /dev/null, so every command fails before
-    /// reaching a device. Only the checks that run before sending can pass.
-    pub(crate) fn offline_mouse() -> Mouse {
-        super::offline_mouse()
-    }
 
     /// The size byte counts the max byte, so `05 01 02` is max 5 with profiles 1 and 2.
     #[test]

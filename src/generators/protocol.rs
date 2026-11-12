@@ -82,7 +82,7 @@ pub fn issue(protocol: &str, mouse: &Mouse) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::device::tests::offline_mouse;
+    use crate::device::offline_mouse;
 
     /// add-device.yml looks for the title, examples/device-from-issue.rs for the heading.
     #[test]

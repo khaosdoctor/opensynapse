@@ -83,7 +83,11 @@ pub fn apply(mouse: &Mouse, profile: u8, file: &ProfileFile) -> io::Result<usize
 
 /// <serial>-<profile>.json in the model folder.
 pub fn default_path(mouse: &Mouse, profile: u8) -> Option<PathBuf> {
-    device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, &format!("{profile}.json"))
+    file(mouse, &format!("{profile}.json"))
+}
+
+fn file(mouse: &Mouse, name: &str) -> Option<PathBuf> {
+    device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, name)
 }
 
 /// <serial>-<profile>.original.json next to the default path, which holds what
@@ -100,8 +104,7 @@ pub fn ensure_defaults(mouse: &Mouse) -> io::Result<usize> {
     let mut created = 0;
     // only the profiles that exist, so a deleted one doesn't come back as a snapshot
     // without an answer only P0 and the first stored profile are sure to be in use, the rest may not exist
-    let first = mouse.def.profiles.iter().copied().find(|&p| p != 0);
-    let existing = mouse.profiles().map(|on| on.ids).unwrap_or_else(|_| first.into_iter().collect());
+    let existing = mouse.profiles().map(|on| on.ids).unwrap_or_else(|_| mouse.def.first_stored_profile().into_iter().collect());
     for p in [0].into_iter().chain(existing) {
         let (Some(original), Some(old)) = (original_path(mouse, p), default_path(mouse, p)) else { continue };
         if original.exists() {
@@ -125,7 +128,7 @@ pub fn export(mouse: &Mouse, profile: u8, path: &Path) -> io::Result<()> {
 /// <serial>-preset-<n>.json. Mice that don't answer the profile commands get
 /// presets instead, profile files kept here and written to the mouse when picked.
 pub fn preset_path(mouse: &Mouse, n: u8) -> Option<PathBuf> {
-    device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, &format!("preset-{n}.json"))
+    file(mouse, &format!("preset-{n}.json"))
 }
 
 pub fn presets(mouse: &Mouse) -> Vec<u8> {
@@ -143,12 +146,11 @@ pub fn presets(mouse: &Mouse) -> Vec<u8> {
 
 /// The preset last written to the mouse, kept in <serial>-preset-active.json.
 pub fn active_preset(mouse: &Mouse) -> Option<u8> {
-    device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, "preset-active.json").and_then(|p| device::load_json(&p).ok())
+    file(mouse, "preset-active.json").and_then(|p| device::load_json(&p).ok())
 }
 
 pub fn set_active_preset(mouse: &Mouse, n: u8) -> io::Result<()> {
-    let path = device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, "preset-active.json").ok_or_else(|| io::Error::other("no config folder"))?;
-    device::save_json(&path, &n)
+    device::save_json(&file(mouse, "preset-active.json").ok_or_else(device::no_config)?, &n)
 }
 
 /// Copies every button on every layer. A deleted profile keeps its keymap on
@@ -167,10 +169,7 @@ pub fn copy(mouse: &Mouse, from: u8, to: u8) -> io::Result<()> {
 
 pub fn forget(mouse: &Mouse, profile: u8) -> io::Result<()> {
     for path in [default_path(mouse, profile), original_path(mouse, profile)].into_iter().flatten() {
-        match fs::remove_file(&path) {
-            Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
-            _ => {}
-        }
+        device::remove(&path)?;
     }
     if names(mouse).contains_key(&profile) {
         rename(mouse, profile, "")?;
@@ -180,12 +179,12 @@ pub fn forget(mouse: &Mouse, profile: u8) -> io::Result<()> {
 
 /// Kept on this computer, the mouse has nowhere to store names.
 pub fn names(mouse: &Mouse) -> BTreeMap<u8, String> {
-    names_path(mouse).and_then(|p| device::load_json(&p).ok()).unwrap_or_default()
+    file(mouse, "names.json").and_then(|p| device::load_json(&p).ok()).unwrap_or_default()
 }
 
 /// An empty name removes it.
 pub fn rename(mouse: &Mouse, profile: u8, name: &str) -> io::Result<()> {
-    let path = names_path(mouse).ok_or_else(|| io::Error::other("no config folder"))?;
+    let path = file(mouse, "names.json").ok_or_else(device::no_config)?;
     let mut all = names(mouse);
     match name.trim() {
         "" => all.remove(&profile),
@@ -194,14 +193,10 @@ pub fn rename(mouse: &Mouse, profile: u8, name: &str) -> io::Result<()> {
     device::save_json(&path, &all)
 }
 
-fn names_path(mouse: &Mouse) -> Option<PathBuf> {
-    device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, "names.json")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::device::tests::offline_mouse;
+    use crate::device::offline_mouse;
     use serde_json::json;
 
     fn file(layers: serde_json::Value) -> ProfileFile {

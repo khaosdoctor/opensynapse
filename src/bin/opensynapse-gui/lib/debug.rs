@@ -9,9 +9,6 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-#[cfg(not(test))]
-const JOURNAL: &str = "/run/systemd/journal/socket";
-
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum Kind {
     /// what was sent to or read from the mouse
@@ -125,7 +122,7 @@ fn journal(kind: Kind, message: &str) {
         Kind::Raw => 7,
     };
     let entry = format!("SYSLOG_IDENTIFIER=opensynapse-gui\nPRIORITY={priority}\nMESSAGE={}\n", message.replace('\n', " "));
-    let _ = socket.send_to(entry.as_bytes(), JOURNAL);
+    let _ = socket.send_to(entry.as_bytes(), "/run/systemd/journal/socket");
 }
 
 /// Local HH:MM:SS, through libc since std has no time zones.

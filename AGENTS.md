@@ -75,6 +75,7 @@ The GUI is split by job, and every file stays under 500 lines:
 | `lib/remapper.rs` | the REMAP editor, action types and key lists |
 | `lib/lighting.rs` | the lighting tab, with the polling rate, battery and sleep timeout |
 | `lib/presets.rs` | the preset list, SAVE AS and DELETE on the lighting tab |
+| `lib/profiles.rs` | the profile list, names and active profile with the queued changes applied |
 | `lib/profile_presets.rs` | profiles as presets saved on this computer, for mice that don't answer the profile commands |
 | `lib/debug.rs` | the session debug log, written to the journal, to `$XDG_STATE_HOME/opensynapse/debug.log` and to the LOG panel in the sidebar |
 | `lib/instance_lock.rs` | the lock file and the "already running" dialog |

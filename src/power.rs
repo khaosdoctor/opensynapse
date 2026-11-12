@@ -39,6 +39,7 @@ impl Power {
     }
 
     fn set<B: Serialize + DynamicType>(&self, iface: &str, method: &str, body: &B) -> io::Result<()> {
+        crate::hid::note(&format!("OPENRAZER > {iface}.{method} {}", serde_json::to_string(body).unwrap_or_default()));
         self.conn.call_method(Some("org.razer"), self.path.as_str(), Some(iface), method, body).map_err(io::Error::other)?;
         Ok(())
     }

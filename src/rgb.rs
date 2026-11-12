@@ -99,6 +99,10 @@ fn call<B: Serialize + DynamicType>(conn: &Connection, path: &str, zone: &str, v
     let mut cap = zone.to_string();
     cap[..1].make_ascii_uppercase();
     let iface = format!("razer.device.lighting.{zone}");
+    // reads run every few seconds and change nothing, only sets are traced
+    if verb == "set" {
+        crate::hid::note(&format!("OPENRAZER > {iface}.{verb}{cap}{name} {}", serde_json::to_string(body).unwrap_or_default()));
+    }
     conn.call_method(Some("org.razer"), path, Some(iface.as_str()), format!("{verb}{cap}{name}").as_str(), body).ok()
 }
 
@@ -203,7 +207,9 @@ impl Lighting {
         if self.daemon_call(zone, "Brightness", &(f64::from(value) * 100.0 / 255.0,)) {
             return Ok(());
         }
-        fs::write(self.file(zone, "led_brightness"), value.to_string()).map_err(hint)
+        let path = self.file(zone, "led_brightness");
+        crate::hid::note(&format!("SYSFS > {} {value}", path.display()));
+        fs::write(path, value.to_string()).map_err(hint)
     }
 
     pub fn set_effect(&self, zone: &str, effect: &Effect) -> io::Result<()> {
@@ -224,6 +230,7 @@ impl Lighting {
         if !path.exists() {
             return Err(io::Error::other(format!("{zone} doesn't support {name}")));
         }
+        crate::hid::note(&format!("SYSFS > {} [{}]", path.display(), crate::hid::hex(data.as_ref())));
         fs::write(path, data).map_err(hint)
     }
 

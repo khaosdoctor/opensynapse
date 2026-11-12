@@ -5,6 +5,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex, OnceLock};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -19,6 +20,41 @@ const fn hid_ioc(nr: u64) -> u64 {
 const HIDIOCSFEATURE: u64 = hid_ioc(0x06);
 const HIDIOCGFEATURE: u64 = hid_ioc(0x07);
 
+static TRACE: OnceLock<fn(&str)> = OnceLock::new();
+static EXCHANGES: OnceLock<fn(&Exchange)> = OnceLock::new();
+static LAST_READ: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(Mutex::default);
+
+/// One command and its reply, for the trace.
+pub struct Exchange<'a> {
+    pub class: u8,
+    pub id: u8,
+    pub args: &'a [u8],
+    /// the reply's data bytes, as many as its size byte says
+    pub reply: Result<&'a [u8], String>,
+    /// "class/id size args [..]"
+    pub sent: String,
+    /// "ok [..]" or "error: .."
+    pub got: String,
+}
+
+/// Every command sent to the mouse and its reply go to `exchanges`, writes that go
+/// through OpenRazer to `notes`. The GUI's debug log uses this.
+pub fn trace(notes: fn(&str), exchanges: fn(&Exchange)) {
+    let _ = TRACE.set(notes);
+    let _ = EXCHANGES.set(exchanges);
+}
+
+/// For writes that go through OpenRazer instead of hidraw, so the trace has everything sent to the mouse.
+pub fn note(message: &str) {
+    if let Some(trace) = TRACE.get() {
+        trace(message);
+    }
+}
+
+pub fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ")
+}
+
 pub struct Hid {
     file: File,
     transaction_id: u8,
@@ -32,6 +68,30 @@ impl Hid {
 
     /// Sends one command and returns the 90-byte response. Fails on any non-OK status.
     pub fn command(&self, class: u8, id: u8, size: u8, args: &[u8]) -> io::Result<[u8; REPORT_LEN]> {
+        let r = self.exchange(class, id, size, args);
+        let Some(trace) = EXCHANGES.get() else { return r };
+        let sent = format!("{class:02x}/{id:02x} size {size:02x} args [{}]", hex(args));
+        let reply = match &r {
+            Ok(resp) => Ok(&resp[8..(8 + resp[5] as usize).min(REPORT_LEN)]),
+            Err(e) => Err(e.to_string()),
+        };
+        let got = match &reply {
+            Ok(data) => format!("ok [{}]", hex(data)),
+            Err(e) => format!("error: {e}"),
+        };
+        // polling repeats the same reads every half second, a read is only traced when its answer changes
+        if id & 0x80 != 0 {
+            let mut last = LAST_READ.lock().unwrap_or_else(|e| e.into_inner());
+            if last.get(&sent) == Some(&got) {
+                return r;
+            }
+            last.insert(sent.clone(), got.clone());
+        }
+        trace(&Exchange { class, id, args, reply, sent, got });
+        r
+    }
+
+    fn exchange(&self, class: u8, id: u8, size: u8, args: &[u8]) -> io::Result<[u8; REPORT_LEN]> {
         #[cfg(debug_assertions)]
         if crate::fake::dir().is_some() {
             return Err(io::Error::other("fake OpenRazer devices have no hidraw node, buttons and DPI need a real mouse"));
@@ -170,6 +230,17 @@ fn descriptor_has_control_report(desc: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hex_pads_each_byte_to_two_digits() {
+        assert_eq!(hex(&[0x00, 0x0a, 0xff]), "00 0a ff");
+        assert_eq!(hex(&[]), "");
+    }
+
+    #[test]
+    fn note_does_nothing_until_a_trace_is_installed() {
+        note("OPENRAZER set brightness");
+    }
 
     #[test]
     fn finds_razer_control_report() {

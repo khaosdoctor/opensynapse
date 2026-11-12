@@ -10,3 +10,4 @@ pub mod preset;
 pub mod profile;
 pub mod rgb;
 pub mod scaffold;
+pub mod trace;

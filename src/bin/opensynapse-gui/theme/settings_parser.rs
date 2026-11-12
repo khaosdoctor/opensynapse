@@ -26,12 +26,33 @@ pub(super) struct Settings {
     /// a font family that replaces the theme's, None keeps the theme's
     #[serde(default)]
     pub(super) font: Option<String>,
-    /// the debug log shows the bytes under each translated command
-    #[serde(default)]
-    pub(super) raw_bytes: bool,
+    /// flattened, so its keys sit at the top of settings.json like the others
+    #[serde(flatten)]
+    pub(super) log: LogOptions,
 }
 
-pub(super) static SETTINGS: RwLock<Settings> = RwLock::new(Settings { mode: Mode::System, theme: String::new(), font: None, raw_bytes: false });
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub struct LogOptions {
+    /// the bytes under each translated command
+    #[serde(default)]
+    pub raw_bytes: bool,
+    #[serde(default = "yes")]
+    pub log_wrap: bool,
+    /// pixels, None keeps the theme's --log-font-size
+    #[serde(default)]
+    pub log_font_size: Option<f32>,
+}
+
+fn yes() -> bool {
+    true
+}
+
+pub(super) static SETTINGS: RwLock<Settings> = RwLock::new(Settings {
+    mode: Mode::System,
+    theme: String::new(),
+    font: None,
+    log: LogOptions { raw_bytes: false, log_wrap: true, log_font_size: None },
+});
 
 pub(super) struct ThemeFile {
     id: String,
@@ -138,13 +159,13 @@ fn store(s: &Settings) {
     }
 }
 
-pub fn raw_bytes() -> bool {
-    read(&SETTINGS).raw_bytes
+pub fn log_options() -> LogOptions {
+    read(&SETTINGS).log
 }
 
 /// Skips `save`, which reloads the theme and every font. Nothing on screen changes but the log.
-pub fn set_raw_bytes(on: bool) {
-    write(&SETTINGS).raw_bytes = on;
+pub fn set_log_options(log: LogOptions) {
+    write(&SETTINGS).log = log;
     store(&read(&SETTINGS));
 }
 

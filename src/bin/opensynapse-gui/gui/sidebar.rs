@@ -10,8 +10,13 @@ use eframe::egui::{self, Align, ComboBox, DragValue, Layout, RichText};
 impl App {
     pub(crate) fn device_box(&mut self, ui: &mut egui::Ui) {
         // eframe already decodes the PNG for the window icon, so the logo needs no image loader
-        let logo = self.logo.get_or_insert_with(|| {
-            let icon = eframe::icon_data::from_png_bytes(include_bytes!("../../../../assets/icon.png")).unwrap_or_default();
+        let light = crate::theme::is_light();
+        let logo = self.logo[light as usize].get_or_insert_with(|| {
+            let png: &[u8] = match light {
+                true => include_bytes!("../../../../assets/icon-light.png"),
+                false => include_bytes!("../../../../assets/icon.png"),
+            };
+            let icon = eframe::icon_data::from_png_bytes(png).unwrap_or_default();
             let image = egui::ColorImage::from_rgba_unmultiplied([icon.width as usize, icon.height as usize], &icon.rgba);
             ui.ctx().load_texture("logo", image, egui::TextureOptions::LINEAR)
         });
@@ -250,29 +255,37 @@ impl App {
     /// Follows the newest line, the panel around it keeps it a fixed height.
     pub(crate) fn log_panel(&mut self, ui: &mut egui::Ui) {
         heading(ui, "LOG");
-        egui::Frame::new().fill(t().deep).inner_margin(6).show(ui, |ui| {
-            egui::ScrollArea::vertical()
+        let options = crate::theme::log_options();
+        let p = t();
+        egui::Frame::new().fill(p.log_bg).inner_margin(6).show(ui, |ui| {
+            // unwrapped lines need room to the side
+            let scroll = match options.log_wrap {
+                true => egui::ScrollArea::vertical(),
+                false => egui::ScrollArea::both(),
+            };
+            scroll
                 .stick_to_bottom(true)
                 .auto_shrink([false, false])
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                 .show(ui, |ui| {
                     // the theme's font goes on every text style, a FontId keeps the log monospace
-                    let format = |color| TextFormat { font_id: egui::FontId::monospace(10.0), color, ..Default::default() };
-                    let raw = crate::theme::raw_bytes();
+                    let font = egui::FontId::monospace(crate::theme::log_font_size());
+                    let format = |color| TextFormat { font_id: font.clone(), color, ..Default::default() };
                     for line in debug::lines() {
                         let mut job = LayoutJob::default();
-                        job.append(&format!("[{}] :: ", line.time), 0.0, format(t().accent));
+                        job.append(&format!("[{}] :: ", line.time), 0.0, format(p.log_time));
                         let color = match line.kind {
-                            debug::Kind::Raw => t().muted,
-                            debug::Kind::Info => t().text,
-                            debug::Kind::Warn => t().warn,
-                            debug::Kind::Error => t().error,
+                            debug::Kind::Raw => p.log_raw,
+                            debug::Kind::Info => p.log_text,
+                            debug::Kind::Warn => p.warn,
+                            debug::Kind::Error => p.error,
                         };
                         job.append(&line.message, 0.0, format(color));
-                        if let Some(bytes) = line.bytes.filter(|_| raw) {
-                            job.append(&format!("\n    {bytes}"), 0.0, format(t().muted.gamma_multiply(0.7)));
+                        if let Some(bytes) = line.bytes.filter(|_| options.raw_bytes) {
+                            job.append(&format!("\n    {bytes}"), 0.0, format(p.log_raw.gamma_multiply(0.7)));
                         }
-                        ui.add(egui::Label::new(job).wrap());
+                        let label = egui::Label::new(job);
+                        ui.add(if options.log_wrap { label.wrap() } else { label.extend() });
                     }
                 });
         });

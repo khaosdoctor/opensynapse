@@ -29,8 +29,8 @@ pub(crate) struct App {
     pub(crate) renaming: Option<String>,
     /// Some when the mouse doesn't answer the profile commands, so profiles are presets on this computer
     pub(crate) profile_presets: Option<crate::lib::profile_presets::Presets>,
-    /// loaded on the first frame, it needs the egui context
-    pub(crate) logo: Option<egui::TextureHandle>,
+    /// dark and light, each loaded the first time it shows, a texture needs the egui context
+    pub(crate) logo: [Option<egui::TextureHandle>; 2],
     /// the status line last written to the debug log, so each change is logged once
     pub(crate) logged: String,
     pub(crate) layer: u8,
@@ -127,7 +127,7 @@ impl App {
             names: BTreeMap::new(),
             renaming: None,
             profile_presets: None,
-            logo: None,
+            logo: [None, None],
             logged: String::new(),
             layer: 0,
             actions: Vec::new(),

@@ -19,7 +19,7 @@ mod theme_detector;
 mod theme_parser;
 
 pub use palette::Palette;
-pub use settings_parser::{raw_bytes, set_raw_bytes, settings_ui};
+pub use settings_parser::{log_options, set_log_options, settings_ui};
 
 use eframe::egui::{self, Color32, CornerRadius, FontData, FontFamily, FontId, Stroke, Theme};
 use palette::{base, uniform};
@@ -28,7 +28,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use theme_detector::{follow_desktop, prefers_light};
 use theme_parser::{forced_scheme, parse};
@@ -36,6 +36,8 @@ use theme_parser::{forced_scheme, parse};
 // `start` fills it in before the first frame
 static CURRENT: RwLock<Palette> = RwLock::new(uniform(Color32::BLACK));
 static RADIUS: AtomicU8 = AtomicU8::new(0);
+static LOG_SIZE: AtomicU32 = AtomicU32::new(0);
+static LIGHT: AtomicBool = AtomicBool::new(false);
 
 /// Read the first time the settings page opens.
 static FONTS: RwLock<Vec<(String, PathBuf)>> = RwLock::new(Vec::new());
@@ -87,6 +89,20 @@ pub fn radius() -> CornerRadius {
     CornerRadius::same(RADIUS.load(Ordering::Relaxed))
 }
 
+/// The settings page's size wins over the theme's --log-font-size.
+pub fn log_font_size() -> f32 {
+    log_options().log_font_size.unwrap_or_else(theme_log_font_size)
+}
+
+pub fn theme_log_font_size() -> f32 {
+    f32::from_bits(LOG_SIZE.load(Ordering::Relaxed))
+}
+
+/// Whether the light or the dark side of the theme is on screen, after the mode setting and the desktop are weighed.
+pub fn is_light() -> bool {
+    LIGHT.load(Ordering::Relaxed)
+}
+
 pub fn start(ctx: &egui::Context) {
     if let Some(s) = config("settings.json").and_then(|f| opensynapse::device::load_json(&f).ok()) {
         *write(&SETTINGS) = s;
@@ -113,6 +129,10 @@ pub fn apply(ctx: &egui::Context) {
     let mut p = style.p;
     p.pane = style.pane.unwrap_or(p.bg.lerp_to_gamma(p.panel, 0.5));
     p.hypershift = style.hypershift.unwrap_or(p.warn);
+    let [bg, text, raw, time] = style.log;
+    (p.log_bg, p.log_text, p.log_raw, p.log_time) = (bg.unwrap_or(p.deep), text.unwrap_or(p.text), raw.unwrap_or(p.muted), time.unwrap_or(p.accent));
+    LOG_SIZE.store(style.log_size.unwrap_or(10.0).to_bits(), Ordering::Relaxed);
+    LIGHT.store(light, Ordering::Relaxed);
     *write(&CURRENT) = p;
     RADIUS.store(style.radius, Ordering::Relaxed);
     let radius = radius();

@@ -9,6 +9,10 @@ pub(super) struct Style {
     pub(super) pane: Option<Color32>,
     /// None until a theme sets --hypershift, then apply uses --warn
     pub(super) hypershift: Option<Color32>,
+    /// --log-bg, --log-text, --log-raw and --log-time, None falls back to deep, text, muted and accent
+    pub(super) log: [Option<Color32>; 4],
+    /// --log-font-size in pixels
+    pub(super) log_size: Option<f32>,
 }
 
 /// `color-scheme: light` or `dark` in theme.css, for desktops that don't
@@ -75,6 +79,18 @@ fn set(style: &mut Style, decl: &str) {
         }
         "--hypershift" => {
             style.hypershift = color().or(style.hypershift);
+            return;
+        }
+        "--log-bg" | "--log-text" | "--log-raw" | "--log-time" => {
+            let i = ["--log-bg", "--log-text", "--log-raw", "--log-time"].iter().position(|n| *n == name).unwrap_or(0);
+            style.log[i] = color().or(style.log[i]);
+            return;
+        }
+        "--log-font-size" => {
+            match value.trim_end_matches("px").trim().parse() {
+                Ok(s) => style.log_size = Some(s),
+                Err(_) => eprintln!("theme: --log-font-size: {value} is not a number of pixels"),
+            }
             return;
         }
         "--bg" => &mut p.bg,
@@ -163,7 +179,7 @@ mod tests {
         let unset = Color32::from_rgb(0x12, 0x34, 0x56);
         for (id, css) in BUILTIN {
             for light in [false, true] {
-                let mut style = Style { p: uniform(unset), radius: 0, font: String::new(), pane: None, hypershift: None };
+                let mut style = Style { p: uniform(unset), radius: 0, font: String::new(), pane: None, hypershift: None, log: [None; 4], log_size: None };
                 parse(css, light, &mut style);
                 let p = style.p;
                 let colors = [

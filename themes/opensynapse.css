@@ -19,6 +19,10 @@
  *   --on-accent  text on filled buttons
  *   --accent, --accent-2, --warn, --muted, --error, --ok
  *   --hypershift the Hypershift layer's color on the mouse, the layer buttons and the editor, --warn if you leave it out
+ *   --log-bg, --log-text, --log-raw, --log-time
+ *                the LOG panel's background, its lines, the bytes and commands sent to the mouse, and the
+ *                timestamps, --deep, --text, --muted and --accent if you leave them out
+ *   --log-font-size  the LOG panel's text, in pixels, 10 if you leave it out (the settings tab can override it)
  *   --off        edge of a button set to OFF
  *   --hover      laid over a button under the mouse, use some transparency like #ffffff1a
  */

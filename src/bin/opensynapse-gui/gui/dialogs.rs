@@ -30,9 +30,24 @@ impl App {
             }
             path_label(ui, &path.display().to_string());
         });
-        let mut raw = theme::raw_bytes();
-        if ui.checkbox(&mut raw, "Show raw bytes in the log").on_hover_text("the bytes go under each translated command").changed() {
-            theme::set_raw_bytes(raw);
+        let mut log = theme::log_options();
+        let mut changed = ui.checkbox(&mut log.raw_bytes, "Show raw bytes in the log").on_hover_text("the bytes go under each translated command").changed();
+        changed |= ui.checkbox(&mut log.log_wrap, "Wrap log lines").on_hover_text("off keeps each line on one row and scrolls sideways").changed();
+        ui.horizontal(|ui| {
+            ui.label("Log font size");
+            let mut size = theme::log_font_size();
+            if ui.add(egui::DragValue::new(&mut size).range(6.0..=24.0).speed(0.2).suffix(" px")).changed() {
+                log.log_font_size = Some(size);
+                changed = true;
+            }
+            let custom = log.log_font_size.is_some();
+            if ui.add_enabled(custom, egui::Button::new("THEME DEFAULT")).on_hover_text("use the theme's --log-font-size").clicked() {
+                log.log_font_size = None;
+                changed = true;
+            }
+        });
+        if changed {
+            theme::set_log_options(log);
         }
         ui.add_space(16.0);
         theme::settings_ui(ui);

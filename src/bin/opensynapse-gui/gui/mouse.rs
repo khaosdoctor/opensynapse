@@ -213,6 +213,11 @@ fn short(a: &Action) -> String {
         Action::Dpi(1 | 6) => "DPI+".into(),
         Action::Dpi(_) => "DPI-".into(),
         Action::DpiStage(n) => format!("DPI{n}"),
+        // op bytes from action::PROFILE, WRAP marks the ones that go around
+        Action::Profile(0x01) => "PROF+".into(),
+        Action::Profile(0x02) => "PROF-".into(),
+        Action::Profile(0x04) => "PWRAP+".into(),
+        Action::Profile(0x05) => "PWRAP-".into(),
         Action::Profile(_) => "PROF".into(),
         Action::ProfileSet(n) => format!("P{n}"),
         Action::Hypershift => "HYPER".into(),

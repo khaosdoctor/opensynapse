@@ -515,7 +515,7 @@ fn parse_effect(name: &str, args: &[&str]) -> Result<Effect, String> {
 }
 
 fn main() -> ExitCode {
-    // Rust ignores SIGPIPE, so `opensynapse dump | head` panicked; exit quietly like other CLIs
+    // Rust ignores SIGPIPE, so `opensynapse dump | head` would panic instead of exiting quietly like other CLIs
     unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
     match parse().and_then(run) {
         Ok(()) => ExitCode::SUCCESS,

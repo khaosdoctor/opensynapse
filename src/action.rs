@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 /// Every action is `[type, length of the data, data...]`. Types and payloads
 /// marked "razerqdhid" come from geezmolycos/razerqdhid (Basilisk V3) and
-/// haven't been seen working on the Naga yet; the rest were pressed and checked.
+/// haven't been seen working on the Naga yet, the rest were pressed and checked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     Disabled,

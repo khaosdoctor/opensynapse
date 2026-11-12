@@ -47,7 +47,7 @@ impl Pressed {
         }
     }
 
-    /// Applies one report; returns whether anything visible changed.
+    /// Applies one report and returns whether anything visible changed.
     // assumes the common Razer layout (interface 0 = mouse, others =
     // keyboard with an optional report id 1). Parse the report descriptor if a mouse differs.
     fn apply(&mut self, interface: u8, r: &[u8]) -> bool {

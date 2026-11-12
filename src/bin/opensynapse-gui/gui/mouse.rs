@@ -8,7 +8,7 @@ use opensynapse::action::{Action, key_name};
 use opensynapse::device::Button;
 use std::time::Duration;
 
-/// The mouse body ends at y 74%; reserve a bit below it for side plates.
+/// The mouse body ends at y 74%, the space below it is for side plates.
 const USED_HEIGHT: f32 = 0.78;
 /// The mouse drawing never grows past this, so big screens don't get a giant mouse.
 const MAX_VIEW_WIDTH: f32 = 900.0;

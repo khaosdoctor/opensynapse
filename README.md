@@ -29,16 +29,18 @@ Razer doesn't ship Synapse for Linux, to change the keybinds we can use keyd and
 
 This is the reverse engineered version of the Synapse protocol handling. It maps out how the mouse stores its keymap (the details are in [`devices/protocols/`](devices/protocols/razer-naga-left-handed-2020.md)). It talks to the mouse directly, so the mapping is saved on the mouse itself and works in any computer, this is a single Rust binary either so you can probably build for whatever OS you have.
 
-One of the goals here is also to document these protocols, mouse by mouse, so nobody has to reverse engineer the same thing twice. If you want to build your own tool, or add a mouse to something else, the [protocol files](devices/protocols/) have what we found and how to use it, with commands and code examples.
+> This program uses userspace USB access, so it doesn't need root privileges.
+
+One of the goals here is also to document these protocols, mouse by mouse, so nobody has to reverse engineer the same thing twice. If you want to build your own tool, or add a mouse to something else, the [protocol files](devices/protocols/) have what we found until now.
 
 Right now you can:
 
-- Remap any button to a key (with modifiers), a mouse button, a media key, DPI up/down or a DPI stage, switching profiles, Hypershift or disable it.
+- Remap any button to keys or other types of actions
 - Normal and the Hypershift layers.
-- Keys and mouse buttons can also be on turbo, so they repeat while you hold them
+- Turbo mode support (repeats the action while the button is pressed)
 - Change DPI and the DPI stages
 - Export and import profiles as JSON
-- See which button you're pressing, live if you have the GUI, which becomes some sort of tester
+- See which button you're pressing live if you have the GUI, which becomes some sort of tester
 - Change the lighting and brightness of zones through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports.
 - Save the lighting as named presets and load them back
 - Change the polling rate, also through OpenRazer
@@ -81,14 +83,16 @@ git clone https://github.com/khaosdoctor/opensynapse && cd opensynapse
 cargo install --path . --features gui
 ```
 
-`cargo install` only copies the binaries, so they read the device files from the `devices/` folder of your clone. If you move or delete the clone, copy the file for your mouse from `devices/` to `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc`, like `1532-008d` for the Naga.
+`cargo install` only copies the binaries, so they read the device files from the `devices/` folder of your clone. If you move or delete the clone, copy the file for your mouse from `devices/` to `~/.config/opensynapse/devices/1532-<pid>/buttons.jsonc` (`1532-pid` is the number for your hid device, for example, `1532-008d` is for the for the Naga, 1532 always defines a Razer device, so your mouse will be `1532-<something>`).
 
-The AUR, apt and `.deb` packages install the udev rule. With anything else you install it yourself, or you'll get a permission denied. Homebrew prints the command for it.
+The AUR, apt and `.deb` packages install the udev rule, which is __very important__ for this to work. With anything else you need to install yourself, or you'll get a permission denied:
 
 ```sh
 sudo install -m644 udev/70-opensynapse.rules /etc/udev/rules.d/
 sudo udevadm control --reload && sudo udevadm trigger
 ```
+
+This rule allows your user to access the mouse without root privileges during the session you're in.
 
 ## First use
 
@@ -104,22 +108,21 @@ Permission denied means the udev rule is missing or the mouse wasn't replugged. 
 
 The first time `opensynapse-gui` sees your mouse it saves every profile and the lighting as the original, so ***RESET*** always has something to go back to.
 
-On the Naga, ***P0*** is the live profile and is lost when you unplug the mouse. ***P1*** is the one it keeps, so pick it before you change anything. Nothing is written to the mouse until you hit ***WRITE TO DEVICE***.
+On the Naga, ***P0*** is the live profile and is lost when you unplug the mouse. ***P1*** is the one it keeps, so pick it before you change anything
 
-The lighting tab needs the OpenRazer daemon running. The polling rate is 125, 500 or 1000 Hz, and ***SLEEP AFTER*** takes 60 to 900 seconds.
+> [!IMPORTANT]
+> The lighting tab needs the OpenRazer daemon running. The polling rate is 125, 500 or 1000 Hz, and ***SLEEP AFTER*** takes 60 to 900 seconds.
 
-Lighting presets are saved in `~/.config/opensynapse/presets/<name>.json`. Names use letters, digits, - and _. Loading a preset is a pending change too, and zones your mouse doesn't have are skipped.
-
-Only one GUI runs at a time. ***CLOSE IT AND OPEN HERE*** on the second one closes the first window, which loses anything still pending there.
+Lighting presets are saved in `~/.config/opensynapse/presets/<name>.json`.
 
 ### With the CLI
 
 Make a backup first.
 
 ```sh
-opensynapse export before.json --profile 1
-opensynapse set thumb1 key:f13 --profile 1
-opensynapse get thumb1 --profile 1
+opensynapse export before.json --profile 1 # backup
+opensynapse set thumb1 key:f13 --profile 1 # change key to f13 on p1
+opensynapse get thumb1 --profile 1 # should print key:f13
 opensynapse import before.json --profile 1   # restores the backup
 ```
 
@@ -133,22 +136,22 @@ opensynapse dpi 1600
 opensynapse stages 800 1600 3200 --active 2   # sets the DPI stages and activates the second stage
 opensynapse export my-profile.json
 opensynapse watch                        # prints buttons as you press them
-opensynapse rgb all static ff00aa        # needs OpenRazer
+opensynapse rgb all static ff00aa        # sets rgb lights, needs OpenRazer
 opensynapse rgb scroll brightness 128
-opensynapse preset save night
+opensynapse preset save night            # saves the current lighting as a preset
 opensynapse preset load night            # also preset list and preset delete
-opensynapse poll 1000                    # Hz, needs the OpenRazer daemon
-opensynapse battery                      # wireless mice, also shows the sleep timeout
-opensynapse idle 300                     # seconds without movement before the mouse sleeps
+opensynapse poll 1000                    # sets the poll rate in Hz, needs the OpenRazer daemon
+opensynapse battery                      # for wireless mice, also shows the sleep timeout
+opensynapse idle 300                     # sets seconds without movement before the mouse sleeps
 opensynapse init                         # start a device file for an unsupported mouse
-opensynapse probe                        # raw probe of your mouse, read-only
+opensynapse probe                        # raw probe of your mouse to check what it has
 opensynapse protocol                     # writes the protocol file, see PROTOCOL.md
 opensynapse protocol send                # posts it as a public GitHub issue
 ```
 
-CLI commands use profile 0 unless you pass `--profile`. On the Naga that's the live profile, lost when you unplug the mouse, so add `--profile 1` for changes you want to keep.
+CLI commands use profile 0 unless you pass `--profile`.
 
-Every package installs shell completions for bash, zsh and fish. If you built it yourself, they're in [`contrib/completions/`](contrib/completions/).
+> Every package installs shell completions for bash, zsh and fish. If you built it yourself, they're in [`contrib/completions/`](contrib/completions/).
 
 ## Theming
 

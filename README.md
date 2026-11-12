@@ -5,7 +5,7 @@
 > Remap buttons, set DPI and lighting on Razer mice from Linux.
 
 > [!WARNING]
-> **This is a work in progress.** I only tested it on my own mouse, so some edge cases might not be covered, but it should work with any mouse, and [First use](#first-use) shows how to check yours. It was also built with heavy AI help, which [AI usage](#ai-usage) explains.
+> **This is a work in progress.** I only tested it on my own mouse, so some edge cases might not be covered, but it should work with any mouse
 
 My lawyers say I have to write this, so here it is.
 

@@ -1,6 +1,6 @@
 # Theming
 
-What you pick on the settings tab is saved in `~/.config/opensynapse/settings.json`, along with the ***Show raw bytes in the log*** checkbox from its debug section. The log panel at the bottom of the sidebar uses a black background and the theme's accent color for timestamps.
+What you pick on the settings tab is saved in `~/.config/opensynapse/settings.json`, along with the log options from its debug section. The log font size there wins over the theme's `--log-font-size`.
 
 ## Mode
 
@@ -37,7 +37,7 @@ Only custom properties are read. Anything outside a `prefers-color-scheme` block
 }
 ```
 
-[`themes/opensynapse.css`](../themes/opensynapse.css) lists every property. `--hypershift` is the color of the Hypershift layer, and a theme that leaves it out uses its `--warn`.
+[`themes/opensynapse.css`](../themes/opensynapse.css) lists every property. `--hypershift` is the color of the Hypershift layer, and a theme that leaves it out uses its `--warn`. The LOG panel has its own `--log-bg`, `--log-text`, `--log-raw`, `--log-time` and `--log-font-size`, and each falls back to the theme's matching color or to 10px.
 
 ## Small changes
 

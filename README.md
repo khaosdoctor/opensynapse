@@ -120,7 +120,7 @@ Lighting presets are saved in `~/.config/opensynapse/presets/<name>.json`.
 
 #### The debug log
 
-The LOG panel at the bottom of the sidebar shows everything the GUI sends to the mouse and what comes back, with known commands in words. The same lines go to `~/.local/state/opensynapse/debug.log` (or `$XDG_STATE_HOME/opensynapse/debug.log`), which ***DEBUG LOG*** on the settings tab opens, and to the systemd journal. The file starts empty on every launch and is deleted when the GUI exits normally. Turn on ***Show raw bytes in the log*** to see the bytes under each translated line.
+The LOG panel at the bottom of the sidebar shows everything the GUI sends to the mouse and what comes back, with known commands in words. The same lines go to `~/.local/state/opensynapse/debug.log` (or `$XDG_STATE_HOME/opensynapse/debug.log`), which ***DEBUG LOG*** on the settings tab opens, and to the systemd journal. The file starts empty on every launch and is deleted when the GUI exits normally. Turn on ***Show raw bytes in the log*** to see the bytes under each translated line. The same section turns line wrapping off and sets the log's font size.
 
 ```sh
 journalctl -t opensynapse-gui -f        # follow it

@@ -5,11 +5,12 @@ use crate::lib::lighting::ZoneUi;
 use crate::lib::remapper::{Editor, Kind};
 use eframe::egui;
 use opensynapse::action::Action;
-use opensynapse::device::{DeviceDef, Mouse};
+use opensynapse::device::{DeviceDef, Mouse, Profiles};
 use opensynapse::input::Pressed;
 use opensynapse::power::{Battery, Power};
 use opensynapse::profile;
 use opensynapse::rgb::{Effect, Lighting};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -21,6 +22,11 @@ pub(crate) struct App {
     pub(crate) unsupported: Vec<String>,
     pub(crate) status: Result<String, String>,
     pub(crate) profile: u8,
+    /// the stored profiles as the mouse reports them, None when it doesn't answer
+    pub(crate) onboard: Option<Profiles>,
+    pub(crate) names: BTreeMap<u8, String>,
+    /// Some while RENAME is open, with the name typed so far
+    pub(crate) renaming: Option<String>,
     pub(crate) layer: u8,
     pub(crate) actions: Vec<Option<Action>>,
     pub(crate) selected: usize,
@@ -103,6 +109,9 @@ impl App {
             unsupported: Vec::new(),
             status: Ok(String::new()),
             profile: 0,
+            onboard: None,
+            names: BTreeMap::new(),
+            renaming: None,
             layer: 0,
             actions: Vec::new(),
             selected: 0,
@@ -198,6 +207,42 @@ impl App {
         }
     }
 
+    /// The profiles on the mouse with the queued NEW and DELETE already applied.
+    /// A mouse that doesn't answer the profile commands gets its device file's list, minus P0.
+    pub(crate) fn profile_list(&self) -> Vec<u8> {
+        let Some(on) = &self.onboard else {
+            let all = self.mice.get(self.current).map_or(vec![0], |m| m.def.profiles.clone());
+            return all.iter().copied().filter(|&p| p != 0 || all.len() == 1).collect();
+        };
+        let mut list = on.ids.clone();
+        for op in &self.ops {
+            match op {
+                Op::CreateProfile(p) if !list.contains(p) => list.push(*p),
+                Op::DeleteProfile(p) => list.retain(|x| x != p),
+                _ => {}
+            }
+        }
+        list.sort();
+        list
+    }
+
+    pub(crate) fn profile_name(&self, profile: u8) -> Option<String> {
+        // a queued DELETE PROFILE forgets the saved name, so a NEW PROFILE with the same number starts without one
+        let mut name = self.names.get(&profile).cloned();
+        for op in &self.ops {
+            match op {
+                Op::DeleteProfile(p) if *p == profile => name = None,
+                Op::Rename { profile: p, name: n } if *p == profile => name = Some(n.clone()),
+                _ => {}
+            }
+        }
+        name.filter(|n| !n.trim().is_empty())
+    }
+
+    pub(crate) fn active_profile(&self) -> Option<u8> {
+        self.onboard.as_ref().map(|o| o.active)
+    }
+
     /// Same for DPI, valid values that differ from the device are queued and
     /// putting the device values back drops the queued change.
     pub(crate) fn queue_dpi_edits(&mut self) {
@@ -226,6 +271,11 @@ pub(crate) enum Op {
     Poll(u16),
     /// sleep timeout in seconds
     Idle(u16),
+    CreateProfile(u8),
+    DeleteProfile(u8),
+    SetActive(u8),
+    /// only saved on this computer, the mouse has no room for names
+    Rename { profile: u8, name: String },
 }
 
 impl Op {
@@ -236,7 +286,9 @@ impl Op {
             }
             (Op::Dpi { .. }, Op::Dpi { .. }) => true,
             (Op::Light { zone: a, .. }, Op::Light { zone: b, .. }) => a == b,
-            (Op::Poll(_), Op::Poll(_)) | (Op::Idle(_), Op::Idle(_)) => true,
+            (Op::Poll(_), Op::Poll(_)) | (Op::Idle(_), Op::Idle(_)) | (Op::SetActive(_), Op::SetActive(_)) => true,
+            (Op::CreateProfile(a), Op::CreateProfile(b)) | (Op::DeleteProfile(a), Op::DeleteProfile(b)) => a == b,
+            (Op::Rename { profile: a, .. }, Op::Rename { profile: b, .. }) => a == b,
             _ => false,
         }
     }
@@ -254,6 +306,11 @@ impl Op {
             Op::Light { zone, effect, brightness } => format!("LIGHT {} > {effect:?} @{brightness}", zone.to_uppercase()),
             Op::Poll(hz) => format!("POLLING RATE > {hz} HZ"),
             Op::Idle(s) => format!("SLEEP AFTER > {s} S"),
+            Op::CreateProfile(p) => format!("NEW PROFILE P{p}"),
+            Op::DeleteProfile(p) => format!("DELETE PROFILE P{p}"),
+            Op::SetActive(p) => format!("SET ACTIVE > P{p}"),
+            Op::Rename { profile, name } if name.trim().is_empty() => format!("P{profile} > NO NAME"),
+            Op::Rename { profile, name } => format!("RENAME P{profile} > {name}"),
         }
     }
 }

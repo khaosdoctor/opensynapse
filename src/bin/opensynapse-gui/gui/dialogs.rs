@@ -1,7 +1,7 @@
 //! The confirm modal, the native file dialogs and the SETTINGS page.
 
-use crate::shared::widgets::{heading, modal, neon, note, tall};
-use crate::state::{App, Confirm, Op, queue};
+use crate::shared::widgets::{heading, modal, neon, note, outline, tall};
+use crate::state::{App, Confirm, Op, queue, unqueue};
 use crate::theme::{self, t};
 use eframe::egui::{self, RichText};
 use opensynapse::{device, profile};
@@ -12,7 +12,7 @@ impl App {
         ui.spacing_mut().button_padding = egui::vec2(10.0, 4.0);
         heading(ui, "PROFILE FILES LOCATION");
         ui.horizontal(|ui| {
-            if tall(ui, neon("CHANGE FOLDER", t().warn)).on_hover_text("where EXPORT saves profile files").clicked() {
+            if tall(ui, neon("CHANGE FOLDER", t().warn)).on_hover_text("where EXPORT PROFILE saves profile files").clicked() {
                 self.pick_folder();
             }
             let dir = self.path.parent().map(|d| d.display().to_string()).unwrap_or_default();
@@ -157,5 +157,41 @@ impl App {
             Confirm::FactoryLighting => self.factory_lighting(),
             Confirm::DeletePreset => self.delete_preset(),
         }
+    }
+
+    /// Open while `renaming` holds the name typed so far.
+    pub(crate) fn rename_dialog(&mut self) {
+        let Some(mut name) = self.renaming.clone() else { return };
+        let p = self.profile;
+        let (mut ok, mut cancel) = (false, false);
+        let modal = modal(&self.ctx, "rename-profile", 400.0, &format!("RENAME P{p}"), |ui| {
+            note(ui, "Profile names are local only and not saved on the mouse memory.");
+            let field = ui.add(egui::TextEdit::singleline(&mut name).hint_text("no name").desired_width(f32::INFINITY));
+            field.request_focus();
+            ok = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                cancel = tall(ui, outline("CANCEL", t().muted)).clicked();
+                ok |= tall(ui, neon("RENAME", t().accent)).clicked();
+            });
+        });
+        if cancel || modal.should_close() {
+            self.renaming = None;
+            return;
+        }
+        if !ok {
+            self.renaming = Some(name);
+            return;
+        }
+        self.renaming = None;
+        let name = name.trim().to_string();
+        let op = Op::Rename { profile: p, name: name.clone() };
+        if self.names.get(&p).map_or("", String::as_str) == name {
+            unqueue(&mut self.ops, &op);
+            return;
+        }
+        let Some(m) = self.mice.get(self.current) else { return };
+        self.status = Ok(format!("QUEUED {}", op.describe(&m.def)));
+        queue(&mut self.ops, op);
     }
 }

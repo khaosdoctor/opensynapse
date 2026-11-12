@@ -2,7 +2,7 @@
 
 use crate::shared::widgets::{backdrop, icon_button, modal, panel, pick, view_tab};
 use crate::state::{App, View};
-use crate::theme::t;
+use crate::theme::{self, t};
 use eframe::egui::{self, Align, Layout, Margin, RichText};
 
 /// The remap editor at the bottom never grows; the mouse view gets the rest.
@@ -29,6 +29,7 @@ impl eframe::App for App {
         self.poll_dpi();
         self.poll_daemon();
         self.confirm_dialog();
+        self.rename_dialog();
         if self.disconnected.is_some() {
             modal(&self.ctx, "disconnected", 420.0, "! MOUSE DISCONNECTED", |ui| {
                 ui.label("Plug it back in and opensynapse picks it up again. Pending changes are kept.");
@@ -81,14 +82,19 @@ impl eframe::App for App {
         }
 
         let name = self.mice.get(self.current).and_then(|m| m.def.buttons.get(self.selected)).map(|b| b.name.clone());
+        let hyper = self.layer != 0;
         if let Some(name) = name {
             egui::Panel::bottom("editor").exact_size(EDITOR_HEIGHT).resizable(false).frame(panel(t().pane)).show(ui, |ui| {
-                self.editor_ui(ui, &name);
+                theme::tinted(hyper, || {
+                    // selectable buttons and combo boxes take egui's selection color, not ours
+                    ui.visuals_mut().selection.bg_fill = t().accent2;
+                    self.editor_ui(ui, &name);
+                });
             });
         }
         if !self.mice.is_empty() {
             egui::Panel::left("profile").exact_size(190.0).resizable(false).frame(panel(t().bg)).show(ui, |ui| self.profile_box(ui));
         }
-        center.show(ui, |ui| self.buttons(ui));
+        center.show(ui, |ui| theme::tinted(hyper, || self.buttons(ui)));
     }
 }

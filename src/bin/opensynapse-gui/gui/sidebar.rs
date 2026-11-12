@@ -1,9 +1,10 @@
 //! The two left columns, device and DPI on the far left and the profile column next to the mouse.
 
 use crate::shared::widgets::{badge, delete_button, heading, neon, note, outline, sized, tall, toggle_button};
-use crate::state::{App, Confirm, View};
+use crate::state::{App, Confirm, Op, View, queue};
 use crate::theme::t;
-use eframe::egui::{self, Align, ComboBox, DragValue, FontId, Layout, Margin, RichText};
+use eframe::egui::text::{LayoutJob, TextFormat};
+use eframe::egui::{self, Align, ComboBox, DragValue, Layout, Margin, RichText};
 
 impl App {
     pub(crate) fn device_box(&mut self, ui: &mut egui::Ui) {
@@ -23,6 +24,7 @@ impl App {
         });
         ui.add_space(14.0);
 
+        heading(ui, "DEVICE");
         let names: Vec<String> = self.mice.iter().map(|m| m.def.name.to_uppercase()).collect();
         let current = names.get(self.current).cloned().unwrap_or("NO DEVICE".into());
         let mut pick = None;
@@ -50,62 +52,138 @@ impl App {
         ui.add_space(18.0);
     }
 
+    fn profile_label(&self, ui: &egui::Ui, p: u8) -> LayoutJob {
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        let format = |color| TextFormat { font_id: font.clone(), color, ..Default::default() };
+        let mut job = LayoutJob::default();
+        let text = match self.profile_name(p) {
+            Some(name) => format!("{name} (P{p})"),
+            None => format!("P{p}"),
+        };
+        job.append(&text, 0.0, format(t().text));
+        if self.active_profile() == Some(p) {
+            job.append("[ACTIVE]", 6.0, format(t().ok));
+        }
+        job
+    }
+
     /// The column left of the mouse drawing, with the profile and layer pickers and the profile file actions.
     pub(crate) fn profile_box(&mut self, ui: &mut egui::Ui) {
         let Some(m) = self.mice.get(self.current) else { return };
-        let (profiles, layers) = (m.def.profiles.clone(), m.def.layers.clone());
+        let layers = m.def.layers.clone();
         let mut changed = false;
         let width = ui.available_width();
         heading(ui, "PROFILE");
-        // profile 0 is what the mouse runs right now and is lost on unplug (verified)
-        let label = |p: u8| {
-            let mut job = egui::text::LayoutJob::default();
-            let font = FontId::monospace(14.0);
-            job.append(&format!("P{p}"), 0.0, egui::TextFormat::simple(font.clone(), t().strong));
-            if p == 0 {
-                job.append("[LIVE]", 6.0, egui::TextFormat::simple(font, t().ok));
-            }
-            job
-        };
+        let list = self.profile_list();
+        let labels: Vec<(u8, LayoutJob)> = list.iter().map(|&p| (p, self.profile_label(ui, p))).collect();
+        let selected = self.profile_label(ui, self.profile);
+        // a queued SET ACTIVE counts, so it can't be queued twice
+        let queued = self.ops.iter().rev().find_map(|o| if let Op::SetActive(p) = o { Some(*p) } else { None });
+        let can_activate = self.onboard.is_some() && queued.or(self.active_profile()) != Some(self.profile);
         ComboBox::from_id_salt("profile")
-            .selected_text(label(self.profile))
+            .selected_text(selected)
             .width(width)
             .show_ui(ui, |ui| {
-                for p in profiles {
-                    changed |= ui.selectable_value(&mut self.profile, p, label(p)).changed();
+                for (p, label) in labels {
+                    changed |= ui.selectable_value(&mut self.profile, p, label).changed();
                 }
             })
             .response
-            .on_hover_text("P0 is live and lost when you unplug the mouse. P1 is stored on it and loads after a replug.");
-        let mut wide = |button, tip| sized(ui, [width, 26.0], button).on_hover_text(tip).clicked();
-        if wide(neon("RESET", t().accent2), "put back this profile's original") {
-            self.confirm = Some(Confirm::ResetButtons);
+            .on_hover_text("Changes to the active profile also go to the live copy, so they apply right away.");
+        // a mouse that doesn't answer the profile commands can't switch, create or delete them
+        let supported = self.onboard.is_some();
+        let activate = supported
+            && ui
+                .add_enabled_ui(can_activate, |ui| sized(ui, [width, 22.0], neon("SET ACTIVE", t().accent)))
+                .inner
+                .on_hover_text("make the mouse use this profile")
+                .clicked();
+        if activate {
+            queue(&mut self.ops, Op::SetActive(self.profile));
+            self.status = Ok(format!("QUEUED SET ACTIVE > P{}", self.profile));
         }
-        if wide(outline("SET DEFAULT", t().warn), "make what's on the mouse now the original RESET goes back to") {
-            self.confirm = Some(Confirm::SetDefault);
-        }
-        if wide(outline("EXPORT", t().accent), "save this profile to a file") {
+        changed |= self.profile_actions(ui, &list);
+
+        let wide = |ui: &mut egui::Ui, button, tip| sized(ui, [width, 26.0], button).on_hover_text(tip).clicked();
+        ui.add_space(8.0);
+        if wide(ui, outline("EXPORT PROFILE", t().accent), "save this profile to a file") {
             self.export();
         }
-        if wide(outline("IMPORT", t().accent2), "queue a profile file's buttons over this profile") {
+        if wide(ui, outline("IMPORT PROFILE", t().accent2), "queue a profile file's buttons over this profile") {
             self.pick_import();
+        }
+        ui.add_space(8.0);
+        if wide(ui, outline("SET DEFAULT", t().warn), "make what's on the mouse now the original RESET TO DEFAULT goes back to") {
+            self.confirm = Some(Confirm::SetDefault);
+        }
+        if wide(ui, neon("RESET TO DEFAULT", t().accent2), "put back this profile's original") {
+            self.confirm = Some(Confirm::ResetButtons);
         }
         ui.add_space(18.0);
 
         heading(ui, "LAYER");
         for (i, l) in layers.iter().enumerate() {
             let selected = self.layer == i as u8;
-            if ui.add_sized([width, 24.0], egui::Button::selectable(selected, l.to_uppercase())).clicked() && !selected {
+            // yellow like the mouse outline on any layer that isn't the default one
+            let button = match (selected, i) {
+                (true, 1..) => neon(&l.to_uppercase(), t().hypershift),
+                _ => egui::Button::selectable(selected, l.to_uppercase()),
+            };
+            if ui.add_sized([width, 24.0], button).clicked() && !selected {
                 self.layer = i as u8;
                 changed = true;
             }
         }
         if changed {
+            // an open RENAME would otherwise name the profile switched to
+            self.renaming = None;
             self.reload();
             let layer = layers.get(self.layer as usize).map_or("?", String::as_str).to_uppercase();
             self.status = Ok(format!("VIEWING P{} > {layer}", self.profile));
             self.update_path();
         }
+    }
+
+    /// Returns true when the shown profile changed.
+    fn profile_actions(&mut self, ui: &mut egui::Ui, list: &[u8]) -> bool {
+        let p = self.profile;
+        let max = self.onboard.as_ref().map_or(0, |o| o.max);
+        let free = (1..=max).find(|i| !list.contains(i));
+        // the mouse can't drop the profile it's using, and a queued SET ACTIVE would make it that one
+        let activating = self.ops.contains(&Op::SetActive(p));
+        let can_delete = self.onboard.is_some() && list.len() > 1 && self.active_profile() != Some(p) && !activating;
+        let size = [ui.available_width(), 22.0];
+        let supported = self.onboard.is_some();
+        let new = supported && ui.add_enabled_ui(free.is_some(), |ui| sized(ui, size, outline("NEW PROFILE", t().accent))).inner.clicked();
+        // names live on this computer, so RENAME works on any mouse
+        let rename = sized(ui, size, outline("RENAME PROFILE", t().accent)).clicked();
+        let delete = supported && ui.add_enabled_ui(can_delete, |ui| sized(ui, size, outline("DELETE PROFILE", t().error))).inner.clicked();
+        ui.add_space(8.0);
+        if rename {
+            self.renaming = Some(self.profile_name(p).unwrap_or_default());
+        }
+        if let (true, Some(n)) = (new, free) {
+            queue(&mut self.ops, Op::CreateProfile(n));
+            self.status = Ok(format!("QUEUED NEW PROFILE P{n}"));
+            self.profile = n;
+            return true;
+        }
+        if !delete {
+            return false;
+        }
+        // a profile that only exists in the queue just leaves it, with everything queued for it
+        let created = self.ops.contains(&Op::CreateProfile(p));
+        self.ops.retain(|o| match o {
+            Op::Button { profile, .. } | Op::Rename { profile, .. } => *profile != p,
+            Op::CreateProfile(x) => *x != p,
+            _ => true,
+        });
+        if !created {
+            queue(&mut self.ops, Op::DeleteProfile(p));
+        }
+        self.status = Ok(format!("QUEUED DELETE PROFILE P{p}"));
+        self.profile = self.active_profile().unwrap_or(list[0]);
+        true
     }
 
     pub(crate) fn dpi_panel(&mut self, ui: &mut egui::Ui) {
@@ -164,28 +242,48 @@ impl App {
         });
     }
 
-    /// Newest first, under a heading that stays put.
     fn pending_list(&mut self, ui: &mut egui::Ui) {
-        heading(ui, &format!("PENDING ({})", self.ops.len()));
+        let mut remove = None;
+        ui.horizontal(|ui| {
+            heading(ui, &format!("PENDING ({})", self.ops.len()));
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                // as tall as the heading, so the row doesn't grow
+                let height = ui.text_style_height(&egui::TextStyle::Body);
+                let undo = ui.add_enabled_ui(!self.ops.is_empty(), |ui| sized(ui, [52.0, height], outline("UNDO", t().accent).small())).inner;
+                if undo.on_hover_text("drop the last change").clicked() {
+                    remove = self.ops.len().checked_sub(1);
+                }
+            });
+        });
         if self.ops.is_empty() {
             note(ui, "no pending changes");
         }
         let Some(def) = self.mice.get(self.current).map(|m| &m.def) else { return };
-        // newest 12 only, a scroll area here would eat the whole sidebar
+        // in the order WRITE TO DEVICE runs them, so the list reads as what will happen. The last 12 only,
+        // so the newest stays in sight, a scroll area here would eat the whole sidebar
         const SHOWN: usize = 12;
-        let mut remove = None;
         let hidden = self.ops.len().saturating_sub(SHOWN);
-        for (i, op) in self.ops.iter().enumerate().skip(hidden).rev() {
-            // top-aligned so the X stays on the first line when a long change wraps
-            ui.horizontal_top(|ui| {
-                if delete_button(ui).clicked() {
+        if hidden > 0 {
+            note(ui, format!("+{hidden} earlier"));
+        }
+        let last = self.ops.len().saturating_sub(1);
+        for (i, op) in self.ops.iter().enumerate().skip(hidden) {
+            // right to left so the X is laid out first and the text wraps in whatever width is left
+            ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                let x = delete_button(ui);
+                if x.clicked() {
                     remove = Some(i);
                 }
-                ui.add(egui::Label::new(RichText::new(op.describe(def)).color(t().strong).small()).wrap());
+                // the newest is what UNDO drops
+                let text = RichText::new(format!("#{i} {}", op.describe(def))).small();
+                let text = if i == last { text.color(t().accent).underline() } else { text.color(t().strong) };
+                // egui puts a wrapping label at the top of its row, so the first line is pushed down to the X's middle by hand
+                let line = ui.text_style_height(&egui::TextStyle::Small);
+                ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                    ui.add_space(((x.rect.height() - line) / 2.0).max(0.0));
+                    ui.add(egui::Label::new(text).wrap());
+                });
             });
-        }
-        if hidden > 0 {
-            note(ui, format!("+{hidden} more"));
         }
         if let Some(i) = remove {
             let op = self.ops.remove(i);

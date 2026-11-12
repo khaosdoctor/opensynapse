@@ -42,10 +42,20 @@ impl App {
         };
         self.selected = 0;
         self.ops.clear(); // queued ops belong to the previous device
+        self.load_profiles();
+        // P0 only mirrors the active profile, so the GUI opens on the active one
+        let list = self.profile_list();
+        self.profile = self.active_profile().filter(|p| list.contains(p)).or(list.first().copied()).unwrap_or(0);
         self.reload();
         self.update_path();
         self.load_lighting();
         self.load_power();
+    }
+
+    pub(crate) fn load_profiles(&mut self) {
+        let Some(m) = self.mice.get(self.current) else { return };
+        self.onboard = m.profiles().ok();
+        self.names = profile::names(m);
     }
 
     /// Reads the polling rate, battery and sleep timeout from the OpenRazer
@@ -66,7 +76,13 @@ impl App {
 
     pub(crate) fn reload(&mut self) {
         let Some(m) = self.mice.get(self.current) else { return };
-        self.actions = m.def.buttons.iter().map(|b| m.get_button(self.profile, b.id, self.layer).ok()).collect();
+        // a profile that NEW PROFILE hasn't written yet will start as a copy of the active one
+        let fresh = self.ops.contains(&Op::CreateProfile(self.profile));
+        let from = match self.active_profile() {
+            Some(a) if fresh => a,
+            _ => self.profile,
+        };
+        self.actions = m.def.buttons.iter().map(|b| m.get_button(from, b.id, self.layer).ok()).collect();
         if let Ok((x, _)) = m.dpi() {
             self.dpi = x;
         }
@@ -95,6 +111,10 @@ impl App {
             return;
         }
         let Some(m) = self.mice.get(self.current) else { return };
+        // the profile button changes the active profile without telling us
+        if let (Some(on), Ok(p)) = (&mut self.onboard, m.profiles()) {
+            *on = p;
+        }
         let (Ok((dpi, _)), Ok(s)) = (m.dpi(), m.dpi_stages()) else {
             // a failed read is often just a busy mouse; gone from sysfs means unplugged
             if hid::find_all(m.def.vid, m.def.pid).is_empty() {
@@ -163,11 +183,29 @@ impl App {
     pub(crate) fn apply(&mut self) {
         let Some(m) = self.mice.get(self.current) else { return };
         let total = self.ops.len();
+        let mut active = self.active_profile();
         while let Some(op) = self.ops.first() {
             let r = match op {
+                // P0 is the live copy of the active profile, writing it too makes the change apply right away
                 Op::Button { profile, layer, index, action } => {
-                    m.set_button(*profile, m.def.buttons[*index].id, *layer, action)
+                    let id = m.def.buttons[*index].id;
+                    m.set_button(*profile, id, *layer, action).and_then(|_| match *profile {
+                        // a mouse that can't say which profile is active gets P0 too, as before profiles were read
+                        p if p != 0 && active.is_none_or(|a| a == p) => m.set_button(0, id, *layer, action),
+                        _ => Ok(()),
+                    })
                 }
+                // snapshot right away, before queued button changes reach the new profile
+                Op::CreateProfile(p) => m
+                    .create_profile(*p)
+                    .and_then(|_| profile::copy(m, active.unwrap_or(1), *p))
+                    .and_then(|_| match profile::original_path(m, *p) {
+                        Some(path) => profile::export(m, *p, &path),
+                        None => Ok(()),
+                    }),
+                Op::DeleteProfile(p) => m.delete_profile(*p).and_then(|_| profile::forget(m, *p)),
+                Op::SetActive(p) => m.set_active_profile(*p).map(|_| active = Some(*p)),
+                Op::Rename { profile: p, name } => profile::rename(m, *p, name),
                 Op::Dpi { dpi, active, stages } => m
                     .set_dpi(*dpi, *dpi)
                     .and_then(|_| m.set_dpi_stages(&DpiStages { active: *active, stages: stages.clone() })),
@@ -193,13 +231,23 @@ impl App {
             if let Err(e) = r {
                 let done = total - self.ops.len();
                 self.status = Err(format!("{done}/{total} APPLIED > {} FAILED: {e}", op.describe(&m.def)));
-                self.reload();
-                self.load_power();
+                self.after_apply();
                 return;
             }
             self.ops.remove(0);
         }
         self.status = Ok(format!("{total} OPERATIONS APPLIED"));
+        self.after_apply();
+    }
+
+    /// A deleted profile can't stay on screen, the active one takes its place.
+    fn after_apply(&mut self) {
+        self.load_profiles();
+        let list = self.profile_list();
+        if !list.contains(&self.profile) {
+            self.profile = self.active_profile().or(list.first().copied()).unwrap_or(0);
+            self.update_path();
+        }
         self.reload();
         self.load_power();
     }

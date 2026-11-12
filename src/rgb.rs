@@ -218,6 +218,20 @@ impl Lighting {
         fs::write(path, data).map_err(hint)
     }
 
+    /// Every zone's look. The mouse answers for the zones it has an LED id for,
+    /// OpenRazer's idea of it fills in the rest.
+    pub fn state(&self, mouse: &device::Mouse) -> Vec<ZoneState> {
+        let mut zones = Vec::new();
+        for zone in &self.zones {
+            let (effect, brightness) = match led_id(zone).and_then(|led| mouse.led(led).ok()) {
+                Some(read) => read,
+                None => (self.current_effect(zone).unwrap_or(Effect::Spectrum), self.brightness(zone).unwrap_or(255)),
+            };
+            zones.push(ZoneState { zone: zone.clone(), effect, brightness });
+        }
+        zones
+    }
+
     /// What a zone shows right now. We ask the daemon when it's running and
     /// otherwise use its saved state (the driver's effect files are write-only).
     pub fn current_effect(&self, zone: &str) -> Option<Effect> {

@@ -119,6 +119,11 @@ impl App {
                 format!("What's on P{p} right now becomes the original that RESET goes back to. The old original is replaced."),
                 "SET DEFAULT",
             ),
+            Confirm::DeletePreset => (
+                "! DELETE PRESET",
+                format!("The preset {} is deleted from your presets folder.", self.preset.clone().unwrap_or_default().to_uppercase()),
+                "DELETE",
+            ),
         };
         let path = self.path.display().to_string();
         let modal = modal(&self.ctx, "confirm", 420.0, title, |ui| {
@@ -150,6 +155,7 @@ impl App {
             Confirm::ResetLighting => self.reset_lighting(),
             Confirm::DefaultLighting => self.set_lighting_default(),
             Confirm::FactoryLighting => self.factory_lighting(),
+            Confirm::DeletePreset => self.delete_preset(),
         }
     }
 }

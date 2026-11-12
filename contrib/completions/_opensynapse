@@ -42,6 +42,7 @@ _opensynapse() {
         'stages:show or set DPI stages'
         'watch:print buttons as you press them'
         'rgb:lighting zones (needs OpenRazer)'
+        'preset:list, save, load or delete lighting presets'
         'poll:show or set the polling rate (needs OpenRazer)'
         'battery:battery and sleep timeout of a wireless mouse'
         'idle:show or set the sleep timeout in seconds'
@@ -80,6 +81,12 @@ _opensynapse() {
                     case $CURRENT in
                         2) _opensynapse_zones ;;
                         3) compadd -- off static breath spectrum wave reactive brightness ;;
+                    esac
+                    ;;
+                preset)
+                    case $CURRENT in
+                        2) compadd -- list save load delete ;;
+                        3) [[ $words[2] == (load|delete) ]] && compadd -- ${(f)"$(opensynapse preset list 2>/dev/null)"} ;;
                     esac
                     ;;
                 poll) (( CURRENT == 2 )) && compadd -- 125 500 1000 ;;

@@ -2,7 +2,7 @@ use opensynapse::action::{self, Action};
 use opensynapse::device;
 use opensynapse::rgb::{self, Effect};
 use opensynapse::generators::protocol;
-use opensynapse::{hid, input, power, profile, scaffold};
+use opensynapse::{hid, input, power, preset, profile, scaffold};
 use std::error::Error;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -30,6 +30,8 @@ commands:
   rgb <zone|all> <effect>      off | static RRGGBB | breath RRGGBB|random | spectrum
                                | wave [reverse] | reactive RRGGBB [speed 1-3]
   rgb <zone|all> brightness N  0-255
+  preset list|save|load|delete [NAME]
+                               lighting presets, load skips zones this mouse doesn't have
   poll [125|500|1000]          show or set the polling rate in Hz (needs the OpenRazer daemon)
   battery                      battery level, charging and the sleep timeout (wireless mice)
   idle [SECONDS]               show or set how long a wireless mouse waits before it sleeps (60-900)
@@ -96,6 +98,17 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
     if args.first() == Some(&"probe") {
         return probe(&args[1..]);
     }
+    // presets belong to the user, these two work without a mouse
+    match args.as_slice() {
+        ["preset", "list"] => {
+            for name in preset::list() {
+                println!("{name}");
+            }
+            return Ok(());
+        }
+        ["preset", "delete", name] => return Ok(preset::delete(name)?),
+        _ => {}
+    }
     let mice = device::detect()?;
     let mouse = match o.device {
         Some(pid) => mice.iter().find(|m| m.def.pid == pid).ok_or(format!("no supported mouse with pid {pid:04x}, see `opensynapse list`"))?,
@@ -108,6 +121,7 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
     let layer = def.layer(&o.layer).ok_or(format!("unknown layer '{}', have {:?}", o.layer, def.layers))?;
     let button = |name: &str| def.button(name).map(|b| b.id).ok_or(format!("unknown button '{name}'"));
     let daemon = || power::find(&mouse.serial).ok_or("this needs the OpenRazer daemon running");
+    let lighting = || rgb::find(def.vid, def.pid, &mouse.serial).ok_or("no lighting found (is the OpenRazer driver loaded?)");
 
     match args.as_slice() {
         ["list"] => {
@@ -179,8 +193,7 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
             }
         }
         ["rgb", rest @ ..] => {
-            let light =
-                rgb::find(def.vid, def.pid, &mouse.serial).ok_or("no lighting found (is the OpenRazer driver loaded?)")?;
+            let light = lighting()?;
             let Some((zone, rest)) = rest.split_first() else {
                 println!("via {}", if light.uses_daemon() { "openrazer daemon" } else { "openrazer driver (sysfs)" });
                 for z in &light.zones {
@@ -211,6 +224,18 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
             }
             println!("{} > {}", zones.join(","), rest.join(" "));
         }
+        ["preset", "save", name] => println!("saved {}", preset::save(name, &lighting()?.state(mouse))?.display()),
+        ["preset", "load", name] => {
+            let light = lighting()?;
+            let saved = preset::load(name)?;
+            let total = saved.len();
+            let zones = preset::for_zones(saved, &light.zones);
+            for z in &zones {
+                light.set_brightness(&z.zone, z.brightness)?;
+                light.set_effect(&z.zone, &z.effect)?;
+            }
+            println!("loaded {} of {total} zones", zones.len());
+        }
         ["poll", rest @ ..] if rest.len() <= 1 => {
             let power = daemon()?;
             if let Some(hz) = rest.first() {
@@ -221,10 +246,8 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
         ["battery"] => {
             let power = daemon()?;
             let b = power.battery().ok_or("this mouse has no battery")?;
-            println!("battery {:.0}%{}", b.percent, if b.charging { ", charging" } else { "" });
-            if let Some(s) = power.idle_time() {
-                println!("sleeps after {s} s idle");
-            }
+            let idle = power.idle_time().map_or(String::new(), |s| format!("\nsleeps after {s} s idle"));
+            println!("battery {:.0}%{}{idle}", b.percent, if b.charging { ", charging" } else { "" });
         }
         ["idle", rest @ ..] if rest.len() <= 1 => {
             let power = daemon()?;

@@ -50,6 +50,11 @@ pub(crate) struct App {
     pub(crate) zone_base: Vec<ZoneUi>,
     /// one card drives every lighting zone
     pub(crate) sync_zones: bool,
+    /// names in the presets folder, and the one last picked or saved
+    pub(crate) presets: Vec<String>,
+    pub(crate) preset: Option<String>,
+    /// Some while SAVE AS is open: the name typed so far and the last error
+    pub(crate) preset_name: Option<(String, Option<String>)>,
     /// polling rate and the rest that goes through the OpenRazer daemon
     pub(crate) power: Option<Power>,
     pub(crate) poll_rate: u16,
@@ -81,6 +86,9 @@ impl App {
             zone_ui: Vec::new(),
             zone_base: Vec::new(),
             sync_zones: false,
+            presets: Vec::new(),
+            preset: None,
+            preset_name: None,
             power: None,
             poll_rate: 0,
             device_poll: None,
@@ -107,6 +115,7 @@ impl App {
             last_poll: Instant::now(),
         };
         app.connect();
+        app.scan_presets();
         app
     }
 
@@ -272,6 +281,7 @@ pub(crate) enum Confirm {
     ResetLighting,
     DefaultLighting,
     FactoryLighting,
+    DeletePreset,
 }
 
 #[derive(Clone, Copy, PartialEq)]

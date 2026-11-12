@@ -51,7 +51,8 @@ complete -c opensynapse -n __opensynapse_no_command -a dpi -d 'show or set DPI'
 complete -c opensynapse -n __opensynapse_no_command -a stages -d 'show or set DPI stages'
 complete -c opensynapse -n __opensynapse_no_command -a watch -d 'print buttons as you press them'
 complete -c opensynapse -n __opensynapse_no_command -a rgb -d 'lighting zones (needs OpenRazer)'
-complete -c opensynapse -n __opensynapse_no_command -a poll -d 'show or set the polling rate (needs OpenRazer)'
+complete -c opensynapse -n __opensynapse_no_command -a preset -d 'list, save, load or delete lighting presets'
+complete -c opensynapse -n __opensynapse_no_command -a poll-d 'show or set the polling rate (needs OpenRazer)'
 complete -c opensynapse -n __opensynapse_no_command -a battery -d 'battery and sleep timeout of a wireless mouse'
 complete -c opensynapse -n __opensynapse_no_command -a idle -d 'show or set the sleep timeout in seconds'
 complete -c opensynapse -n __opensynapse_no_command -a export -d 'save a profile to JSON'
@@ -77,6 +78,8 @@ complete -c opensynapse -n '__opensynapse_at set 1' -a 'key: turbo: keyturbo: ra
     dpi:up dpi:down dpi:up-wrap dpi:down-wrap profile:next profile:prev profile:next-wrap profile:prev-wrap'
 complete -c opensynapse -n '__opensynapse_at rgb 0' -a '(__opensynapse_zones)'
 complete -c opensynapse -n '__opensynapse_at rgb 1' -a 'off static breath spectrum wave reactive brightness'
+complete -c opensynapse -n '__opensynapse_at preset 0' -a 'list save load delete'
+complete -c opensynapse -n '__opensynapse_at preset 1; and contains -- (__opensynapse_args)[2] load delete' -a '(opensynapse preset list 2>/dev/null)'
 complete -c opensynapse -n '__opensynapse_at poll 0' -a '125 500 1000'
 complete -c opensynapse -n '__opensynapse_at export 0; or __opensynapse_at import 0; or __opensynapse_at init 0' -F
 complete -c opensynapse -n '__opensynapse_at protocol 0' -a send -F

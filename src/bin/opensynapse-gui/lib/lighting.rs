@@ -66,6 +66,10 @@ impl ZoneUi {
         }
     }
 
+    pub(crate) fn state(&self) -> rgb::ZoneState {
+        rgb::ZoneState { zone: self.name.clone(), effect: self.effect(), brightness: self.brightness }
+    }
+
     pub(crate) fn op(&self) -> Op {
         Op::Light { zone: self.name.clone(), effect: self.effect(), brightness: self.brightness }
     }
@@ -131,6 +135,7 @@ impl App {
         if !online {
             ui.disable();
         }
+        self.presets_row(ui);
         self.device_row(ui);
 
         // with sync on, the first zone's card drives every zone
@@ -267,26 +272,32 @@ impl App {
 
     /// Lighting on the mouse as it was last read or written.
     pub(crate) fn lighting_now(&self) -> Vec<rgb::ZoneState> {
-        self.zone_base.iter().map(|z| rgb::ZoneState { zone: z.name.clone(), effect: z.effect(), brightness: z.brightness }).collect()
+        self.zone_base.iter().map(ZoneUi::state).collect()
+    }
+
+    /// Puts saved zones on their cards, so the edits get queued. Zones this
+    /// mouse doesn't have are skipped. Returns how many were used.
+    pub(crate) fn queue_zones(&mut self, saved: Vec<rgb::ZoneState>) -> usize {
+        self.sync_zones = false;
+        let mut used = 0;
+        for s in saved {
+            let Some(z) = self.zone_ui.iter_mut().find(|z| z.name == s.zone) else { continue };
+            *z = ZoneUi::from_effect(&s.zone, s.effect, s.brightness);
+            used += 1;
+        }
+        used
     }
 
     /// Queues the original lighting snapshot.
     pub(crate) fn reset_lighting(&mut self) {
         let Some(path) = self.lighting_original() else { return };
-        let saved: Vec<rgb::ZoneState> = match device::load_json(&path) {
-            Ok(s) => s,
-            Err(e) => {
-                self.status = Err(format!("{}: {e}", path.display()));
-                return;
+        match device::load_json(&path) {
+            Ok(saved) => {
+                self.queue_zones(saved);
+                self.status = Ok("LIGHTING RESET QUEUED".into());
             }
-        };
-        self.sync_zones = false;
-        for s in saved {
-            if let Some(z) = self.zone_ui.iter_mut().find(|z| z.name == s.zone) {
-                *z = ZoneUi::from_effect(&s.zone, s.effect, s.brightness);
-            }
+            Err(e) => self.status = Err(format!("{}: {e}", path.display())),
         }
-        self.status = Ok("LIGHTING RESET QUEUED".into());
     }
 
     pub(crate) fn set_lighting_default(&mut self) {

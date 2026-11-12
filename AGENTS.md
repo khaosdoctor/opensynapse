@@ -17,8 +17,8 @@ The repo isn't formatted with rustfmt, so don't run `cargo fmt`, it rewrites eve
 
 Everything here ends up as bytes on a real device, and a wrong write can leave a button doing something odd until someone fixes it by hand. So:
 
-- Reads are always fine. `list`, `dump`, `get`, `export`, `watch`, `init`, `probe`, `protocol`, `battery` and `poll` or `idle` with no value only read. `probe` refuses any command without the read bit.
-- Before any write (`set`, `dpi`, `stages`, `rgb`, `poll <rate>`, `idle <seconds>`, `import`, or the GUI's WRITE TO DEVICE), say exactly what you're about to send and wait for a human to say yes. Change one thing, read it back, then put it back.
+- Reads are always fine. `list`, `dump`, `get`, `export`, `watch`, `init`, `probe`, `protocol`, `battery`, `preset list|save|delete` and `poll` or `idle` with no value only read the mouse. `probe` refuses any command without the read bit.
+- Before any write (`set`, `dpi`, `stages`, `rgb`, `poll <rate>`, `idle <seconds>`, `preset load`, `import`, or the GUI's WRITE TO DEVICE), say exactly what you're about to send and wait for a human to say yes. Change one thing, read it back, then put it back.
 - Never run `opensynapse protocol send`, it posts a public issue.
 - The exploration rules for new mice are in the agent prompt at the end of [CONTRIBUTING.md](CONTRIBUTING.md#using-an-agent).
 
@@ -34,6 +34,7 @@ Everything here ends up as bytes on a real device, and a wrong write can leave a
 | `src/input.rs` | which buttons are held right now, for `watch` and the GUI highlights |
 | `src/rgb.rs` | lighting through the OpenRazer driver and daemon, we don't reverse engineer lighting |
 | `src/power.rs` | polling rate, battery and sleep timeout through the OpenRazer daemon |
+| `src/preset.rs` | named lighting presets in `~/.config/opensynapse/presets` |
 | `src/scaffold.rs` | `init`, which starts a device file for an unknown mouse using reads only |
 | `src/generators/protocol.rs` | writes `devices/protocols/<slug>.md` for `opensynapse protocol` |
 | `src/main.rs` | the CLI, including `probe` for raw read-only probing of a hidraw node |
@@ -52,7 +53,8 @@ The GUI is split by job, and every file stays under 500 lines:
 | `state.rs` | the `App` struct, the pending queue (`Op`) and what each button will do |
 | `lib/protocol.rs` | everything the GUI does with the mouse or the OpenRazer daemon |
 | `lib/remapper.rs` | the REMAP editor, action types and key lists |
-| `lib/lighting.rs` | the lighting tab |
+| `lib/lighting.rs` | the lighting tab, with the polling rate, battery and sleep timeout |
+| `lib/presets.rs` | the preset list, SAVE AS and DELETE on the lighting tab |
 | `lib/instance_lock.rs` | the lock file and the "already running" dialog |
 | `gui/` | layout, the mouse drawing, the sidebar and the dialogs |
 | `shared/widgets.rs` | every styled widget. Views ask it for a button or a panel and never pick colors themselves |

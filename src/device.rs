@@ -184,6 +184,19 @@ pub fn config_dir() -> Option<PathBuf> {
         .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
 }
 
+/// A theme or preset name, trimmed and lowercased. It becomes a file name, so
+/// we keep it to letters, digits, - and _.
+pub fn check_name(name: &str) -> Result<String, String> {
+    let name = name.trim().to_lowercase();
+    if name.is_empty() {
+        return Err("give it a name".into());
+    }
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("only letters, digits, - and _".into());
+    }
+    Ok(name)
+}
+
 /// Writes a file, creating its folder first.
 pub fn write(path: &Path, contents: impl AsRef<[u8]>) -> io::Result<()> {
     if let Some(dir) = path.parent() {
@@ -335,6 +348,14 @@ mod tests {
         let naga = definitions().into_iter().find(|d| d.pid == 0x008d).expect("naga from devices/");
         assert_eq!((naga.vid, naga.transaction_id, naga.buttons.len()), (0x1532, 0x1f, 22));
         assert_eq!(naga.button("thumb1").map(|b| b.id), Some(0x40));
+    }
+
+    #[test]
+    fn names_stay_file_names() {
+        assert_eq!(check_name(" Night_Blue-2 "), Ok("night_blue-2".into()));
+        assert!(check_name("  ").is_err());
+        assert!(check_name("../evil").is_err());
+        assert!(check_name("my preset").is_err());
     }
 
     #[test]

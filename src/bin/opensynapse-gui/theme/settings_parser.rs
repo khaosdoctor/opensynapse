@@ -76,16 +76,9 @@ fn new_theme_dialog(ctx: &egui::Context) {
     *write(&NEW_THEME) = (!close).then_some((name, failed));
 }
 
-/// Copies the default theme to themes/<name>.css. The name becomes the file name
-/// and the button, so we keep it to letters, digits, - and _.
+/// Copies the default theme to themes/<name>.css. The name becomes the file name and the button.
 fn create_theme(name: &str) -> Result<PathBuf, String> {
-    let name = name.trim().to_lowercase();
-    if name.is_empty() {
-        return Err("give the theme a name".into());
-    }
-    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-        return Err("only letters, digits, - and _".into());
-    }
+    let name = device::check_name(name)?;
     let file = config("themes").ok_or("no config folder")?.join(format!("{name}.css"));
     if file.exists() {
         return Err(format!("{} already exists", file.display()));

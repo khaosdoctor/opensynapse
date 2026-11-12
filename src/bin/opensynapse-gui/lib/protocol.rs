@@ -5,7 +5,7 @@ use crate::state::{App, Op};
 use opensynapse::action::Action;
 use opensynapse::device::{self, DpiStages};
 use opensynapse::power::{self, Power};
-use opensynapse::rgb::{self, Effect};
+use opensynapse::rgb;
 use opensynapse::{hid, input, profile};
 use std::time::{Duration, Instant};
 
@@ -209,14 +209,7 @@ impl App {
             self.zone_ui.clear();
             return;
         };
-        self.zone_ui = light
-            .zones
-            .iter()
-            .map(|z| match rgb::led_id(z).and_then(|led| m.led(led).ok()) {
-                Some((effect, brightness)) => ZoneUi::from_effect(z, effect, brightness),
-                None => ZoneUi::from_effect(z, light.current_effect(z).unwrap_or(Effect::Spectrum), light.brightness(z).unwrap_or(255)),
-            })
-            .collect();
+        self.zone_ui = light.state(m).into_iter().map(|s| ZoneUi::from_effect(&s.zone, s.effect, s.brightness)).collect();
         self.zone_base = self.zone_ui.clone();
         // the first time we see this mouse its lighting becomes the original RESET goes back to
         let Some(path) = self.lighting_original().filter(|p| !p.exists()) else { return };

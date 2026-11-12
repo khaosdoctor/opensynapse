@@ -317,3 +317,61 @@ fn turbo_toggle(ui: &mut egui::Ui, e: &mut Editor) {
         ui.add(DragValue::new(&mut e.rate).range(1..=2000).suffix(" ms")).on_hover_text(TIP);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Selecting a button loads it into the editor, which queues whatever build
+    /// returns if it differs, so a lossy round trip queues a write nobody asked for.
+    #[test]
+    fn load_then_build_gives_the_action_back() {
+        let actions = [
+            Action::Key { mods: 0, usage: 0x04 },
+            Action::Key { mods: 0x03, usage: 0x1e },
+            Action::Key { mods: 0x01, usage: 0x00 },
+            Action::Key { mods: 0, usage: 0x64 },
+            Action::Key { mods: 0, usage: 0x62 },
+            Action::KeyTurbo { mods: 0x04, usage: 0x68, interval: 30 },
+            Action::Mouse(0x01),
+            Action::Mouse(0x69),
+            Action::MouseTurbo { button: 0x01, interval: 50 },
+            Action::Media(0xcd),
+            Action::Key { mods: 0, usage: 0x7f },
+            Action::Dpi(6),
+            Action::DpiStage(5),
+            Action::Profile(5),
+            Action::ProfileSet(1),
+            Action::Hypershift,
+            Action::Disabled,
+            Action::Raw(vec![0x0b, 0x0c]),
+        ];
+        for a in actions {
+            assert_eq!(Editor::load(&a).build(), Ok(a.clone()), "{a}");
+        }
+    }
+
+    #[test]
+    fn media_outside_the_tab_round_trips() {
+        // media:mute from the CLI, a different usage from the tab's MUTE key. It shows up on
+        // the RAW tab, and queue_edits compares bytes, so selecting it queues nothing
+        let a = Action::Media(0xe2);
+        assert_eq!(Editor::load(&a).build().map(|b| b.encode()), Ok(a.encode()));
+    }
+
+    #[test]
+    fn build_refuses_what_it_cant_encode() {
+        let typed = |key: &str| Editor { key: key.into(), ..Editor::load(&Action::Key { mods: 0, usage: 0x04 }) }.build();
+        assert_eq!(typed(" ctrl+z "), Ok(Action::Key { mods: 0x01, usage: 0x1d }));
+        assert_eq!(typed("Z"), Ok(Action::Key { mods: 0, usage: 0x1d }));
+        assert_eq!(typed(""), Err("unknown key ''".into()));
+        assert_eq!(typed("nosuchkey"), Err("unknown key 'nosuchkey'".into()));
+        // the box only takes a plain key, turbo comes from the toggle
+        assert_eq!(typed("a:50"), Err("unknown key 'a:50'".into()));
+        let raw = |hex: &str| Editor { raw: hex.into(), ..Editor::load(&Action::Raw(vec![0x0b])) }.build();
+        assert_eq!(raw(" 0b0c "), Ok(Action::Raw(vec![0x0b, 0x0c])));
+        for bad in ["", "0", "zz", "0b 0c"] {
+            assert!(raw(bad).is_err(), "{bad}");
+        }
+    }
+}

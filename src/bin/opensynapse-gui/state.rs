@@ -159,7 +159,8 @@ impl App {
     /// the device value). Buttons that couldn't be read are left alone.
     pub(crate) fn queue_edits(&mut self) {
         let (Ok(action), Some(now)) = (self.editor.build(), self.effective(self.selected)) else { return };
-        if action == now {
+        // compared as bytes, a media key the MEDIA tab doesn't list comes back from the editor as Raw
+        if action.encode() == now.encode() {
             return;
         }
         let index = self.selected;
@@ -289,4 +290,65 @@ pub(crate) enum View {
     Buttons,
     Lighting,
     Settings,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn button(index: usize, action: Action) -> Op {
+        Op::Button { profile: 0, layer: 0, index, action }
+    }
+
+    fn light(zone: &str, brightness: u8) -> Op {
+        Op::Light { zone: zone.into(), effect: Effect::Spectrum, brightness }
+    }
+
+    #[test]
+    fn queue_keeps_one_op_per_target() {
+        let mut ops = Vec::new();
+        assert!(queue(&mut ops, button(0, Action::Disabled)));
+        assert!(queue(&mut ops, button(1, Action::Hypershift)));
+        // editors queue every frame, the same op again must not move or repeat
+        assert!(!queue(&mut ops, button(0, Action::Disabled)));
+        assert!(ops == [button(0, Action::Disabled), button(1, Action::Hypershift)]);
+        assert!(queue(&mut ops, button(0, Action::Mouse(1))));
+        assert!(ops == [button(1, Action::Hypershift), button(0, Action::Mouse(1))]);
+        // the same index on another layer or profile is another button
+        assert!(queue(&mut ops, Op::Button { profile: 0, layer: 1, index: 0, action: Action::Disabled }));
+        assert!(queue(&mut ops, Op::Button { profile: 1, layer: 0, index: 0, action: Action::Disabled }));
+        assert_eq!(ops.len(), 4);
+
+        let mut ops = Vec::new();
+        queue(&mut ops, Op::Dpi { dpi: 800, active: 1, stages: vec![800] });
+        queue(&mut ops, Op::Dpi { dpi: 1600, active: 2, stages: vec![800, 1600] });
+        queue(&mut ops, Op::Poll(500));
+        queue(&mut ops, Op::Poll(1000));
+        queue(&mut ops, Op::Idle(60));
+        queue(&mut ops, light("logo", 10));
+        queue(&mut ops, light("scroll", 10));
+        queue(&mut ops, light("logo", 20));
+        let want = [
+            Op::Dpi { dpi: 1600, active: 2, stages: vec![800, 1600] },
+            Op::Poll(1000),
+            Op::Idle(60),
+            light("scroll", 10),
+            light("logo", 20),
+        ];
+        assert!(ops == want);
+    }
+
+    #[test]
+    fn unqueue_drops_by_target_whatever_the_value() {
+        let mut ops = vec![button(0, Action::Mouse(1)), button(1, Action::Disabled), Op::Poll(500), light("logo", 10)];
+        unqueue(&mut ops, &button(0, Action::Disabled));
+        unqueue(&mut ops, &Op::Poll(0));
+        unqueue(&mut ops, &light("logo", 99));
+        assert!(ops == [button(1, Action::Disabled)]);
+        // nothing queued for these, so nothing changes
+        unqueue(&mut ops, &Op::Idle(60));
+        unqueue(&mut ops, &light("scroll", 10));
+        unqueue(&mut ops, &Op::Button { profile: 1, layer: 0, index: 1, action: Action::Disabled });
+        assert!(ops == [button(1, Action::Disabled)]);
+    }
 }

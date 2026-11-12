@@ -46,3 +46,23 @@ Only custom properties are read. Anything outside a `prefers-color-scheme` block
 ## Font
 
 ***THEME DEFAULT*** uses the theme's `--font`. Any other font in the list replaces it for every theme.
+
+## Gallery
+
+The lighting tab, in the default theme.
+
+| Dark | Light |
+|---|---|
+| ![The lighting tab, dark](screenshots/lighting.png) | ![The lighting tab, light](screenshots/lighting-light.png) |
+
+Every built-in theme on the buttons tab.
+
+| Theme | Dark | Light |
+|---|---|---|
+| opensynapse | ![opensynapse, dark](screenshots/themes/opensynapse-dark.png) | ![opensynapse, light](screenshots/themes/opensynapse-light.png) |
+| synapse | ![synapse, dark](screenshots/themes/synapse-dark.png) | ![synapse, light](screenshots/themes/synapse-light.png) |
+| adwaita | ![adwaita, dark](screenshots/themes/adwaita-dark.png) | ![adwaita, light](screenshots/themes/adwaita-light.png) |
+| breeze | ![breeze, dark](screenshots/themes/breeze-dark.png) | ![breeze, light](screenshots/themes/breeze-light.png) |
+| catppuccin | ![catppuccin, dark](screenshots/themes/catppuccin-dark.png) | ![catppuccin, light](screenshots/themes/catppuccin-light.png) |
+| kanagawa | ![kanagawa, dark](screenshots/themes/kanagawa-dark.png) | ![kanagawa, light](screenshots/themes/kanagawa-light.png) |
+| dracula | ![dracula, dark](screenshots/themes/dracula-dark.png) | ![dracula, light](screenshots/themes/dracula-light.png) |

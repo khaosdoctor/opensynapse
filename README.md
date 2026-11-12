@@ -47,9 +47,11 @@ Right now you can:
 - Change the polling rate, also through OpenRazer
 - See the battery and set how long a wireless mouse waits before it sleeps
 
-![The buttons tab: the Naga drawn with what each button does, the DPI stages and the remap editor](docs/screenshots/buttons.png)
+![The buttons tab in the dark theme: the Naga drawn with what each button does, the DPI stages, the profile column and the remap editor](docs/screenshots/buttons.png)
 
-![The lighting tab: effect and brightness for each zone](docs/screenshots/lighting.png)
+![The buttons tab in the light theme](docs/screenshots/buttons-light.png)
+
+The lighting tab and every built-in theme, light and dark, are in the [theme gallery](docs/THEMING.md#gallery).
 
 ## Install
 
@@ -127,7 +129,11 @@ journalctl -t opensynapse-gui -f        # follow it
 journalctl -t opensynapse-gui -p err    # only errors
 ```
 
-Please attach the log to bug reports.
+The file is gone once the GUI closes, so for a bug report save the journal instead and attach `opensynapse.log`:
+
+```sh
+journalctl -t opensynapse-gui -b > opensynapse.log   # everything since this boot
+```
 
 ### With the CLI
 

@@ -145,7 +145,8 @@ impl App {
         self.queue_dpi_edits();
         ui.add_space(24.0);
 
-        // pending operations, pinned to the bottom of the sidebar (bottom_up puts the first one added lowest)
+        // the buttons are pinned to the bottom, the list starts right under the stages so the
+        // PENDING heading doesn't move as changes come in
         ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
             ui.add_enabled_ui(!self.ops.is_empty(), |ui| {
                 ui.horizontal(|ui| {
@@ -159,31 +160,37 @@ impl App {
                     }
                 });
             });
-            if self.ops.is_empty() {
-                note(ui, "no pending changes");
-            }
-            let Some(def) = self.mice.get(self.current).map(|m| &m.def) else { return };
-            // newest 12 only, a scroll area here would eat the whole sidebar
-            const SHOWN: usize = 12;
-            let mut remove = None;
-            let hidden = self.ops.len().saturating_sub(SHOWN);
-            for (i, op) in self.ops.iter().enumerate().skip(hidden).rev() {
-                ui.horizontal(|ui| {
-                    if delete_button(ui).clicked() {
-                        remove = Some(i);
-                    }
-                    ui.label(RichText::new(op.describe(def)).color(t().strong).small());
-                });
-            }
-            if hidden > 0 {
-                note(ui, format!("+{hidden} more"));
-            }
-            if let Some(i) = remove {
-                let op = self.ops.remove(i);
-                self.status = Ok(format!("REMOVED {}", op.describe(def)));
-                self.reset_edits();
-            }
-            heading(ui, &format!("PENDING ({})", self.ops.len()));
+            ui.with_layout(Layout::top_down(Align::LEFT), |ui| self.pending_list(ui));
         });
+    }
+
+    /// Newest first, under a heading that stays put.
+    fn pending_list(&mut self, ui: &mut egui::Ui) {
+        heading(ui, &format!("PENDING ({})", self.ops.len()));
+        if self.ops.is_empty() {
+            note(ui, "no pending changes");
+        }
+        let Some(def) = self.mice.get(self.current).map(|m| &m.def) else { return };
+        // newest 12 only, a scroll area here would eat the whole sidebar
+        const SHOWN: usize = 12;
+        let mut remove = None;
+        let hidden = self.ops.len().saturating_sub(SHOWN);
+        for (i, op) in self.ops.iter().enumerate().skip(hidden).rev() {
+            // top-aligned so the X stays on the first line when a long change wraps
+            ui.horizontal_top(|ui| {
+                if delete_button(ui).clicked() {
+                    remove = Some(i);
+                }
+                ui.add(egui::Label::new(RichText::new(op.describe(def)).color(t().strong).small()).wrap());
+            });
+        }
+        if hidden > 0 {
+            note(ui, format!("+{hidden} more"));
+        }
+        if let Some(i) = remove {
+            let op = self.ops.remove(i);
+            self.status = Ok(format!("REMOVED {}", op.describe(def)));
+            self.reset_edits();
+        }
     }
 }

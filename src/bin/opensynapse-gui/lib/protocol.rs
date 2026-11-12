@@ -1,6 +1,7 @@
 //! Every place the GUI reads or writes the mouse or the OpenRazer daemon.
 
 use crate::lib::lighting::ZoneUi;
+use crate::lib::profile_presets;
 use crate::state::{App, Op};
 use opensynapse::action::Action;
 use opensynapse::device::{self, DpiStages};
@@ -55,7 +56,16 @@ impl App {
     pub(crate) fn load_profiles(&mut self) {
         let Some(m) = self.mice.get(self.current) else { return };
         self.onboard = m.profiles().ok();
+        // only this mouse is at hand, so presets can be tried on it as if it had no stored profiles
+        #[cfg(debug_assertions)]
+        if std::env::var_os("OPENSYNAPSE_NO_PROFILES").is_some() {
+            self.onboard = None;
+        }
         self.names = profile::names(m);
+        self.profile_presets = None;
+        if self.onboard.is_none() {
+            self.profile_presets = self.load_presets();
+        }
     }
 
     /// Reads the polling rate, battery and sleep timeout from the OpenRazer
@@ -82,7 +92,11 @@ impl App {
             Some(a) if fresh => a,
             _ => self.profile,
         };
-        self.actions = m.def.buttons.iter().map(|b| m.get_button(from, b.id, self.layer).ok()).collect();
+        let slot = if self.profile_presets.is_some() { self.preset_slot() } else { from };
+        self.actions = match self.preset_actions(from, self.layer) {
+            Some(actions) => actions,
+            None => m.def.buttons.iter().map(|b| m.get_button(slot, b.id, self.layer).ok()).collect(),
+        };
         if let Ok((x, _)) = m.dpi() {
             self.dpi = x;
         }
@@ -184,8 +198,12 @@ impl App {
         let Some(m) = self.mice.get(self.current) else { return };
         let total = self.ops.len();
         let mut active = self.active_profile();
+        let preset_mode = self.profile_presets.is_some();
+        let (slot, mut active_preset) = (self.preset_slot(), active.unwrap_or(1));
         while let Some(op) = self.ops.first() {
+            let preset_op = preset_mode.then(|| profile_presets::apply(m, slot, op, &mut active_preset)).flatten();
             let r = match op {
+                _ if preset_op.is_some() => preset_op.unwrap_or(Ok(())),
                 // P0 is the live copy of the active profile, writing it too makes the change apply right away
                 Op::Button { profile, layer, index, action } => {
                     let id = m.def.buttons[*index].id;
@@ -274,13 +292,31 @@ impl App {
     /// Saves what's on the mouse for the shown profile to `path`.
     pub(crate) fn export_profile(&mut self, path: &std::path::Path) {
         let Some(m) = self.mice.get(self.current) else { return };
-        self.status = profile::export(m, self.profile, path).map(|_| format!("P{} SAVED > {}", self.profile, path.display())).map_err(|e| e.to_string());
+        self.status = self.save_profile(m, path).map(|_| format!("P{} SAVED > {}", self.profile, path.display())).map_err(|e| e.to_string());
     }
 
     /// Replaces the profile's original snapshot with what's on the mouse.
     pub(crate) fn set_default(&mut self) {
         let Some(m) = self.mice.get(self.current) else { return };
-        let Some(path) = profile::original_path(m, self.profile) else { return };
-        self.status = profile::export(m, self.profile, &path).map(|_| format!("P{} IS THE NEW ORIGINAL > {}", self.profile, path.display())).map_err(|e| e.to_string());
+        let Some(path) = self.original_file(self.profile) else { return };
+        self.status = self.save_profile(m, &path).map(|_| format!("P{} IS THE NEW ORIGINAL > {}", self.profile, path.display())).map_err(|e| e.to_string());
+    }
+
+    /// A preset that isn't on the mouse only exists as its file, so that's what gets copied.
+    fn save_profile(&self, m: &device::Mouse, path: &std::path::Path) -> std::io::Result<()> {
+        let preset = self.profile_presets.as_ref().filter(|p| p.active != self.profile);
+        match (preset, profile::preset_path(m, self.profile)) {
+            (Some(_), Some(file)) => std::fs::copy(file, path).map(|_| ()),
+            _ if self.profile_presets.is_some() => profile::export(m, self.preset_slot(), path),
+            _ => profile::export(m, self.profile, path),
+        }
+    }
+
+    pub(crate) fn original_file(&self, p: u8) -> Option<std::path::PathBuf> {
+        let m = self.mice.get(self.current)?;
+        match self.profile_presets {
+            Some(_) => profile_presets::original(m, p),
+            None => profile::original_path(m, p),
+        }
     }
 }

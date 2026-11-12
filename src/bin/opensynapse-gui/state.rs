@@ -27,6 +27,8 @@ pub(crate) struct App {
     pub(crate) names: BTreeMap<u8, String>,
     /// Some while RENAME is open, with the name typed so far
     pub(crate) renaming: Option<String>,
+    /// Some when the mouse doesn't answer the profile commands, so profiles are presets on this computer
+    pub(crate) profile_presets: Option<crate::lib::profile_presets::Presets>,
     pub(crate) layer: u8,
     pub(crate) actions: Vec<Option<Action>>,
     pub(crate) selected: usize,
@@ -112,6 +114,7 @@ impl App {
             onboard: None,
             names: BTreeMap::new(),
             renaming: None,
+            profile_presets: None,
             layer: 0,
             actions: Vec::new(),
             selected: 0,
@@ -130,7 +133,12 @@ impl App {
 
     /// The path field follows the selected device, profile and folder.
     pub(crate) fn update_path(&mut self) {
-        let Some(p) = self.mice.get(self.current).and_then(|m| profile::default_path(m, self.profile)) else { return };
+        let Some(p) = self.mice.get(self.current).and_then(|m| match self.profile_presets {
+            Some(_) => profile::preset_path(m, self.profile),
+            None => profile::default_path(m, self.profile),
+        }) else {
+            return;
+        };
         self.path = match (&self.dir, p.file_name()) {
             (Some(dir), Some(name)) => dir.join(name),
             _ => p,
@@ -210,11 +218,14 @@ impl App {
     /// The profiles on the mouse with the queued NEW and DELETE already applied.
     /// A mouse that doesn't answer the profile commands gets its device file's list, minus P0.
     pub(crate) fn profile_list(&self) -> Vec<u8> {
-        let Some(on) = &self.onboard else {
-            let all = self.mice.get(self.current).map_or(vec![0], |m| m.def.profiles.clone());
-            return all.iter().copied().filter(|&p| p != 0 || all.len() == 1).collect();
+        let mut list = match (&self.onboard, &self.profile_presets) {
+            (Some(on), _) => on.ids.clone(),
+            (None, Some(presets)) => presets.ids.clone(),
+            (None, None) => {
+                let all = self.mice.get(self.current).map_or(vec![0], |m| m.def.profiles.clone());
+                return all.iter().copied().filter(|&p| p != 0 || all.len() == 1).collect();
+            }
         };
-        let mut list = on.ids.clone();
         for op in &self.ops {
             match op {
                 Op::CreateProfile(p) if !list.contains(p) => list.push(*p),
@@ -240,9 +251,8 @@ impl App {
     }
 
     pub(crate) fn active_profile(&self) -> Option<u8> {
-        self.onboard.as_ref().map(|o| o.active)
+        self.onboard.as_ref().map(|o| o.active).or(self.profile_presets.as_ref().map(|p| p.active))
     }
-
     /// Same for DPI, valid values that differ from the device are queued and
     /// putting the device values back drops the queued change.
     pub(crate) fn queue_dpi_edits(&mut self) {

@@ -67,7 +67,7 @@ impl App {
 
     /// Queues the profile's original snapshot.
     fn reset_buttons(&mut self) {
-        let Some(path) = self.mice.get(self.current).and_then(|m| profile::original_path(m, self.profile)) else { return };
+        let Some(path) = self.original_file(self.profile) else { return };
         self.status = self.queue_file(&path, "RESET");
     }
 

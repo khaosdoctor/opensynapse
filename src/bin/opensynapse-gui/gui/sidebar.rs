@@ -79,7 +79,7 @@ impl App {
         let selected = self.profile_label(ui, self.profile);
         // a queued SET ACTIVE counts, so it can't be queued twice
         let queued = self.ops.iter().rev().find_map(|o| if let Op::SetActive(p) = o { Some(*p) } else { None });
-        let can_activate = self.onboard.is_some() && queued.or(self.active_profile()) != Some(self.profile);
+        let can_activate = self.active_profile().is_some() && queued.or(self.active_profile()) != Some(self.profile);
         ComboBox::from_id_salt("profile")
             .selected_text(selected)
             .width(width)
@@ -90,8 +90,8 @@ impl App {
             })
             .response
             .on_hover_text("Changes to the active profile also go to the live copy, so they apply right away.");
-        // a mouse that doesn't answer the profile commands can't switch, create or delete them
-        let supported = self.onboard.is_some();
+        // only when the mouse could be read at all, presets need that too
+        let supported = self.active_profile().is_some();
         let activate = supported
             && ui
                 .add_enabled_ui(can_activate, |ui| sized(ui, [width, 22.0], neon("SET ACTIVE", t().accent)))
@@ -147,13 +147,17 @@ impl App {
     /// Returns true when the shown profile changed.
     fn profile_actions(&mut self, ui: &mut egui::Ui, list: &[u8]) -> bool {
         let p = self.profile;
-        let max = self.onboard.as_ref().map_or(0, |o| o.max);
+        let max = match (&self.onboard, &self.profile_presets) {
+            (Some(on), _) => on.max,
+            (None, Some(_)) => crate::lib::profile_presets::MAX,
+            (None, None) => 0,
+        };
         let free = (1..=max).find(|i| !list.contains(i));
         // the mouse can't drop the profile it's using, and a queued SET ACTIVE would make it that one
         let activating = self.ops.contains(&Op::SetActive(p));
-        let can_delete = self.onboard.is_some() && list.len() > 1 && self.active_profile() != Some(p) && !activating;
+        let can_delete = self.active_profile().is_some() && list.len() > 1 && self.active_profile() != Some(p) && !activating;
         let size = [ui.available_width(), 22.0];
-        let supported = self.onboard.is_some();
+        let supported = self.active_profile().is_some();
         let new = supported && ui.add_enabled_ui(free.is_some(), |ui| sized(ui, size, outline("NEW PROFILE", t().accent))).inner.clicked();
         // names live on this computer, so RENAME works on any mouse
         let rename = sized(ui, size, outline("RENAME PROFILE", t().accent)).clicked();

@@ -25,7 +25,7 @@ pub struct ProfileFile {
     pub layers: BTreeMap<String, BTreeMap<String, String>>,
 }
 
-fn read(mouse: &Mouse, profile: u8) -> io::Result<ProfileFile> {
+pub fn read(mouse: &Mouse, profile: u8) -> io::Result<ProfileFile> {
     let def = &mouse.def;
     let mut layers = BTreeMap::new();
     for (i, layer) in def.layers.iter().enumerate() {
@@ -100,8 +100,10 @@ pub fn original_path(mouse: &Mouse, profile: u8) -> Option<PathBuf> {
 pub fn ensure_defaults(mouse: &Mouse) -> io::Result<usize> {
     let mut created = 0;
     // only the profiles that exist, so a deleted one doesn't come back as a snapshot
-    let existing = mouse.profiles().map(|on| [0].into_iter().chain(on.ids).collect::<Vec<u8>>());
-    for &p in existing.as_ref().unwrap_or(&mouse.def.profiles) {
+    // without an answer only P0 and the first stored profile are sure to be in use, the rest may not exist
+    let first = mouse.def.profiles.iter().copied().find(|&p| p != 0);
+    let existing = mouse.profiles().map(|on| on.ids).unwrap_or_else(|_| first.into_iter().collect());
+    for p in [0].into_iter().chain(existing) {
         let (Some(original), Some(old)) = (original_path(mouse, p), default_path(mouse, p)) else { continue };
         if original.exists() {
             continue;
@@ -119,6 +121,35 @@ pub fn ensure_defaults(mouse: &Mouse) -> io::Result<usize> {
 
 pub fn export(mouse: &Mouse, profile: u8, path: &Path) -> io::Result<()> {
     device::save_json(path, &read(mouse, profile)?)
+}
+
+/// <serial>-preset-<n>.json. Mice that don't answer the profile commands get
+/// presets instead, profile files kept here and written to the mouse when picked.
+pub fn preset_path(mouse: &Mouse, n: u8) -> Option<PathBuf> {
+    device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, &format!("preset-{n}.json"))
+}
+
+pub fn presets(mouse: &Mouse) -> Vec<u8> {
+    let Some(dir) = device::model_dir(mouse.def.vid, mouse.def.pid) else { return Vec::new() };
+    let prefix = preset_path(mouse, 0).and_then(|p| p.file_name()?.to_str()?.strip_suffix("0.json").map(str::to_string)).unwrap_or_default();
+    let mut found: Vec<u8> = fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| e.file_name().to_str()?.strip_prefix(&prefix)?.strip_suffix(".json")?.parse().ok())
+        .collect();
+    found.sort();
+    found
+}
+
+/// The preset last written to the mouse, kept in <serial>-preset-active.json.
+pub fn active_preset(mouse: &Mouse) -> Option<u8> {
+    device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, "preset-active.json").and_then(|p| device::load_json(&p).ok())
+}
+
+pub fn set_active_preset(mouse: &Mouse, n: u8) -> io::Result<()> {
+    let path = device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, "preset-active.json").ok_or_else(|| io::Error::other("no config folder"))?;
+    device::save_json(&path, &n)
 }
 
 /// Copies every button on every layer. A deleted profile keeps its keymap on

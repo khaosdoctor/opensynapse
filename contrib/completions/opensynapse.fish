@@ -52,9 +52,10 @@ complete -c opensynapse -n __opensynapse_no_command -a stages -d 'show or set DP
 complete -c opensynapse -n __opensynapse_no_command -a watch -d 'print buttons as you press them'
 complete -c opensynapse -n __opensynapse_no_command -a rgb -d 'lighting zones (needs OpenRazer)'
 complete -c opensynapse -n __opensynapse_no_command -a preset -d 'list, save, load or delete lighting presets'
-complete -c opensynapse -n __opensynapse_no_command -a poll-d 'show or set the polling rate (needs OpenRazer)'
+complete -c opensynapse -n __opensynapse_no_command -a poll -d 'show or set the polling rate (needs OpenRazer)'
 complete -c opensynapse -n __opensynapse_no_command -a battery -d 'battery and sleep timeout of a wireless mouse'
 complete -c opensynapse -n __opensynapse_no_command -a idle -d 'show or set the sleep timeout in seconds'
+complete -c opensynapse -n __opensynapse_no_command -a profile -d 'list, create, delete, switch or rename stored profiles'
 complete -c opensynapse -n __opensynapse_no_command -a export -d 'save a profile to JSON'
 complete -c opensynapse -n __opensynapse_no_command -a import -d 'write a saved profile to the mouse'
 complete -c opensynapse -n __opensynapse_no_command -a protocol -d 'generate a protocol file for this mouse'
@@ -66,7 +67,7 @@ complete -c opensynapse -l device -x -d 'mouse PID, like 008d'
 complete -c opensynapse -l active -x -a '1 2 3 4 5' -d 'active DPI stage'
 complete -c opensynapse -l args -x -d 'hex args for probe, like 004000'
 complete -c opensynapse -l tid -x -d 'transaction id for probe, like 0x3f'
-complete -c opensynapse -l force-d 'overwrite an existing file'
+complete -c opensynapse -l force -d 'overwrite an existing file'
 complete -c opensynapse -l dry-run -d 'print the issue instead of opening it'
 complete -c opensynapse -l yes -d 'skip the confirmation'
 
@@ -76,6 +77,7 @@ complete -c opensynapse -n '__opensynapse_at set 1' -a 'key: turbo: keyturbo: ra
     mouse:left mouse:right mouse:middle mouse:back mouse:forward mouse:wheelup mouse:wheeldown mouse:wheelleft mouse:wheelright
     media:playpause media:play media:pause media:next media:prev media:stop media:mute media:volumeup media:volumedown
     dpi:up dpi:down dpi:up-wrap dpi:down-wrap profile:next profile:prev profile:next-wrap profile:prev-wrap'
+complete -c opensynapse -n '__opensynapse_at profile 0' -a 'create delete switch rename'
 complete -c opensynapse -n '__opensynapse_at rgb 0' -a '(__opensynapse_zones)'
 complete -c opensynapse -n '__opensynapse_at rgb 1' -a 'off static breath spectrum wave reactive brightness'
 complete -c opensynapse -n '__opensynapse_at preset 0' -a 'list save load delete'

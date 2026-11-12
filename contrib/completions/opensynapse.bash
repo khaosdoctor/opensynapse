@@ -42,13 +42,14 @@ _opensynapse() {
     done
 
     case $cmd in
-        "") COMPREPLY=($(compgen -W "init probe list dump get set dpi stages watch rgb preset poll battery idle export import protocol help" -- "$cur")) ;;
+        "") COMPREPLY=($(compgen -W "init probe list dump get set dpi stages watch rgb preset poll battery idle profile export import protocol help" -- "$cur")) ;;
         preset)
             case ${#args[@]} in
                 0) COMPREPLY=($(compgen -W "list save load delete" -- "$cur")) ;;
                 1) [[ ${args[0]} == load || ${args[0]} == delete ]] && COMPREPLY=($(compgen -W "$(opensynapse preset list 2>/dev/null)" -- "$cur")) ;;
             esac
             ;;
+        profile) ((${#args[@]} == 0)) && COMPREPLY=($(compgen -W "create delete switch rename" -- "$cur")) ;;
         poll) ((${#args[@]} == 0)) && COMPREPLY=($(compgen -W "125 500 1000" -- "$cur")) ;;
         probe) ((${#args[@]} == 0)) && COMPREPLY=($(compgen -W "$(compgen -G '/dev/hidraw*')" -- "$cur")) ;;
         get) ((${#args[@]} == 0)) && COMPREPLY=($(compgen -W "$(_opensynapse_buttons)" -- "$cur")) ;;

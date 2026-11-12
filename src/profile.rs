@@ -99,7 +99,9 @@ pub fn original_path(mouse: &Mouse, profile: u8) -> Option<PathBuf> {
 /// Returns how many files were created.
 pub fn ensure_defaults(mouse: &Mouse) -> io::Result<usize> {
     let mut created = 0;
-    for &p in &mouse.def.profiles {
+    // only the profiles that exist, so a deleted one doesn't come back as a snapshot
+    let existing = mouse.profiles().map(|on| [0].into_iter().chain(on.ids).collect::<Vec<u8>>());
+    for &p in existing.as_ref().unwrap_or(&mouse.def.profiles) {
         let (Some(original), Some(old)) = (original_path(mouse, p), default_path(mouse, p)) else { continue };
         if original.exists() {
             continue;
@@ -117,6 +119,53 @@ pub fn ensure_defaults(mouse: &Mouse) -> io::Result<usize> {
 
 pub fn export(mouse: &Mouse, profile: u8, path: &Path) -> io::Result<()> {
     device::save_json(path, &read(mouse, profile)?)
+}
+
+/// Copies every button on every layer. A deleted profile keeps its keymap on
+/// the mouse, so a new profile gets this instead of whatever was there before.
+pub fn copy(mouse: &Mouse, from: u8, to: u8) -> io::Result<()> {
+    for layer in 0..mouse.def.layers.len() as u8 {
+        for b in &mouse.def.buttons {
+            let action = mouse.get_button(from, b.id, layer)?;
+            if mouse.get_button(to, b.id, layer)?.encode() != action.encode() {
+                mouse.set_button(to, b.id, layer, &action)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn forget(mouse: &Mouse, profile: u8) -> io::Result<()> {
+    for path in [default_path(mouse, profile), original_path(mouse, profile)].into_iter().flatten() {
+        match fs::remove_file(&path) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+            _ => {}
+        }
+    }
+    if names(mouse).contains_key(&profile) {
+        rename(mouse, profile, "")?;
+    }
+    Ok(())
+}
+
+/// Kept on this computer, the mouse has nowhere to store names.
+pub fn names(mouse: &Mouse) -> BTreeMap<u8, String> {
+    names_path(mouse).and_then(|p| device::load_json(&p).ok()).unwrap_or_default()
+}
+
+/// An empty name removes it.
+pub fn rename(mouse: &Mouse, profile: u8, name: &str) -> io::Result<()> {
+    let path = names_path(mouse).ok_or_else(|| io::Error::other("no config folder"))?;
+    let mut all = names(mouse);
+    match name.trim() {
+        "" => all.remove(&profile),
+        name => all.insert(profile, name.to_string()),
+    };
+    device::save_json(&path, &all)
+}
+
+fn names_path(mouse: &Mouse) -> Option<PathBuf> {
+    device::model_file(mouse.def.vid, mouse.def.pid, &mouse.serial, "names.json")
 }
 
 #[cfg(test)]

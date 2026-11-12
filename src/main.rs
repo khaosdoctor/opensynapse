@@ -35,6 +35,10 @@ commands:
   poll [125|500|1000]          show or set the polling rate in Hz (needs the OpenRazer daemon)
   battery                      battery level, charging and the sleep timeout (wireless mice)
   idle [SECONDS]               show or set how long a wireless mouse waits before it sleeps (60-900)
+  profile                      stored profiles and which one is active
+  profile create|delete|switch N
+                               create copies the active profile, the profile button only reaches created ones
+  profile rename N NAME        a name for the GUI, kept on this computer (empty NAME removes it)
   export <file.json>           save keymap (all layers) + DPI of --profile
   import <file.json>           write a saved profile to --profile
   protocol [file.md]           generate a protocol file skeleton for this mouse (--force overwrites)
@@ -51,7 +55,7 @@ actions:
   dpi:up|down|up-wrap|down-wrap|stageN, profile:next|prev|next-wrap|prev-wrap|N,
   disabled, raw:hex
 
-profile defaults to 0 (the live slot), layer to normal, device to the first mouse in `list`
+profile defaults to 0, the live copy of the active profile, lost on unplug. Layer to normal, device to the first mouse in `list`
 (PID is the hex after the colon, like 008d).";
 
 #[derive(Default)]
@@ -271,6 +275,31 @@ fn run(o: Opts) -> Result<(), Box<dyn Error>> {
             let path = rest.first().map_or_else(|| protocol_path(def), PathBuf::from);
             write_new(&path, &protocol::generate(mouse), o.force)?;
             println!("wrote {}\nfill in the TODOs, then `opensynapse protocol send` opens an issue with it", path.display());
+        }
+        ["profile", rest @ ..] => {
+            let n = |s: &str| s.parse::<u8>().map_err(|_| format!("bad profile '{s}'"));
+            match rest {
+                [] => {}
+                ["create", p] => {
+                    let active = mouse.profiles()?.active;
+                    mouse.create_profile(n(p)?)?;
+                    profile::copy(mouse, active, n(p)?)?;
+                }
+                ["delete", p] => {
+                    mouse.delete_profile(n(p)?)?;
+                    profile::forget(mouse, n(p)?)?;
+                }
+                ["switch", p] => mouse.set_active_profile(n(p)?)?,
+                ["rename", p, name @ ..] => profile::rename(mouse, n(p)?, &name.join(" "))?,
+                _ => return Err("profile [create|delete|switch N | rename N NAME]".into()),
+            }
+            let p = mouse.profiles()?;
+            let names = profile::names(mouse);
+            for id in &p.ids {
+                let name = names.get(id).map_or(String::new(), |n| format!(" {n}"));
+                println!("P{id}{name}{}", if *id == p.active { " [active]" } else { "" });
+            }
+            println!("{} of {} profiles", p.ids.len(), p.max);
         }
         ["export", path] => {
             profile::export(mouse, o.profile, Path::new(path))?;

@@ -46,6 +46,7 @@ _opensynapse() {
         'poll:show or set the polling rate (needs OpenRazer)'
         'battery:battery and sleep timeout of a wireless mouse'
         'idle:show or set the sleep timeout in seconds'
+        'profile:list, create, delete, switch or rename stored profiles'
         'export:save a profile to JSON'
         'import:write a saved profile to the mouse'
         'protocol:generate a protocol file for this mouse'
@@ -77,6 +78,7 @@ _opensynapse() {
                         3) _opensynapse_actions ;;
                     esac
                     ;;
+                profile) (( CURRENT == 2 )) && compadd create delete switch rename ;;
                 rgb)
                     case $CURRENT in
                         2) _opensynapse_zones ;;

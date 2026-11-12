@@ -41,6 +41,7 @@ const VARSTORE: u8 = 0x01;
 const CLASS_DPI: u8 = 0x04;
 const CLASS_KEYMAP: u8 = 0x02;
 const CLASS_LIGHT: u8 = 0x0f;
+const CLASS_PROFILE: u8 = 0x05;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeviceDef {
@@ -230,6 +231,15 @@ pub struct DpiStages {
     pub stages: Vec<u16>,
 }
 
+/// The stored profiles that exist on the mouse. The profile button and
+/// `profile:N` only reach these, a profile has to be created before it can be switched to.
+#[derive(Debug, PartialEq)]
+pub struct Profiles {
+    pub max: u8,
+    pub ids: Vec<u8>,
+    pub active: u8,
+}
+
 /// Every connected mouse that has a definition.
 pub fn detect() -> io::Result<Vec<Mouse>> {
     #[cfg(debug_assertions)]
@@ -317,6 +327,27 @@ impl Mouse {
         }
         self.hid.command(CLASS_DPI, 0x06, 0x26, &args)?;
         Ok(())
+    }
+
+    pub fn profiles(&self) -> io::Result<Profiles> {
+        // [max, id, id, ...], the size byte counts max too
+        let r = self.hid.command(CLASS_PROFILE, 0x81, 0x50, &[])?;
+        let ids = r[9..(8 + r[5] as usize).clamp(9, r.len())].to_vec();
+        let active = self.hid.command(CLASS_PROFILE, 0x84, 0x01, &[])?[8];
+        Ok(Profiles { max: r[8], ids, active })
+    }
+
+    pub fn create_profile(&self, profile: u8) -> io::Result<()> {
+        self.hid.command(CLASS_PROFILE, 0x02, 0x01, &[profile]).map(|_| ())
+    }
+
+    pub fn delete_profile(&self, profile: u8) -> io::Result<()> {
+        self.hid.command(CLASS_PROFILE, 0x03, 0x01, &[profile]).map(|_| ())
+    }
+
+    /// Like pressing the profile button, the mouse copies this profile into P0.
+    pub fn set_active_profile(&self, profile: u8) -> io::Result<()> {
+        self.hid.command(CLASS_PROFILE, 0x04, 0x01, &[profile]).map(|_| ())
     }
 
     /// Effect and brightness of one LED zone, read from the mouse (verified on

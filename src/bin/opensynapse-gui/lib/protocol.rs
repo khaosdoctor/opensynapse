@@ -2,6 +2,7 @@
 
 use crate::lib::lighting::ZoneUi;
 use crate::lib::profile_presets;
+use crate::lib::debug;
 use crate::state::{App, Op};
 use opensynapse::action::Action;
 use opensynapse::device::{self, DpiStages};
@@ -33,6 +34,7 @@ impl App {
     pub(crate) fn switch_to(&mut self, i: usize) {
         self.current = i;
         let m = &self.mice[i];
+        debug::set_device(&m.def);
         let ctx = self.ctx.clone();
         // the previous listener's threads keep running until their device goes away
         self.pressed = Some(input::listen(m.def.vid, m.def.pid, move || ctx.request_repaint()));
@@ -52,6 +54,7 @@ impl App {
         self.update_path();
         self.load_lighting();
         self.load_power();
+        debug::write("Device ready to accept commands");
     }
 
     pub(crate) fn load_profiles(&mut self) {
@@ -252,6 +255,10 @@ impl App {
                     *base = done;
                 }
             }
+            match &r {
+                Ok(_) => debug::write(&format!("WROTE {}", op.describe(&m.def))),
+                Err(e) => debug::write(&format!("FAILED {}: {e}", op.describe(&m.def))),
+            }
             if let Err(e) = r {
                 let done = total - self.ops.len();
                 self.status = Err(format!("{done}/{total} APPLIED > {} FAILED: {e}", op.describe(&m.def)));
@@ -295,7 +302,6 @@ impl App {
         }
     }
 
-    /// Saves what's on the mouse for the shown profile to `path`.
     pub(crate) fn export_profile(&mut self, path: &std::path::Path) {
         let Some(m) = self.mice.get(self.current) else { return };
         self.status = self.save_profile(m, path).map(|_| format!("P{} SAVED > {}", self.profile, path.display())).map_err(|e| e.to_string());

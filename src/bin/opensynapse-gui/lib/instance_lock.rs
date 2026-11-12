@@ -75,6 +75,13 @@ pub(crate) struct Launcher {
 }
 
 impl eframe::App for Launcher {
+    fn on_exit(&mut self) {
+        // only the window that started the log owns it, the "already running" one never did
+        if self.app.is_some() {
+            crate::lib::debug::finish();
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         if let Some(app) = &mut self.app {
             app.ui(ui, frame);

@@ -1,5 +1,6 @@
 //! The confirm modal, the native file dialogs and the SETTINGS page.
 
+use crate::lib::debug;
 use crate::shared::widgets::{heading, modal, neon, note, outline, tall};
 use crate::state::{App, Confirm, Op, queue, unqueue};
 use crate::theme::{self, t};
@@ -18,6 +19,23 @@ impl App {
             let dir = self.path.parent().map(|d| d.display().to_string()).unwrap_or_default();
             ui.add(egui::Label::new(RichText::new(&dir).color(t().muted)).truncate()).on_hover_text(&dir);
         });
+        ui.add_space(16.0);
+        heading(ui, "DEBUG");
+        ui.horizontal(|ui| {
+            let path = debug::path().unwrap_or_default();
+            if tall(ui, neon("DEBUG LOG", t().accent)).on_hover_text("this session's log, also sent to the journal").clicked() {
+                // eframe can't open files, xdg-open hands it to the default editor
+                if let Err(e) = std::process::Command::new("xdg-open").arg(&path).spawn() {
+                    self.status = Err(format!("could not open {}: {e}", path.display()));
+                }
+            }
+            let shown = path.display().to_string();
+            ui.add(egui::Label::new(RichText::new(&shown).color(t().muted)).truncate()).on_hover_text(&shown);
+        });
+        let mut raw = theme::raw_bytes();
+        if ui.checkbox(&mut raw, "Show raw bytes in the log").on_hover_text("the bytes go under each translated command").changed() {
+            theme::set_raw_bytes(raw);
+        }
         ui.add_space(16.0);
         theme::settings_ui(ui);
     }

@@ -19,7 +19,7 @@ mod theme_detector;
 mod theme_parser;
 
 pub use palette::Palette;
-pub use settings_parser::settings_ui;
+pub use settings_parser::{raw_bytes, set_raw_bytes, settings_ui};
 
 use eframe::egui::{self, Color32, CornerRadius, FontData, FontFamily, FontId, Stroke, Theme};
 use palette::{base, uniform};

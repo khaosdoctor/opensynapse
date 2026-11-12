@@ -1,3 +1,4 @@
+pub(crate) mod debug;
 pub(crate) mod instance_lock;
 pub(crate) mod lighting;
 pub(crate) mod presets;

@@ -26,9 +26,12 @@ pub(super) struct Settings {
     /// a font family that replaces the theme's, None keeps the theme's
     #[serde(default)]
     pub(super) font: Option<String>,
+    /// the debug log shows the bytes under each translated command
+    #[serde(default)]
+    pub(super) raw_bytes: bool,
 }
 
-pub(super) static SETTINGS: RwLock<Settings> = RwLock::new(Settings { mode: Mode::System, theme: String::new(), font: None });
+pub(super) static SETTINGS: RwLock<Settings> = RwLock::new(Settings { mode: Mode::System, theme: String::new(), font: None, raw_bytes: false });
 
 pub(super) struct ThemeFile {
     id: String,
@@ -125,6 +128,20 @@ pub(super) fn theme_css(id: &str) -> (String, String) {
 fn save(ctx: &egui::Context, s: Settings) {
     *write(&SETTINGS) = s.clone();
     apply(ctx);
+    let Some(file) = config("settings.json") else { return };
+    if let Err(e) = device::save_json(&file, &s) {
+        eprintln!("could not save settings to {}: {e}", file.display());
+    }
+}
+
+pub fn raw_bytes() -> bool {
+    read(&SETTINGS).raw_bytes
+}
+
+/// Skips `save`, which reloads the theme and every font. Nothing on screen changes but the log.
+pub fn set_raw_bytes(on: bool) {
+    write(&SETTINGS).raw_bytes = on;
+    let s = read(&SETTINGS).clone();
     let Some(file) = config("settings.json") else { return };
     if let Err(e) = device::save_json(&file, &s) {
         eprintln!("could not save settings to {}: {e}", file.display());

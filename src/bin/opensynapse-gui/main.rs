@@ -28,6 +28,9 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             theme::start(&cc.egui_ctx);
             // while the alert shows we don't touch the mouse, the other GUI still has it
+            if busy.is_none() {
+                lib::debug::start();
+            }
             let app = busy.is_none().then(|| App::new(cc.egui_ctx.clone()));
             Ok(Box::new(Launcher { app, busy, _lock: lock }))
         }),

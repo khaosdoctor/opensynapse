@@ -1,5 +1,6 @@
 //! Where each panel goes in the window.
 
+use crate::lib::debug;
 use crate::shared::widgets::{backdrop, icon_button, modal, panel, pick, view_tab};
 use crate::state::{App, View};
 use crate::theme::{self, t};
@@ -8,6 +9,7 @@ use eframe::egui::{self, Align, Layout, Margin, RichText};
 /// The remap editor at the bottom never grows, the mouse view gets the rest.
 const EDITOR_HEIGHT: f32 = 344.0;
 const SIDEBAR_WIDTH: f32 = 250.0;
+const LOG_HEIGHT: f32 = 160.0;
 
 /// Status bar links, Phosphor codepoints for the GitHub logo, a bug and a globe.
 const LINKS: &[(&str, &str, &str)] = &[
@@ -28,6 +30,15 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll_dpi();
         self.poll_daemon();
+        // every action reports through the status line, so logging its changes logs what happened
+        let line = match &self.status {
+            Ok(s) => s.clone(),
+            Err(e) => format!("ERROR {e}"),
+        };
+        if line != self.logged && !line.is_empty() {
+            debug::write(&line);
+            self.logged = line;
+        }
         self.confirm_dialog();
         self.rename_dialog();
         if self.disconnected.is_some() {
@@ -37,6 +48,8 @@ impl eframe::App for App {
         }
         // the sidebar goes first so it runs the full height, the tabs only span the rest
         egui::Panel::left("dpi").exact_size(SIDEBAR_WIDTH).resizable(false).frame(panel(t().panel)).show(ui, |ui| {
+            // laid out first so it keeps the bottom, the rest of the sidebar fills what's above
+            egui::Panel::bottom("log").exact_size(LOG_HEIGHT).resizable(false).show_separator_line(false).frame(egui::Frame::new()).show(ui, |ui| self.log_panel(ui));
             self.device_box(ui);
             self.dpi_panel(ui);
         });
@@ -52,7 +65,7 @@ impl eframe::App for App {
             });
         });
 
-        let status = backdrop(t().bg, Margin::symmetric(12, 6));
+        let status = backdrop(t().panel, Margin::symmetric(12, 6));
         let (text, color) = match &self.status {
             Ok(s) => (format!("> {s}"), t().accent),
             Err(e) => (format!("! {e}"), t().accent2),
@@ -88,18 +101,26 @@ impl eframe::App for App {
 
         let name = self.mice.get(self.current).and_then(|m| m.def.buttons.get(self.selected)).map(|b| b.name.clone());
         let hyper = self.layer != 0;
+        let mut editor_top = None;
         if let Some(name) = name {
-            egui::Panel::bottom("editor").exact_size(EDITOR_HEIGHT).resizable(false).frame(panel(t().pane)).show(ui, |ui| {
+            // a Frame strokes all four sides, the window edge on the right needs no line, so only the top is drawn
+            let frame = panel(t().pane).stroke(egui::Stroke::NONE);
+            let editor = egui::Panel::bottom("editor").exact_size(EDITOR_HEIGHT).resizable(false).frame(frame).show(ui, |ui| {
                 theme::tinted(hyper, || {
                     // selectable buttons and combo boxes take egui's selection color, not ours
                     ui.visuals_mut().selection.bg_fill = t().accent2;
                     self.editor_ui(ui, &name);
                 });
             });
+            editor_top = Some(editor.response.rect);
         }
         if !self.mice.is_empty() {
             egui::Panel::left("profile").exact_size(190.0).resizable(false).frame(panel(t().bg)).show(ui, |ui| self.profile_box(ui));
         }
         center.show(ui, |ui| theme::tinted(hyper, || self.buttons(ui)));
+        // drawn last so the center panel can't paint over it, two pixels like the profile column's border meeting it
+        if let Some(r) = editor_top {
+            ui.painter().rect_filled(egui::Rect::from_x_y_ranges(r.x_range(), r.top() - 1.0..=r.top() + 1.0), 0.0, t().border);
+        }
     }
 }

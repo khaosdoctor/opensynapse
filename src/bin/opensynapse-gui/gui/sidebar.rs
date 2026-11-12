@@ -1,6 +1,7 @@
 //! The two left columns, device and DPI on the far left and the profile column next to the mouse.
 
-use crate::shared::widgets::{delete_button, heading, neon, note, outline, sized, tall};
+use crate::shared::widgets::{delete_button, heading, neon, note, outline, sized};
+use crate::lib::debug;
 use crate::state::{App, Confirm, Op, queue};
 use crate::theme::t;
 use eframe::egui::text::{LayoutJob, TextFormat};
@@ -69,7 +70,6 @@ impl App {
         job
     }
 
-    /// The column left of the mouse drawing, with the profile and layer pickers and the profile file actions.
     pub(crate) fn profile_box(&mut self, ui: &mut egui::Ui) {
         let Some(m) = self.mice.get(self.current) else { return };
         let layers = m.def.layers.clone();
@@ -229,29 +229,56 @@ impl App {
         self.queue_dpi_edits();
         ui.add_space(24.0);
 
-        // the buttons are pinned to the bottom, the list starts right under the stages so the
-        // PENDING heading doesn't move as changes come in
-        ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
-            ui.add_enabled_ui(!self.ops.is_empty(), |ui| {
-                ui.horizontal(|ui| {
-                    if tall(ui, neon("CLEAR", t().accent2)).clicked() {
-                        self.status = Ok(format!("CLEARED {} PENDING", self.ops.len()));
-                        self.ops.clear();
-                        self.reset_edits();
-                    }
-                    if tall(ui, neon("WRITE TO DEVICE", t().accent)).clicked() {
-                        self.apply();
+        let width = ui.available_width();
+        ui.add_enabled_ui(!self.ops.is_empty(), |ui| {
+            if sized(ui, [width, 28.0], neon("CLEAR QUEUE", t().accent2)).clicked() {
+                self.status = Ok(format!("CLEARED {} PENDING", self.ops.len()));
+                self.ops.clear();
+                self.reset_edits();
+            }
+            if sized(ui, [width, 28.0], neon("WRITE TO DEVICE", t().accent)).clicked() {
+                self.apply();
+            }
+        });
+        ui.add_space(14.0);
+        self.pending_list(ui);
+    }
+
+    /// Follows the newest line, the panel around it keeps it a fixed height.
+    pub(crate) fn log_panel(&mut self, ui: &mut egui::Ui) {
+        heading(ui, "LOG");
+        egui::Frame::new().fill(egui::Color32::BLACK).inner_margin(6).show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .stick_to_bottom(true)
+                .auto_shrink([false, false])
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                .show(ui, |ui| {
+                    // the theme's font goes on every text style, a FontId keeps the log monospace
+                    let format = |color| TextFormat { font_id: egui::FontId::monospace(10.0), color, ..Default::default() };
+                    let raw = crate::theme::raw_bytes();
+                    for line in debug::lines() {
+                        let mut job = LayoutJob::default();
+                        job.append(&format!("[{}] :: ", line.time), 0.0, format(t().accent));
+                        let color = match line.kind {
+                            debug::Kind::Raw => t().muted,
+                            debug::Kind::Info => egui::Color32::from_gray(200),
+                            debug::Kind::Warn => t().warn,
+                            debug::Kind::Error => t().error,
+                        };
+                        job.append(&line.message, 0.0, format(color));
+                        if let Some(bytes) = line.bytes.filter(|_| raw) {
+                            job.append(&format!("\n    {bytes}"), 0.0, format(egui::Color32::from_gray(110)));
+                        }
+                        ui.add(egui::Label::new(job).wrap());
                     }
                 });
-            });
-            ui.with_layout(Layout::top_down(Align::LEFT), |ui| self.pending_list(ui));
         });
     }
 
     fn pending_list(&mut self, ui: &mut egui::Ui) {
         let mut remove = None;
         ui.horizontal(|ui| {
-            heading(ui, &format!("PENDING ({})", self.ops.len()));
+            heading(ui, &format!("PENDING QUEUE ({})", self.ops.len()));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 // as tall as the heading, so the row doesn't grow
                 let height = ui.text_style_height(&egui::TextStyle::Body);

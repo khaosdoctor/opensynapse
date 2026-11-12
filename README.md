@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/icon.svg" width="128" alt="opensynapse icon"></p>
 
-# opensynapse
+# OpenSynapse
 
 > Remap buttons, set DPI and lighting on Razer mice from Linux.
 

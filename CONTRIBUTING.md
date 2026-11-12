@@ -4,6 +4,8 @@ I only have one Razer mouse, so every other model depends on someone who owns it
 
 Bug fixes and features are welcome too, open an issue first if it's something big so we can talk about it.
 
+If you're working on lighting, the polling rate, the battery or presets, you don't need a mouse that supports them. `scripts/fake-devices.sh` gives you OpenRazer's fake devices in a shell, and [Testing without a mouse](AGENTS.md#testing-without-a-mouse) explains what works there.
+
 ## Contents
 
 - [Adding a mouse](#adding-a-mouse)

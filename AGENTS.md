@@ -22,6 +22,22 @@ Everything here ends up as bytes on a real device, and a wrong write can leave a
 - Never run `opensynapse protocol send`, it posts a public issue.
 - The exploration rules for new mice are in the agent prompt at the end of [CONTRIBUTING.md](CONTRIBUTING.md#using-an-agent).
 
+## Testing without a mouse
+
+The lighting, polling rate, battery, sleep timeout and presets all go through OpenRazer, and OpenRazer has fake devices for its own tests. `scripts/fake-devices.sh` creates them and runs a second daemon for them on a private session bus, so your real daemon and mouse never see any of it. Writes are fine here, nothing reaches real hardware.
+
+```sh
+scripts/fake-devices.sh                    # a Naga Left-Handed 2020 and a wireless Viper Ultimate, in a new shell
+scripts/fake-devices.sh --list             # every model OpenRazer can fake
+scripts/fake-devices.sh razerbasiliskv3 -- cargo run --bin opensynapse -- rgb
+```
+
+Inside that shell, `cargo run --bin opensynapse -- rgb`, `poll`, `battery`, `idle` and `preset ...` work on the fake devices, `--device 007b` picks one, and `cargo run --features gui --bin opensynapse-gui` shows them in the lighting tab. Exit the shell and the daemon and the fake files are gone.
+
+The first run downloads the OpenRazer release that matches your `openrazer-daemon` to `~/.cache/opensynapse`, since the fake device generator only ships in its source. It needs `python3` and `dbus-run-session`.
+
+The script sets `OPENSYNAPSE_OPENRAZER_TEST` to the fake devices' folder. Debug builds then list only those devices, read lighting from that folder instead of `/sys/bus/hid/drivers`, keep presets and other config inside it, and send nothing over hidraw. Release builds don't have any of this. Buttons and DPI need hidraw, so on a fake device they fail with "fake OpenRazer devices have no hidraw node". Test those on a real mouse.
+
 ## Where things are
 
 | Path | What's in it |
@@ -35,6 +51,7 @@ Everything here ends up as bytes on a real device, and a wrong write can leave a
 | `src/rgb.rs` | lighting through the OpenRazer driver and daemon, we don't reverse engineer lighting |
 | `src/power.rs` | polling rate, battery and sleep timeout through the OpenRazer daemon |
 | `src/preset.rs` | named lighting presets in `~/.config/opensynapse/presets` |
+| `src/fake.rs` | OpenRazer's fake devices for debug builds, see [Testing without a mouse](#testing-without-a-mouse) |
 | `src/scaffold.rs` | `init`, which starts a device file for an unknown mouse using reads only |
 | `src/generators/protocol.rs` | writes `devices/protocols/<slug>.md` for `opensynapse protocol` |
 | `src/main.rs` | the CLI, including `probe` for raw read-only probing of a hidraw node |

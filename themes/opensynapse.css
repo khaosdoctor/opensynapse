@@ -1,9 +1,10 @@
-/* OpenSynapse, the default look. Neon on near-black, plus a light version.
+/* OpenSynapse is the default look, cyberpunk with a light version too.
  *
  * To make your own theme, copy this file to ~/.config/opensynapse/themes/<name>.css
- * and it shows up as <NAME> on the settings page. You can leave any property
- * out and it comes from this theme. Whatever is in :root counts for both
- * modes, and a prefers-color-scheme block only for that mode.
+ * and it shows up as <NAME> on the settings page, and any property you leave
+ * out comes from this theme. Whatever you put in :root counts for both modes,
+ * while a prefers-color-scheme block only counts for that mode, and the list
+ * here has every property you can set.
  *
  *   --radius     corner radius of buttons and panels, in pixels
  *   --font       monospace, or font families looked up with fc-match

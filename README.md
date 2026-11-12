@@ -5,9 +5,9 @@
 > Remap buttons, set DPI and lighting on Razer mice from Linux.
 
 > [!WARNING]
-> **This is a work in progress.** I tested it on my mouse only, so edge cases might not be covered. It should work with any mice. See [First use](#first-use). It was also built with heavy AI help, see [AI usage](#ai-usage).
+> **This is a work in progress.** I only tested it on my own mouse, so some edge cases might not be covered, but it should work with any mouse, and [First use](#first-use) shows how to check yours. It was also built with heavy AI help, which [AI usage](#ai-usage) explains.
 
-My lawyers say I have to write this so:
+My lawyers say I have to write this, so here it is.
 
 > Not affiliated with, endorsed by, or supported by Razer Inc. Everything here is distributed as-is and with no warranty.
 
@@ -27,27 +27,26 @@ My lawyers say I have to write this so:
 
 Razer doesn't ship Synapse for Linux, to change the keybinds we can use keyd and the likes of it so we can remap what the mouse sends to the computer, but the remap sometimes miss buttons, some buttons are weird stuff (like keys that don't really exist) and the final remaps stay on the computer, not on the mouse. I also happen to have a Razer mice, and a Linux computer, so that was _pretty_ annoying... For... Years...
 
-This is the reverse engineered version of the Synapse protocol handling. It maps out how the mouse stores its keymap (the details are in [`devices/protocols/`](devices/protocols/razer-naga-left-handed-2020.md)). It talks to the mouse directly, so the mapping is saved on the mouse itself and works in any computer, this is a single Rust binary either so you can probably build for whatever OS you have.
+This is a reverse engineered version of the way Synapse talks to the mouse, so it talks to the mouse directly and the mapping is saved on the mouse itself, which means it works on any computer you plug it into, and how the mouse stores its keymap is all written down in [`devices/protocols/`](devices/protocols/razer-naga-left-handed-2020.md). It's also a single Rust binary, so you can probably build it for whatever OS you have.
 
 > This program uses userspace USB access, so it doesn't need root privileges.
 
-One of the goals here is also to document these protocols, mouse by mouse, so nobody has to reverse engineer the same thing twice. If you want to build your own tool, or add a mouse to something else, the [protocol files](devices/protocols/) have what we found until now.
+One of the goals here is also to document these protocols, mouse by mouse, so nobody has to reverse engineer the same thing twice. If you want to build your own tool, or add a mouse to something else, the [protocol files](devices/protocols/) have everything we know so far.
 
-Right now you can:
+These are the things you can do with it right now.
 
-- Remap any button to keys or other types of actions
-- Normal and the Hypershift layers.
-- Turbo mode support (repeats the action while the button is pressed)
-- Change DPI and the DPI stages
+- Remap any button to keys or other types of actions, on both the normal and the Hypershift layers
+- Turn on turbo mode for a button, which repeats its action while you hold it
+- Change the DPI and the DPI stages
 - Create, delete, name and switch the profiles stored on the mouse
 - Export and import profiles as JSON
-- See which button you're pressing live if you have the GUI, which becomes some sort of tester
-- Change the lighting and brightness of zones through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports.
+- See which button you're pressing live in the GUI, which makes it work as a sort of button tester
+- Change the lighting and brightness of each zone through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports
 - Save the lighting as named presets and load them back
 - Change the polling rate, also through OpenRazer
 - See the battery and set how long a wireless mouse waits before it sleeps
 
-![The buttons tab in the dark theme: the Naga drawn with what each button does, the DPI stages, the profile column and the remap editor](docs/screenshots/buttons.png)
+![The buttons tab in the dark theme, with the Naga drawn with what each button does, the DPI stages, the profile column and the remap editor](docs/screenshots/buttons.png)
 
 ![The buttons tab in the light theme](docs/screenshots/buttons-light.png)
 
@@ -55,7 +54,7 @@ The lighting tab and every built-in theme, light and dark, are in the [theme gal
 
 ## Install
 
-On Arch, from the AUR.
+On Arch you can install it from the AUR.
 
 ```sh
 yay -S opensynapse      # builds the latest release
@@ -63,7 +62,7 @@ yay -S opensynapse-bin  # same release, prebuilt
 yay -S opensynapse-git  # builds the latest main
 ```
 
-On Debian and Ubuntu, from the apt repository.
+On Debian and Ubuntu, add the apt repository and install it from there.
 
 ```sh
 curl -fsSL https://oss.lsantos.dev/opensynapse/apt/public.key | sudo gpg --dearmor -o /usr/share/keyrings/opensynapse.gpg
@@ -71,7 +70,7 @@ echo "deb [signed-by=/usr/share/keyrings/opensynapse.gpg arch=$(dpkg --print-arc
 sudo apt update && sudo apt install opensynapse
 ```
 
-With Homebrew on Linux.
+If you use Homebrew on Linux, it's in my tap.
 
 ```sh
 brew install khaosdoctor/tap/opensynapse
@@ -79,57 +78,55 @@ brew install khaosdoctor/tap/opensynapse
 
 Every [release](https://github.com/khaosdoctor/opensynapse/releases) also has a `.deb`, an AppImage (GUI only, named `OpenSynapse-<version>-<arch>.AppImage`) and a tar.gz with both binaries, for x86_64 and arm64.
 
-To build it yourself, you need [Rust](https://rustup.rs). Drop the `--features gui` if you only want the CLI.
+To build it yourself you need [Rust](https://rustup.rs), and you can drop the `--features gui` if you only want the CLI.
 
 ```sh
 git clone https://github.com/khaosdoctor/opensynapse && cd opensynapse
 cargo install --path . --features gui
 ```
 
-`cargo install` only copies the binaries, so they read the device files from the `devices/` folder of your clone. If you move or delete the clone, copy the file for your mouse from `devices/` to `~/.config/opensynapse/devices/1532-<pid>/buttons.jsonc` (`1532-pid` is the number for your hid device, for example, `1532-008d` is for the for the Naga, 1532 always defines a Razer device, so your mouse will be `1532-<something>`).
+`cargo install` only copies the binaries, so they read the device files from the `devices/` folder of your clone. If you move or delete the clone, copy the file for your mouse from `devices/` to `~/.config/opensynapse/devices/1532-<pid>/buttons.jsonc` (`1532-pid` is the number for your hid device, for example, `1532-008d` is for the Naga, and since 1532 always means a Razer device, your mouse will be `1532-<something>`).
 
-The AUR, apt and `.deb` packages install the udev rule, which is __very important__ for this to work. With anything else you need to install yourself, or you'll get a permission denied:
+The AUR, apt and `.deb` packages install the udev rule, which is __very important__ for this to work because it lets your user open the mouse without root privileges during the session you're in. With anything else you have to install it yourself, or you'll get a permission denied error.
 
 ```sh
 sudo install -m644 udev/70-opensynapse.rules /etc/udev/rules.d/
 sudo udevadm control --reload && sudo udevadm trigger
 ```
 
-This rule allows your user to access the mouse without root privileges during the session you're in.
-
 ## First use
 
-If you just installed the udev rule, replug the mouse once. Then check that opensynapse sees it.
+If you just installed the udev rule, replug the mouse once and then check that opensynapse sees it.
 
 ```sh
 opensynapse list
 ```
 
-Permission denied means the udev rule is missing or the mouse wasn't replugged. If your mouse isn't in the list, see [Adding your mouse](#adding-your-mouse).
+A permission denied error means the udev rule is missing or the mouse wasn't replugged, and if your mouse isn't in the list, see [Adding your mouse](#adding-your-mouse).
 
 ### In the GUI
 
-The first time `opensynapse-gui` sees your mouse it saves every profile on the mouse and the lighting as the original, so ***RESET TO DEFAULT*** always has something to go back to. ***NEW PROFILE*** starts as a copy of the active profile and saves its original, and ***DELETE PROFILE*** removes the profile's files and name.
+The first time `opensynapse-gui` sees your mouse it saves every profile on the mouse and the lighting as the original, so ***RESET TO DEFAULT*** always has something to go back to, and when you click ***NEW PROFILE*** it starts as a copy of the active profile and saves its own original, while ***DELETE PROFILE*** removes the profile's files and name.
 
-The profile list shows the profiles stored on the mouse, and the active one is marked ***[ACTIVE]***. Changes to the active profile apply right away and stay after you replug the mouse. The mouse only switches to profiles that exist, so a profile button pointing at P3 does nothing until you create P3 with ***NEW PROFILE***. Names from ***RENAME PROFILE*** are kept on your computer, the mouse has no room for them.
+The profile list shows the profiles stored on the mouse with the active one marked ***[ACTIVE]***, and anything you change on the active profile applies right away and stays after you replug the mouse. The mouse only switches to profiles that exist, so a profile button pointing at P3 does nothing until you create P3 with ***NEW PROFILE***, and names from ***RENAME PROFILE*** are kept on your computer because the mouse has no room for them.
 
-If your mouse doesn't answer the profile commands, the profiles are presets saved on your computer in `~/.config/opensynapse/devices/<vid-pid>/<serial>-preset-<n>.json`, in the same format as ***EXPORT PROFILE***, with the active one remembered in `<serial>-preset-active.json`. What is on the mouse the first time becomes preset 1, and the active preset is read from the mouse on every start. You can keep up to 20. ***SET ACTIVE*** queues the preset's buttons and DPI, and ***WRITE TO DEVICE*** sends them. Editing a preset that isn't active only changes its file, and editing the active one also writes to the mouse (its first stored profile and P0) so it applies right away.
+If your mouse doesn't answer the profile commands, the profiles are presets saved on your computer in `~/.config/opensynapse/devices/<vid-pid>/<serial>-preset-<n>.json`, in the same format as ***EXPORT PROFILE***, with the active one remembered in `<serial>-preset-active.json`. Whatever is on the mouse the first time becomes preset 1, you can keep up to 20 of them, and the active preset is read from the mouse on every start. ***SET ACTIVE*** queues the preset's buttons and DPI for ***WRITE TO DEVICE*** to send, and if you edit a preset that isn't active only its file changes, but if you edit the active one it also writes to the mouse (its first stored profile and P0), so it applies right away.
 
 > [!IMPORTANT]
-> The lighting tab needs the OpenRazer daemon running. The polling rate is 125, 500 or 1000 Hz, and ***SLEEP AFTER*** takes 60 to 900 seconds.
+> The lighting tab needs the OpenRazer daemon running, and on that tab the polling rate can be 125, 500 or 1000 Hz while ***SLEEP AFTER*** takes 60 to 900 seconds.
 
 Lighting presets are saved in `~/.config/opensynapse/presets/<name>.json`.
 
 #### The debug log
 
-The LOG panel at the bottom of the sidebar shows everything the GUI sends to the mouse and what comes back, with known commands in words. The same lines go to `~/.local/state/opensynapse/debug.log` (or `$XDG_STATE_HOME/opensynapse/debug.log`), which ***DEBUG LOG*** on the settings tab opens, and to the systemd journal. The file starts empty on every launch and is deleted when the GUI exits normally. Turn on ***Show raw bytes in the log*** to see the bytes under each translated line. The same section turns line wrapping off and sets the log's font size.
+The LOG panel at the bottom of the sidebar shows everything the GUI sends to the mouse and what comes back, with the commands it knows written out in words. The same lines go to the systemd journal and to `~/.local/state/opensynapse/debug.log` (or `$XDG_STATE_HOME/opensynapse/debug.log`), a file that ***DEBUG LOG*** on the settings tab opens, which starts empty on every launch and is deleted when the GUI exits normally. If you turn on ***Show raw bytes in the log*** in that same section you'll see the bytes under each translated line, and you can also turn line wrapping off and set the log's font size there.
 
 ```sh
 journalctl -t opensynapse-gui -f        # follow it
 journalctl -t opensynapse-gui -p err    # only errors
 ```
 
-The file is gone once the GUI closes, so for a bug report save the journal instead and attach `opensynapse.log`:
+The file is gone once the GUI closes, so for a bug report save the journal with this command and attach `opensynapse.log`.
 
 ```sh
 journalctl -t opensynapse-gui -b > opensynapse.log   # everything since this boot
@@ -137,7 +134,7 @@ journalctl -t opensynapse-gui -b > opensynapse.log   # everything since this boo
 
 ### With the CLI
 
-Make a backup first.
+Make a backup with `export` before you change anything, so `import` can put it back.
 
 ```sh
 opensynapse export before.json --profile 1 # backup
@@ -171,7 +168,7 @@ opensynapse protocol                     # writes the protocol file, see PROTOCO
 opensynapse protocol send                # posts it as a public GitHub issue
 ```
 
-CLI commands use profile 0 unless you pass `--profile`. Profile 0 is the live copy of the active profile, so changes there apply right away and are lost when you unplug the mouse.
+CLI commands use profile 0 unless you pass `--profile`, and profile 0 is the live copy of the active profile, so changes there apply right away and are lost when you unplug the mouse.
 
 > Every package installs shell completions for bash, zsh and fish. If you built it yourself, they're in [`contrib/completions/`](contrib/completions/).
 
@@ -181,29 +178,21 @@ The GUI comes with a few themes and you can write your own in CSS, see [docs/THE
 
 ## Adding your mouse
 
-OpenSynapse reads a JSON file with your mouse's USB ids and its buttons when it starts. Yours goes in `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc`, and it wins over the ones every package installs from [`devices/`](devices). You don't need to wait for me or upload anything.
+When it starts, OpenSynapse reads a JSON file with your mouse's USB ids and its buttons, and if you put yours in `~/.config/opensynapse/devices/<vid-pid>/buttons.jsonc`, it's used instead of the ones every package installs from [`devices/`](devices), so you don't need to wait for me or upload anything.
 
-Run `opensynapse init` with the mouse plugged in. It only reads from the mouse and writes most of the file for you. Fix the `// TODO` lines, mostly naming the buttons.
+Run `opensynapse init` with the mouse plugged in and it writes most of the file for you, only reading from the mouse, so what's left is fixing the `// TODO` lines, which is mostly naming the buttons.
 
 ```sh
 opensynapse init
 opensynapse list   # your mouse should be here now
 ```
 
-**I need your help here though.** I only have one Razer mouse, so please send your file back. `opensynapse protocol send` opens a GitHub issue with it, or you can open a PR. [CONTRIBUTING.md](CONTRIBUTING.md) has the steps, and a prompt so an agent does it for you.
+**I need your help here though.** I only have one Razer mouse, so please send your file back, either with `opensynapse protocol send`, which opens a GitHub issue with it, or with a PR. [CONTRIBUTING.md](CONTRIBUTING.md) has the steps and a prompt so an agent does it for you.
 
 ## AI usage
 
-This was built with heavy AI help, and I'm not a Rust or firmware developer.
+This was built with heavy AI help. I'm a backend developer who works with high-level languages, so I'm no Rust or firmware developer, and since I had this problem for years and couldn't solve it on my own, I used AI for the things I couldn't do by myself and to help me write the rest. I tested everything on my own mouse, but I don't understand every line yet, and I'm learning how it works as I go.
 
-I'm a backend developer and I work with high-level languages. I had this problem for years and couldn't solve it on my own, so I used AI for the things I couldn't do by myself, and to help me write the rest. I tested everything on my own mouse, but I don't understand every line yet, and I'm learning how it works as I go.
+If you're wondering whether it's safe to use, it only changes settings and never touches the firmware, and everything can be undone because the original state of the mouse is saved and you can import it back anytime. It runs as your user instead of root, the protocol is documented in [`PROTOCOL.md`](PROTOCOL.md) and [`devices/protocols/`](devices/protocols/), and it's tested on real hardware, since I use it on my own mouse every day.
 
-If you're wondering whether it's safe to use:
-
-- **It only changes settings, never firmware.**
-- **Everything can be undone.** The original state of the mouse is saved, and you can import it back anytime.
-- **It runs as your user, not root.**
-- **The protocol is documented** in [`PROTOCOL.md`](PROTOCOL.md) and [`devices/protocols/`](devices/protocols/).
-- **It's tested on real hardware.** I use it on my own mouse every day.
-
-There are probably mistakes I didn't catch. If you find one, open an [issue](https://github.com/khaosdoctor/opensynapse/issues). If you know Rust or HID and want to review the code, that's even better. If AI-built software is a dealbreaker for you, that's fair, no hard feelings.
+There are probably mistakes I didn't catch, so if you find one, open an [issue](https://github.com/khaosdoctor/opensynapse/issues), and if you know Rust or HID and want to review the code, that's even better. If AI-built software is a dealbreaker for you, that's fair, no hard feelings.

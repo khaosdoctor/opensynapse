@@ -1,18 +1,16 @@
 # Theming
 
-What you pick on the settings tab is saved in `~/.config/opensynapse/settings.json`, along with the log options from its debug section. The log font size there wins over the theme's `--log-font-size`.
+What you pick on the settings tab is saved in `~/.config/opensynapse/settings.json`, along with the log options from its debug section, and the log font size there overwrites the theme's `--log-font-size`.
 
 ## Mode
 
-***SYSTEM*** follows your desktop's light or dark setting. Every theme has both versions.
-
-Tiling window managers like Sway or Hyprland often don't report a preference, so ***SYSTEM*** stays dark there. Pick ***LIGHT***, or put `color-scheme: light;` in `theme.css` so ***SYSTEM*** uses that instead.
+***SYSTEM*** follows your desktop's light or dark setting, and every theme has both versions. Tiling window managers like Sway or Hyprland often don't report a preference, so ***SYSTEM*** stays dark there, and if you want light you can pick ***LIGHT*** or put `color-scheme: light;` in `theme.css` so ***SYSTEM*** uses that instead.
 
 ## Themes
 
 | Theme | Look |
 |---|---|
-| OpenSynapse | the default, neon on near-black |
+| OpenSynapse | the default, cyberpunk |
 | Synapse | Razer's own app, black and green |
 | Adwaita | GNOME |
 | Breeze | KDE |
@@ -22,9 +20,9 @@ Tiling window managers like Sway or Hyprland often don't report a preference, so
 
 ## Your own theme
 
-Themes are CSS files, the built-in ones are in [`themes/`](../themes). Yours go in `~/.config/opensynapse/themes/<name>.css`. They show up after ***RELOAD***, and a file named like a built-in theme replaces it.
+Themes are CSS files and the built-in ones are in [`themes/`](../themes), so if you want a new one you can create it in the GUI with ***NEW THEME*** on the settings tab, which starts it as a copy of the default one, or create a file in `~/.config/opensynapse/themes/<name>.css` yourself, and it shows up after ***RELOAD***, replacing any built-in theme with the same name.
 
-Only custom properties are read. Anything outside a `prefers-color-scheme` block counts for both modes.
+The app only reads custom properties, and anything you put outside a `prefers-color-scheme` block counts for both modes.
 
 ```css
 :root {
@@ -37,25 +35,25 @@ Only custom properties are read. Anything outside a `prefers-color-scheme` block
 }
 ```
 
-[`themes/opensynapse.css`](../themes/opensynapse.css) lists every property. `--hypershift` is the color of the Hypershift layer, and a theme that leaves it out uses its `--warn`. The LOG panel has its own `--log-bg`, `--log-text`, `--log-raw`, `--log-time` and `--log-font-size`, and each falls back to the theme's matching color or to 10px.
+[`themes/opensynapse.css`](../themes/opensynapse.css) lists every property, like `--hypershift`, the color of the Hypershift layer, and if your theme leaves it out it uses the theme's `--warn` instead. The LOG panel has its own `--log-bg`, `--log-text`, `--log-raw`, `--log-time` and `--log-font-size`, and if you leave any of them out it falls back to the theme's matching color or to 10px.
 
 ## Small changes
 
-`~/.config/opensynapse/theme.css` takes the same properties and applies on top of any theme.
+If you only want to change a couple of things, `~/.config/opensynapse/theme.css` takes the same properties and applies them on top of whatever theme you picked.
 
 ## Font
 
-***THEME DEFAULT*** uses the theme's `--font`. Any other font in the list replaces it for every theme.
+***THEME DEFAULT*** uses the theme's `--font`, and if you pick any other font in the list, it replaces that for every theme.
 
 ## Gallery
 
-The lighting tab, in the default theme.
+This is the lighting tab in the default theme.
 
 | Dark | Light |
 |---|---|
 | ![The lighting tab, dark](screenshots/lighting.png) | ![The lighting tab, light](screenshots/lighting-light.png) |
 
-Every built-in theme on the buttons tab.
+And these are all the built-in themes on the buttons tab.
 
 | Theme | Dark | Light |
 |---|---|---|

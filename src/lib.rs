@@ -1,5 +1,7 @@
 pub mod action;
 pub mod device;
+#[cfg(debug_assertions)]
+pub mod fake;
 pub mod generators;
 pub mod hid;
 pub mod input;

@@ -135,14 +135,23 @@ fn connect_daemon(serial: &str, zone: &str) -> Option<(Connection, String)> {
     Some((conn, path))
 }
 
+/// The OpenRazer driver folders, which hold one folder per device they drive.
+fn driver_dirs() -> Vec<PathBuf> {
+    #[cfg(debug_assertions)]
+    if let Some(dir) = crate::fake::dir() {
+        return vec![dir];
+    }
+    let Ok(drivers) = fs::read_dir("/sys/bus/hid/drivers") else { return Vec::new() };
+    let razer = drivers.flatten().filter(|d| d.file_name().to_string_lossy().starts_with("razer"));
+    razer.map(|d| d.path()).collect()
+}
+
 /// Lighting for a vid:pid (and serial, to find it on the OpenRazer daemon).
 pub fn find(vid: u16, pid: u16, serial: &str) -> Option<Lighting> {
     let prefix = format!("0003:{vid:04X}:{pid:04X}.");
-    let mut dirs: Vec<PathBuf> = fs::read_dir("/sys/bus/hid/drivers")
-        .ok()?
-        .flatten()
-        .filter(|d| d.file_name().to_string_lossy().starts_with("razer"))
-        .filter_map(|d| fs::read_dir(d.path()).ok())
+    let mut dirs: Vec<PathBuf> = driver_dirs()
+        .into_iter()
+        .filter_map(|d| fs::read_dir(d).ok())
         .flat_map(|it| it.flatten())
         .filter(|e| e.file_name().to_string_lossy().starts_with(&prefix))
         .map(|e| e.path())

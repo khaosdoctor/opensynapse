@@ -89,6 +89,11 @@ impl App {
             self.reconnect(vid, pid);
             return;
         }
+        // fake devices have no DPI to follow and no hidraw node, which would read as unplugged
+        #[cfg(debug_assertions)]
+        if opensynapse::fake::dir().is_some() {
+            return;
+        }
         let Some(m) = self.mice.get(self.current) else { return };
         let (Ok((dpi, _)), Ok(s)) = (m.dpi(), m.dpi_stages()) else {
             // a failed read is often just a busy mouse; gone from sysfs means unplugged

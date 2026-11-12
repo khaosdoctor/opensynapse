@@ -179,6 +179,11 @@ fn devices_dir() -> Option<PathBuf> {
 
 /// $XDG_CONFIG_HOME, or ~/.config.
 pub fn config_dir() -> Option<PathBuf> {
+    // fake devices get their own presets and lighting files, gone with the test folder
+    #[cfg(debug_assertions)]
+    if let Some(dir) = crate::fake::dir() {
+        return Some(dir.join("config"));
+    }
     env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
@@ -215,7 +220,7 @@ pub fn load_json<T: DeserializeOwned>(path: &Path) -> io::Result<T> {
 
 pub struct Mouse {
     pub def: DeviceDef,
-    hid: Hid,
+    pub(crate) hid: Hid,
     /// factory serial read at detection, empty if the device doesn't report one
     pub serial: String,
 }
@@ -227,6 +232,10 @@ pub struct DpiStages {
 
 /// Every connected mouse that has a definition.
 pub fn detect() -> io::Result<Vec<Mouse>> {
+    #[cfg(debug_assertions)]
+    if let Some(dir) = crate::fake::dir() {
+        return Ok(crate::fake::mice(&dir));
+    }
     let mut found = Vec::new();
     for def in definitions() {
         let Some(path) = hid::find(def.vid, def.pid, def.interface) else { continue };

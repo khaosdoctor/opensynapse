@@ -32,6 +32,10 @@ impl Hid {
 
     /// Sends one command and returns the 90-byte response. Fails on any non-OK status.
     pub fn command(&self, class: u8, id: u8, size: u8, args: &[u8]) -> io::Result<[u8; REPORT_LEN]> {
+        #[cfg(debug_assertions)]
+        if crate::fake::dir().is_some() {
+            return Err(io::Error::other("fake OpenRazer devices have no hidraw node, buttons and DPI need a real mouse"));
+        }
         let mut buf = [0u8; REPORT_LEN + 1]; // byte 0 = report id 0
         let report = &mut buf[1..];
         report[1] = self.transaction_id;

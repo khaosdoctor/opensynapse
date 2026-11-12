@@ -17,8 +17,8 @@ The repo isn't formatted with rustfmt, so don't run `cargo fmt`, it rewrites eve
 
 Everything here ends up as bytes on a real device, and a wrong write can leave a button doing something odd until someone fixes it by hand. So:
 
-- Reads are always fine. `list`, `dump`, `get`, `export`, `watch`, `init`, `probe`, `protocol`, `battery`, `preset list|save|delete` and `poll` or `idle` with no value only read the mouse. `probe` refuses any command without the read bit.
-- Before any write (`set`, `dpi`, `stages`, `rgb`, `poll <rate>`, `idle <seconds>`, `preset load`, `import`, or the GUI's WRITE TO DEVICE), say exactly what you're about to send and wait for a human to say yes. Change one thing, read it back, then put it back.
+- Reads are always fine. `list`, `dump`, `get`, `export`, `watch`, `init`, `probe`, `protocol`, `battery`, `preset list|save|delete`, `profile` with no subcommand, `profile rename` and `poll` or `idle` with no value only read the mouse. `probe` refuses any command without the read bit.
+- Before any write (`set`, `dpi`, `stages`, `rgb`, `poll <rate>`, `idle <seconds>`, `preset load`, `import`, `profile create|delete|switch`, or the GUI's WRITE TO DEVICE), say exactly what you're about to send and wait for a human to say yes. Change one thing, read it back, then put it back.
 - Never run `opensynapse protocol send`, it posts a public issue.
 - The exploration rules for new mice are in the agent prompt at the end of [CONTRIBUTING.md](CONTRIBUTING.md#using-an-agent).
 
@@ -45,8 +45,8 @@ The script sets `OPENSYNAPSE_OPENRAZER_TEST` to the fake devices' folder. Debug 
 | `src/lib.rs` | the library the CLI and GUI share |
 | `src/hid.rs` | the 90-byte Razer feature report over hidraw, and finding the right interface |
 | `src/action.rs` | what a button does and how it's encoded on the wire |
-| `src/device.rs` | device files, the config folder and the JSON helpers everything else uses |
-| `src/profile.rs` | profile export/import files |
+| `src/device.rs` | device files, the config folder, the JSON helpers everything else uses, and the commands for buttons, DPI and stored profiles |
+| `src/profile.rs` | profile export/import files and profile names, which only exist on this computer |
 | `src/input.rs` | which buttons are held right now, for `watch` and the GUI highlights |
 | `src/rgb.rs` | lighting through the OpenRazer driver and daemon, we don't reverse engineer lighting |
 | `src/power.rs` | polling rate, battery and sleep timeout through the OpenRazer daemon |

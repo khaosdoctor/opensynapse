@@ -39,6 +39,7 @@ Right now you can:
 - Normal and the Hypershift layers.
 - Turbo mode support (repeats the action while the button is pressed)
 - Change DPI and the DPI stages
+- Create, delete, name and switch the profiles stored on the mouse
 - Export and import profiles as JSON
 - See which button you're pressing live if you have the GUI, which becomes some sort of tester
 - Change the lighting and brightness of zones through [OpenRazer](https://openrazer.github.io/) (install `openrazer-driver-dkms` on Arch), so it works on any mouse OpenRazer supports.
@@ -106,9 +107,9 @@ Permission denied means the udev rule is missing or the mouse wasn't replugged. 
 
 ### In the GUI
 
-The first time `opensynapse-gui` sees your mouse it saves every profile and the lighting as the original, so ***RESET*** always has something to go back to.
+The first time `opensynapse-gui` sees your mouse it saves every profile on the mouse and the lighting as the original, so ***RESET TO DEFAULT*** always has something to go back to. ***NEW PROFILE*** starts as a copy of the active profile and saves its original, and ***DELETE PROFILE*** removes the profile's files and name.
 
-On the Naga, ***P0*** is the live profile and is lost when you unplug the mouse. ***P1*** is the one it keeps, so pick it before you change anything
+The profile list shows the profiles stored on the mouse, and the active one is marked ***[ACTIVE]***. Changes to the active profile apply right away and stay after you replug the mouse. The mouse only switches to profiles that exist, so a profile button pointing at P3 does nothing until you create P3 with ***NEW PROFILE***. Names from ***RENAME PROFILE*** are kept on your computer, the mouse has no room for them. If your mouse doesn't answer the profile commands, ***SET ACTIVE***, ***NEW PROFILE*** and ***DELETE PROFILE*** are hidden and every change also goes to P0, so it applies right away.
 
 > [!IMPORTANT]
 > The lighting tab needs the OpenRazer daemon running. The polling rate is 125, 500 or 1000 Hz, and ***SLEEP AFTER*** takes 60 to 900 seconds.
@@ -134,6 +135,8 @@ opensynapse set thumb1 key:ctrl+1
 opensynapse set thumb2 key:f13 --layer hypershift
 opensynapse dpi 1600
 opensynapse stages 800 1600 3200 --active 2   # sets the DPI stages and activates the second stage
+opensynapse profile                      # stored profiles and which one is active
+opensynapse profile create 2             # also delete, switch and rename
 opensynapse export my-profile.json
 opensynapse watch                        # prints buttons as you press them
 opensynapse rgb all static ff00aa        # sets rgb lights, needs OpenRazer
@@ -149,7 +152,7 @@ opensynapse protocol                     # writes the protocol file, see PROTOCO
 opensynapse protocol send                # posts it as a public GitHub issue
 ```
 
-CLI commands use profile 0 unless you pass `--profile`.
+CLI commands use profile 0 unless you pass `--profile`. Profile 0 is the live copy of the active profile, so changes there apply right away and are lost when you unplug the mouse.
 
 > Every package installs shell completions for bash, zsh and fish. If you built it yourself, they're in [`contrib/completions/`](contrib/completions/).
 

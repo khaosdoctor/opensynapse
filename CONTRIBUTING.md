@@ -66,9 +66,9 @@ Rules:
 - When testing a write, change one button only, read it back to confirm,
   ask me to press it, and then set it back to what it was before.
 - Don't touch profiles other than 0 unless I ask.
-- `opensynapse set`, `dpi <X>`, `stages` with DPI values or `--active`, `rgb`, `import` and the
-  GUI write to the mouse too. `list`, `dump`, `get`, `export`, `watch`, `init`, `probe` and
-  `protocol` (without `send`) only read; `protocol send` posts a public issue, never run it.
+- `opensynapse set`, `dpi <X>`, `stages` with DPI values or `--active`, `rgb`, `import`,
+  `profile create|delete|switch` and the GUI write to the mouse too. `list`, `dump`, `get`,
+  `export`, `watch`, `init`, `probe`, `profile` and `protocol` (without `send`) only read; `protocol send` posts a public issue, never run it.
 - Never pass --force. If `init` or `protocol` says the file already exists, edit that file instead.
 
 Steps:

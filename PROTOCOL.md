@@ -12,6 +12,7 @@ If you're adding a mouse, write one. The [Naga Left-Handed 2020 file](devices/pr
 ## Contents
 
 - [What's the same on every Razer mouse](#whats-the-same-on-every-razer-mouse)
+- [Profiles](#profiles)
 - [Finding things out](#finding-things-out)
 - [Generating the file](#generating-the-file)
 - [Template](#template)
@@ -59,6 +60,13 @@ packet-beta
 
 You send the report with `HIDIOCSFEATURE` and keep reading it back with `HIDIOCGFEATURE` until the status stops being busy. OpenSynapse treats any status other than `01` and `02` as a rejected command. On Linux, hidraw wants one extra report id byte of `00` in front of the buffer, so you send 91 bytes. `opensynapse probe` already does all of this. [devices/protocols/README.md](devices/protocols/README.md#creating-a-report) has a worked example of the bytes.
 
+## Profiles
+
+Mice with onboard memory keep their profiles in command class `0x05`. The commands are `0x80` profile count, `0x81` profile list, `0x84` active profile, `0x8a` max profiles, `0x02` create, `0x03` delete and `0x04` set active, with the data size at `01` (`0x50` for the list).
+
+The same ids show up in [freenapse](https://github.com/MatthewSaintBull/freenapse) (Viper V3 Pro, where a mouse with a single profile answers a failure to the active profile read) and, with different names for some of them, in [razerqdhid](https://github.com/geezmolycos/razerqdhid/blob/main/docs/cmd_profile-en.md) (Basilisk V3). [uchroma's reference](https://hyperb1iss.github.io/uchroma/reference/razer-protocol-reference.html) lists class `0x05` as profile management too, but with other command ids. None of them say which models support it, so whether every Razer mouse answers class `0x05` is not known.
+
+Seen only on the Naga Left-Handed 2020: a profile has to be created with `0x02` before the firmware will switch to it, and profile `0` is the live copy of the active one. The commands, the replies and what was tried are in the [Naga file](devices/protocols/razer-naga-left-handed-2020.md#profiles-class-0x05).
 ## Finding things out
 
 This is where you work out what goes in your protocol file. You'll find which command class and ids your mouse answers on, what arguments each one takes, which id is which button and how an action is written in bytes. That's what fills the command, button and action tables, like the ones in the [Naga file](devices/protocols/razer-naga-left-handed-2020.md).

@@ -11,6 +11,7 @@ All findings come from talking to the real device on Linux through `/dev/hidraw`
 - [Button ids](#button-ids)
 - [Action encoding](#action-encoding)
 - [Lighting (class `0x0f`)](#lighting-class-0x0f)
+- [Profiles (class `0x05`)](#profiles-class-0x05)
 - [Unknowns](#unknowns)
 
 ## Transport
@@ -27,7 +28,7 @@ The common frame from [PROTOCOL.md](../../PROTOCOL.md#whats-the-same-on-every-ra
 | `0x8e` bulk dump | `[profile, button, layer]` | 8-byte entries, layout not decoded |
 | `0x82` | none | `08 1c 08 1c`, meaning unknown |
 
-Layer `0` is normal and `1` is Hypershift. Profiles `0`..`5` answer reads. Profile `0` is the live profile: writing it changes the behaviour right away, leaves profile `1` untouched, and is lost on a replug (verified). Writing profile `1` also changes the behaviour right away and survives a replug (verified), so it's the stored profile the mouse loads. Profiles `2`..`5` weren't written.
+Layer `0` is normal and `1` is Hypershift. Profiles `0`..`5` answer reads. Profile `0` is the live profile: writing it changes the behaviour right away, leaves profile `1` untouched, and is lost on a replug (verified). Writing profile `1` while it's the active profile also changes the behaviour right away and survives a replug (verified). Profiles `2`..`5` can be written before they exist, see [Profiles](#profiles-class-0x05).
 
 ## Button ids
 
@@ -72,9 +73,29 @@ Lighting is written through OpenRazer, but the mouse answers the extended matrix
 
 LED ids are OpenRazer's: `01` scroll wheel, `04` logo, `10` right side. Effect `01` static is verified; `00` none, `02` breathing, `03` spectrum, `04` wave and `05` reactive are decoded from OpenRazer's write layout and weren't read back.
 
+## Profiles (class `0x05`)
+
+The mouse stores up to 5 profiles. Only profile `1` exists out of the box, the others have to be created.
+
+| Command | Args | Reply | Status |
+|---|---|---|---|
+| `0x80` get profile count | none, size `01` | number of created profiles | verified: `01`, then `02` after creating profile 2 |
+| `0x81` get profile list | none, size `0x50` | `[max, id, id, ...]`, the size counts the max too | verified: `05 01` with only profile 1, `05 01 02` after creating profile 2 |
+| `0x84` get active profile | none, size `01` | profile id | verified: `01`, then `02` after switching |
+| `0x8a` get max profiles | none, size `01` | `05` | verified |
+| `0x02` create profile | `[n]`, size `01` | status only | verified |
+| `0x04` set active profile | `[n]`, size `01` | status only | verified: status ok, then `0x84` reads `n` |
+| `0x03` delete profile | `[n]`, size `01` | status only | verified: `0x81` drops `n`, and its keymap still reads back unchanged |
+
+Keymaps can be written to profiles `2`..`5` before they're created, and creating a profile leaves a keymap already written to it untouched. The firmware only switches between created profiles though. While only profile `1` existed, the profile button (`07 01 04`) and a button set to `07 02 03 02` did nothing. After `0x02` created profile 2, pressing the `07 02 03 02` button switched to it: `0x84` read `02` and profile `0` held profile 2's buttons.
+
+Profile `0` is the live copy of the active profile. Switching copies the stored profile into profile `0`, writes to profile `0` apply right away and are lost on unplug, and on a replug the active stored profile is copied into it again.
+
+After switching back to profile 1 with `0x04`, its thumb buttons read as `key:1`..`key:8`, which are profile 2's values, while left and right kept profile 1's swap. The cause isn't known.
+
 ## Unknowns
 
 The mouse doesn't validate actions on write: on thumb1 it stored every type byte from `0x01` to `0x1f` exactly as sent (only type `0x00`, and `0x14` with a 6-byte payload, came back rewritten). A write that's accepted and reads back fine says nothing about what the button will do, so new action types have to be checked by pressing the button and watching the input reports.
 
 - Some defaults read back with a length that doesn't match the data: keys on the Hypershift layer and thumb9 read `02 01 00 <usage>`, and the tilt defaults read `0e 01 <btn> 00 14`. They work, so the firmware seems to ignore the length on those. Writing the documented length works too.
-- No command to read or set the active profile is known. A button set to `07 02 03 <n>` should switch profiles.
+- A button set to `07 02 03 <n>` switches to profile `n` once it exists (verified with `n` = 2). The relative forms `07 01 0x` were only seen doing nothing while one profile existed.

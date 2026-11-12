@@ -73,7 +73,7 @@ impl Pressed {
     }
 }
 
-/// The modifier key usages (0xe0 left ctrl ... 0xe7 right meta) set in a modifier mask.
+/// Usages 0xe0 (left ctrl) to 0xe7 (right meta) for the bits set in a modifier mask.
 fn mod_keys(mods: u8) -> impl Iterator<Item = u8> {
     (0..8).filter(move |i| mods & (1 << i) != 0).map(|i| 0xe0 + i)
 }

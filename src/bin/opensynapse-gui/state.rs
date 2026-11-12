@@ -31,6 +31,8 @@ pub(crate) struct App {
     pub(crate) profile_presets: Option<crate::lib::profile_presets::Presets>,
     /// loaded on the first frame, it needs the egui context
     pub(crate) logo: Option<egui::TextureHandle>,
+    /// the status line last written to the debug log, so each change is logged once
+    pub(crate) logged: String,
     pub(crate) layer: u8,
     pub(crate) actions: Vec<Option<Action>>,
     pub(crate) selected: usize,
@@ -126,6 +128,7 @@ impl App {
             renaming: None,
             profile_presets: None,
             logo: None,
+            logged: String::new(),
             layer: 0,
             actions: Vec::new(),
             selected: 0,
@@ -139,7 +142,6 @@ impl App {
         }
     }
 
-    /// The path field follows the selected device, profile and folder.
     pub(crate) fn update_path(&mut self) {
         let Some(p) = self.mice.get(self.current).and_then(|m| match self.profile_presets {
             Some(_) => profile::preset_path(m, self.profile),

@@ -71,7 +71,6 @@ pub fn plan(mouse: &Mouse, profile: u8, file: &ProfileFile) -> io::Result<Vec<(u
     Ok(changed)
 }
 
-/// Writes the file to the device. Returns buttons written.
 pub fn apply(mouse: &Mouse, profile: u8, file: &ProfileFile) -> io::Result<usize> {
     let writes = plan(mouse, profile, file)?;
     mouse.set_dpi_stages(&DpiStages { active: file.active_stage, stages: file.dpi_stages.clone() })?;

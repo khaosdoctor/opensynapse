@@ -85,7 +85,6 @@ impl DeviceDef {
     }
 }
 
-/// Parses the text of one device file.
 pub fn parse(src: &str) -> Result<DeviceDef, serde_json::Error> {
     let mut def: DeviceDef = serde_json::from_str(&strip_comments(src))?;
     def.source = src.to_string();
@@ -257,7 +256,6 @@ pub fn offline_mouse() -> Mouse {
     Mouse { def, hid: Hid::open(Path::new("/dev/null"), 0x1f).unwrap(), serial: "TEST".into() }
 }
 
-/// Every connected mouse that has a definition.
 pub fn detect() -> io::Result<Vec<Mouse>> {
     #[cfg(debug_assertions)]
     if let Some(dir) = crate::fake::dir() {

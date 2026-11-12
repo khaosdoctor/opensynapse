@@ -30,7 +30,6 @@ pub(crate) fn view_tab(ui: &mut egui::Ui, text: &str, selected: bool) -> egui::R
     tall(ui, button)
 }
 
-/// A borderless glyph from the icon font, like the status bar links.
 pub(crate) fn icon_button(ui: &mut egui::Ui, icon: &str, tip: &str) -> egui::Response {
     let button = egui::Button::new(RichText::new(icon).font(theme::icon(17.0)).color(t().muted)).frame(false);
     hover(ui.add(button)).on_hover_text(tip)
@@ -66,7 +65,6 @@ pub(crate) fn tall(ui: &mut egui::Ui, button: egui::Button) -> egui::Response {
     hover(ui.add(button.min_size(egui::vec2(0.0, 28.0))))
 }
 
-/// A button stretched to a fixed size, for the full-width sidebar buttons.
 pub(crate) fn sized(ui: &mut egui::Ui, size: [f32; 2], button: egui::Button) -> egui::Response {
     hover(ui.add_sized(size, button))
 }
@@ -104,12 +102,10 @@ pub(crate) fn panel(fill: Color32) -> Frame {
     Frame::new().fill(fill).inner_margin(Margin::same(14)).stroke(Stroke::new(1.0, t().border))
 }
 
-/// A filled area without a border, for the bars around the window and the central view.
 pub(crate) fn backdrop(fill: Color32, margin: Margin) -> Frame {
     Frame::new().fill(fill).inner_margin(margin)
 }
 
-/// A button card in the grid under the mouse drawing, outlined in `edge`.
 pub(crate) fn card(edge: Color32) -> Frame {
     Frame::new().fill(t().card).stroke(Stroke::new(1.0, edge)).inner_margin(Margin::same(8))
 }
@@ -127,7 +123,6 @@ pub(crate) fn note(ui: &mut egui::Ui, text: impl Into<String>) {
     ui.label(RichText::new(text).color(t().muted).small());
 }
 
-/// A modal with a title. The backdrop dims everything behind it and blocks clicks.
 pub(crate) fn modal<R>(ctx: &egui::Context, id: &str, width: f32, title: &str, body: impl FnOnce(&mut egui::Ui) -> R) -> egui::ModalResponse<R> {
     egui::Modal::new(egui::Id::unique(id)).show(ctx, |ui| {
         ui.set_max_width(width);

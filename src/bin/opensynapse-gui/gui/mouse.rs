@@ -25,7 +25,6 @@ impl App {
             ui.ctx().request_repaint_after(Duration::from_millis(100)); // let highlights fade
         }
 
-        // buttons with a position go on the drawn mouse, the rest into the grid
         let (placed, loose): (Vec<usize>, Vec<usize>) = (0..buttons.len()).partition(|&i| buttons[i].at.is_some());
         let mut clicked = None;
         let view_height = ui.available_height();
@@ -175,7 +174,6 @@ fn mouse_outline(body: egui::Rect) -> Vec<egui::Pos2> {
         .collect()
 }
 
-/// Compact action text that fits on a drawn button.
 fn short(a: &Action) -> String {
     match a {
         Action::Key { mods, usage } => {

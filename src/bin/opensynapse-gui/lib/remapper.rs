@@ -245,7 +245,6 @@ impl App {
     }
 }
 
-/// KEY tab: modifiers, the key box and the special key groups.
 fn key_fields(ui: &mut egui::Ui, e: &mut Editor, on: bool) {
     // one column per group, a group that doesn't fit goes to the next row
     ui.horizontal_wrapped(|ui| {
